@@ -42,6 +42,8 @@ def _ga_multiply_get_index(index_1: str, index_2: str) -> Tuple[int, str]:
             index = index[:i] + index[i+2:]
         else:
             i += 1
+        # TODO for generic GA, we need to know the parameters of G(a,b,c), to know if the square is 1, -1, or 0
+        # one solution : add a,b and c as global variables and compare index[i] with a, a+b, a+b+c 
     return even_number_of_permutations, "".join([str(i) for i in index])
 
 
@@ -91,7 +93,7 @@ class GenericLinear:
         if len(inputs) == 1:
             # real input
             x = inputs[0]
-            output = [self.layers[i](x) for i in range(2**upstride_type)]
+            output = [self.layers[i](x) for i in range(type_to_multivector_length[upstride_type])]
         else:
             # R^{type_to_multivector_length[upstride_type]} input
             output = [None] * type_to_multivector_length[upstride_type]
@@ -189,7 +191,8 @@ class Upstride2TF:
 
     def __init__(self, strategy='default'):
         # for now strategy is useless
-        pass
+        if strategy != 'default':
+            raise NotImplementedError("")
 
     def __call__(self, x):
         return x[0]
