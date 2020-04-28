@@ -1,15 +1,48 @@
 """users shouldn't import this package directly. instead import upstride.typeX.tf.keras.layers
 """
-
+from typing import Tuple, List
 import tensorflow as tf
 
-upstride_type = 2  # setup when calling upstride.type{1/2/3}
+upstride_type = 3  # setup when calling upstride.type{1/2/3}
 
 type_to_multivector_length = {
     1: 2,
     2: 4,
     3: 8
 }
+
+type3_multivector_to_index = ["", "1", "2", "3", "12", "13", "23", "123"]
+type3_index_to_multivector = {
+    "": 0,
+    "1": 1,
+    "2": 2,
+    "3": 3,
+    "12": 4,
+    "13": 5,
+    "23": 6,
+    "123": 7
+}
+
+
+def _ga_multiply_get_index(index_1: str, index_2: str) -> Tuple[int, str]:
+    """given e_{index_1}, e_{index_2} return (s, index) such as e_{index_1} * e_{index_2} = s * e_{index}
+    """
+    even_number_of_permutations = True
+    index = [int(i) for i in index_1 + index_2]
+    # first we sort the index
+    for i in range(len(index) - 1):
+        for j in range(len(index) - i - 1):
+            if int(index[j]) > int(index[j + 1]):
+                index[j], index[j + 1] = index[j + 1], index[j]
+                even_number_of_permutations = not even_number_of_permutations
+    # then we remove the doubles
+    i = 0
+    while i < len(index) - 1:
+        if index[i] == index[i + 1]:
+            index = index[:i] + index[i+2:]
+        else:
+            i += 1
+    return even_number_of_permutations, "".join([str(i) for i in index])
 
 
 def unit_multiplier(i, j):
@@ -40,13 +73,14 @@ def unit_multiplier(i, j):
             if i < j:
                 return id, 1
     if upstride_type == 3:  # (scalar, e1, e2, e3, e12, e13, e23, e123)
-        raise NotImplementedError("")
-        if i == j and i < 4:
-            return 0, 1
-        elif i == j:
-            return 0, -1
-        elif i == 0 or j == 0:
-            return max(i, j), 1
+        index1 = type3_multivector_to_index[i]
+        index2 = type3_multivector_to_index[j]
+        even_number_of_permutations, index = _ga_multiply_get_index(index1, index2)
+        if even_number_of_permutations:
+            s = 1
+        else:
+            s = -1
+        return type3_index_to_multivector[index], s
 
 
 class GenericLinear:
