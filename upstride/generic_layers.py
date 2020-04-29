@@ -43,7 +43,7 @@ def _ga_multiply_get_index(index_1: str, index_2: str) -> Tuple[int, str]:
         else:
             i += 1
         # TODO for generic GA, we need to know the parameters of G(a,b,c), to know if the square is 1, -1, or 0
-        # one solution : add a,b and c as global variables and compare index[i] with a, a+b, a+b+c 
+        # one solution : add a,b and c as global variables and compare index[i] with a, a+b, a+b+c
     return even_number_of_permutations, "".join([str(i) for i in index])
 
 
@@ -85,9 +85,22 @@ def unit_multiplier(i, j):
         return type3_index_to_multivector[index], s
 
 
+def get_layers(layer, *argv, **kwargs):
+    # special case for the name of the layer : if defined, then we need to change it to create different operation
+    if 'name' not in kwargs:
+        layers = [layer(*argv, **kwargs) for _ in range(type_to_multivector_length[upstride_type])]
+    else:
+        layers = []
+        base_name = kwargs['name']
+        for i in range(type_to_multivector_length[upstride_type]):
+            kwargs['name'] = f'{base_name}_{i}'
+            layers.append(layer(*argv, **kwargs))
+    return layers
+
+
 class GenericLinear:
     def __init__(self, layer, *argv, **kwargs):
-        self.layers = [layer(*argv, **kwargs) for _ in range(type_to_multivector_length[upstride_type])]
+        self.layers = get_layers(layer, *argv, **kwargs)
 
     def __call__(self, inputs):
         if len(inputs) == 1:
@@ -116,7 +129,7 @@ class GenericLinear:
 
 class GenericNonLinear:
     def __init__(self, layer, *argv, **kwargs):
-        self.layers = [layer(*argv, **kwargs) for _ in range(type_to_multivector_length[upstride_type])]
+        self.layers = get_layers(layer, *argv, **kwargs)
 
     def __call__(self, inputs):
         if len(inputs) == 1:
@@ -174,6 +187,15 @@ class BatchNormalization(GenericNonLinear):
 class Activation(GenericNonLinear):
     def __init__(self, *argv, **kwargs):
         super().__init__(tf.keras.layers.Activation, *argv, **kwargs)
+
+
+class Flatten(GenericNonLinear):
+    def __init__(self, *argv, **kwargs):
+        super().__init__(tf.keras.layers.Flatten, *argv, **kwargs)
+
+class Dropout(GenericNonLinear):
+    def __init__(self, *argv, **kwargs):
+        super().__init__(tf.keras.layers.Dropout, *argv, **kwargs)
 
 
 class TF2Upstride:
