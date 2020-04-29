@@ -127,11 +127,26 @@ class GenericLinear:
         return output
 
 
+def reorder(inputs):
+    # need to permute the 2 dimensions of the list
+    # for instance, if layer is Add on quaternion, inputs = [[a,b,c,d], [e,f,g,h]]
+    # need to transform to [[a,e],[b,f],[c,g],[d,h]]
+    new_inputs = [[] for _ in range(len(inputs[1]))]
+    for el in inputs:
+        for i, e in enumerate(el):
+            new_inputs[i].append(e)
+    return new_inputs
+
+
 class GenericNonLinear:
     def __init__(self, layer, *argv, **kwargs):
         self.layers = get_layers(layer, *argv, **kwargs)
+        self.list_as_input = False  # some layers like Add takes multiple inputs as list
 
     def __call__(self, inputs):
+        if self.list_as_input:
+            inputs = reorder(inputs)
+
         if len(inputs) == 1:
             output = [self.layers[i](inputs[0]) for i in range(type_to_multivector_length[upstride_type])]
         else:
@@ -169,9 +184,19 @@ class MaxPooling2D(GenericNonLinear):
         super().__init__(tf.keras.layers.MaxPooling2D, *argv, **kwargs)
 
 
+class MaxPool2D(GenericNonLinear):
+    def __init__(self, *argv, **kwargs):
+        super().__init__(tf.keras.layers.MaxPool2D, *argv, **kwargs)
+
+
 class GlobalMaxPooling2D(GenericNonLinear):
     def __init__(self, *argv, **kwargs):
         super().__init__(tf.keras.layers.GlobalMaxPooling2D, *argv, **kwargs)
+
+
+class GlobalAveragePooling2D(GenericNonLinear):
+    def __init__(self, *argv, **kwargs):
+        super().__init__(tf.keras.layers.GlobalAveragePooling2D, *argv, **kwargs)
 
 
 class Reshape(GenericNonLinear):
@@ -193,8 +218,38 @@ class Flatten(GenericNonLinear):
     def __init__(self, *argv, **kwargs):
         super().__init__(tf.keras.layers.Flatten, *argv, **kwargs)
 
+
+class ZeroPadding2D(GenericNonLinear):
+    def __init__(self, *argv, **kwargs):
+        super().__init__(tf.keras.layers.ZeroPadding2D, *argv, **kwargs)
+
+
+class ReLU(GenericNonLinear):
+    def __init__(self, *argv, **kwargs):
+        super().__init__(tf.keras.layers.ReLU, *argv, **kwargs)
+
+
+class LeakyReLU(GenericNonLinear):
+    def __init__(self, *argv, **kwargs):
+        super().__init__(tf.keras.layers.LeakyReLU, *argv, **kwargs)
+
+
+class Add(GenericNonLinear):
+    def __init__(self, *argv, **kwargs):
+        super().__init__(tf.keras.layers.Add, *argv, **kwargs)
+        self.list_as_input = True
+
+
+class Concatenate(GenericNonLinear):
+    def __init__(self, *argv, **kwargs):
+        super().__init__(tf.keras.layers.Concatenate, *argv, **kwargs)
+        self.list_as_input = True
+
+
 class Dropout(GenericNonLinear):
     def __init__(self, *argv, **kwargs):
+        # TODO for now dropout manage real part and img part separately. better if manage both at the same time
+        # solution : only one layer and concat before ? Or define all Dropout with the same seed ?
         super().__init__(tf.keras.layers.Dropout, *argv, **kwargs)
 
 
