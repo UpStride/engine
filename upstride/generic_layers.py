@@ -1,6 +1,7 @@
 """users shouldn't import this package directly. instead import upstride.typeX.tf.keras.layers
 """
-from typing import Tuple, List
+import inspect
+from typing import List, Tuple
 import tensorflow as tf
 
 upstride_type = 3  # setup when calling upstride.type{1/2/3}
@@ -86,21 +87,121 @@ def unit_multiplier(i, j):
 
 
 def get_layers(layer, *argv, **kwargs):
-    # special case for the name of the layer : if defined, then we need to change it to create different operation
+    """instantiate layer several times to match the number needed by the GA definition
+
+    Any parameter analysis need to be done here. For instance, we can't define several times 
+    a layer with the same name, so we need to edit the name manually
+
+    Args:
+        layer (tf.keras.layers.Layer): a keras layer that we need to instantiate several times
+
+    Returns:
+        List[tf.keras.layers.Layer]: the list of keras layers
+    """
+    # convert all arguments to kwargs using python inspection
+    parameters = inspect.getfullargspec(layer.__init__).args
+    for i, arg in enumerate(argv):
+        kwargs[parameters[i + 1]] = arg  # + 1 because the first element of parameters is 'self'
+
+    # If we define some bias, we don't want to put it in the linear layer but after, as a non-linear layer
+    add_bias = False
+    if "use_bias" in kwargs:
+        kwargs["use_bias"] = False
+        add_bias = True
+    elif 'use_bias' in inspect.signature(layer.__init__).parameters:
+        kwargs["use_bias"] = False
+        add_bias = inspect.signature(layer.__init__).parameters['use_bias'].default
+    bias_parameters = {}
+    if add_bias:
+        for param in ["bias_initializer", "bias_regularizer", "bias_constraint"]:
+            if param in kwargs:
+                bias_parameters[param] = kwargs[param]
+            else:
+                bias_parameters[param] = inspect.signature(layer.__init__).parameters[param].default
+
+
+    # special case for the name of the layer : if defined, then we need to change it to create different operations
     if 'name' not in kwargs:
-        layers = [layer(*argv, **kwargs) for _ in range(type_to_multivector_length[upstride_type])]
+        layers = [layer(**kwargs) for _ in range(type_to_multivector_length[upstride_type])]
     else:
         layers = []
         base_name = kwargs['name']
         for i in range(type_to_multivector_length[upstride_type]):
             kwargs['name'] = f'{base_name}_{i}'
-            layers.append(layer(*argv, **kwargs))
-    return layers
+            layers.append(layer(**kwargs))
+    return layers, add_bias, bias_parameters
+
+
+class BiasLayer(tf.keras.layers.Layer):
+    """Keras layer that only adds a bias to the input.
+    
+    code from https://github.com/tensorflow/agents/blob/v0.4.0/tf_agents/networks/bias_layer.py#L24-L81
+    with some modifications when initializing the weight to use the same conf as other layers
+
+    `BiasLayer` implements the operation:
+    `output = input + bias`
+    Arguments:
+        bias_initializer: Initializer for the bias vector.
+    Input shape:
+        nD tensor with shape: `(batch_size, ..., input_dim)`. The most common
+          situation would be a 2D input with shape `(batch_size, input_dim)`. Note
+          a rank of at least 2 is required.
+    Output shape:
+        nD tensor with shape: `(batch_size, ..., input_dim)`. For instance, for a
+          2D input with shape `(batch_size, input_dim)`, the output would have
+          shape `(batch_size, input_dim)`.
+    """
+
+    def __init__(self, bias_initializer='zeros', bias_regularizer=None, bias_constraint=None, **kwargs):
+        if 'input_shape' not in kwargs and 'input_dim' in kwargs:
+            kwargs['input_shape'] = (kwargs.pop('input_dim'),)
+
+        super(BiasLayer, self).__init__(**kwargs)
+        self.bias_initializer = tf.keras.initializers.get(bias_initializer)
+        self.bias_regularizer = tf.keras.regularizers.get(bias_regularizer)
+        self.bias_constraint = tf.keras.constraints.get(bias_constraint)
+
+        self.supports_masking = True
+        self.input_spec = tf.keras.layers.InputSpec(min_ndim=2)
+
+    def build(self, input_shape):
+        input_shape = tf.TensorShape(input_shape)
+        last_dim = tf.compat.dimension_value(input_shape[-1])
+
+        if last_dim is None:
+            raise ValueError('The last dimension of the inputs to `BiasLayer` '
+                             'should be defined. Found `None`.')
+
+        self.input_spec = tf.keras.layers.InputSpec(min_ndim=2, axes={-1: last_dim})
+        self.bias = self.add_weight(
+          name='bias',
+          shape=[input_shape[-1]],
+          initializer=self.bias_initializer,
+          regularizer=self.bias_regularizer,
+          constraint=self.bias_constraint,
+          trainable=True,
+          dtype=self.dtype)
+
+        self.built = True
+
+    def call(self, inputs):
+        return tf.nn.bias_add(inputs, self.bias)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {
+            'bias_initializer':
+                tf.keras.initializers.serialize(self.bias_initializer),
+        }
+        base_config = super(BiasLayer, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 class GenericLinear:
     def __init__(self, layer, *argv, **kwargs):
-        self.layers = get_layers(layer, *argv, **kwargs)
+        self.layers, self.add_bias, self.bias_parameters = get_layers(layer, *argv, **kwargs)
 
     def __call__(self, inputs):
         if len(inputs) == 1:
@@ -124,6 +225,9 @@ class GenericLinear:
                             output[k] = -self.layers[i](inputs[j])
                         else:
                             output[k] -= self.layers[i](inputs[j])
+        if self.add_bias:
+            for i in range(type_to_multivector_length[upstride_type]):
+                output[i] = BiasLayer(self.bias_parameters['bias_initializer'], self.bias_parameters['bias_regularizer'], self.bias_parameters['bias_constraint'])(output[i])
         return output
 
 
@@ -140,8 +244,8 @@ def reorder(inputs):
 
 class GenericNonLinear:
     def __init__(self, layer, *argv, **kwargs):
-        self.layers = get_layers(layer, *argv, **kwargs)
-        self.list_as_input = False  # some layers like Add takes multiple inputs as list
+        self.layers, self.add_bias, self.bias_parameters = get_layers(layer, *argv, **kwargs)
+        self.list_as_input = False  # some layers like Add or Contatenates takes a list of tensor as input
 
     def __call__(self, inputs):
         if self.list_as_input:
