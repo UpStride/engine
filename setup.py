@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="upstride_python",
+    name="upstride",
     version="0.1.0",
     author="UpStride S.A.S",
     author_email="hello@upstride.io",
@@ -17,9 +17,9 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
-    test_suite="nose.collector",
-    tests_require=['nose'],
-    install_requires=[
-        'PyYAML',
-    ],
+    # test_suite="",
+    # tests_require=[''],
+    # install_requires=[
+    #     '',
+    # ],
 )

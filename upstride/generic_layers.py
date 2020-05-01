@@ -48,7 +48,7 @@ def _ga_multiply_get_index(index_1: str, index_2: str) -> Tuple[int, str]:
     return even_number_of_permutations, "".join([str(i) for i in index])
 
 
-def unit_multiplier(i, j):
+def unit_multiplier(i: int, j: int) -> Tuple[int, int]:
     """given e_i and e_j, return (k,s) such as : e_i * e_j = s * e_k
 
     with:
@@ -86,7 +86,7 @@ def unit_multiplier(i, j):
         return type3_index_to_multivector[index], s
 
 
-def get_layers(layer, *argv, **kwargs):
+def get_layers(layer: tf.keras.layers.Layer, *argv, **kwargs) -> Tuple[List[tf.keras.layers.Layer], bool, dict]:
     """instantiate layer several times to match the number needed by the GA definition
 
     Any parameter analysis need to be done here. For instance, we can't define several times 
@@ -98,28 +98,27 @@ def get_layers(layer, *argv, **kwargs):
     Returns:
         List[tf.keras.layers.Layer]: the list of keras layers
     """
-    # convert all arguments to kwargs using python inspection
+    # convert all arguments from argv to kwargs
     parameters = inspect.getfullargspec(layer.__init__).args
     for i, arg in enumerate(argv):
         kwargs[parameters[i + 1]] = arg  # + 1 because the first element of parameters is 'self'
+    # add all default parameters to kwargs
+    for key, value in inspect.signature(layer.__init__).parameters.items():
+        if key in ['self', 'kwargs']:
+            continue
+        if key not in kwargs:
+            kwargs[key] = value.default
 
     # If we define some bias, we don't want to put it in the linear layer but after, as a non-linear layer
     add_bias = False
     if "use_bias" in kwargs:
+        add_bias = kwargs["use_bias"]
         kwargs["use_bias"] = False
-        add_bias = True
-    elif 'use_bias' in inspect.signature(layer.__init__).parameters:
-        kwargs["use_bias"] = False
-        add_bias = inspect.signature(layer.__init__).parameters['use_bias'].default
     bias_parameters = {}
     if add_bias:
         for param in ["bias_initializer", "bias_regularizer", "bias_constraint"]:
-            if param in kwargs:
-                bias_parameters[param] = kwargs[param]
-            else:
-                bias_parameters[param] = inspect.signature(layer.__init__).parameters[param].default
-
-
+            bias_parameters[param] = kwargs[param]
+            
     # special case for the name of the layer : if defined, then we need to change it to create different operations
     if 'name' not in kwargs:
         layers = [layer(**kwargs) for _ in range(type_to_multivector_length[upstride_type])]
@@ -134,7 +133,7 @@ def get_layers(layer, *argv, **kwargs):
 
 class BiasLayer(tf.keras.layers.Layer):
     """Keras layer that only adds a bias to the input.
-    
+
     code from https://github.com/tensorflow/agents/blob/v0.4.0/tf_agents/networks/bias_layer.py#L24-L81
     with some modifications when initializing the weight to use the same conf as other layers
 
@@ -174,13 +173,13 @@ class BiasLayer(tf.keras.layers.Layer):
 
         self.input_spec = tf.keras.layers.InputSpec(min_ndim=2, axes={-1: last_dim})
         self.bias = self.add_weight(
-          name='bias',
-          shape=[input_shape[-1]],
-          initializer=self.bias_initializer,
-          regularizer=self.bias_regularizer,
-          constraint=self.bias_constraint,
-          trainable=True,
-          dtype=self.dtype)
+            name='bias',
+            shape=[input_shape[-1]],
+            initializer=self.bias_initializer,
+            regularizer=self.bias_regularizer,
+            constraint=self.bias_constraint,
+            trainable=True,
+            dtype=self.dtype)
 
         self.built = True
 
