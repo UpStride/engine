@@ -120,7 +120,7 @@ def get_layers(layer: tf.keras.layers.Layer, *argv, **kwargs) -> Tuple[List[tf.k
             bias_parameters[param] = kwargs[param]
             
     # special case for the name of the layer : if defined, then we need to change it to create different operations
-    if 'name' not in kwargs:
+    if 'name' not in kwargs or kwargs['name'] is None:
         layers = [layer(**kwargs) for _ in range(type_to_multivector_length[upstride_type])]
     else:
         layers = []
