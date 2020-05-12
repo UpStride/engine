@@ -5,12 +5,14 @@ import inspect
 from typing import List, Tuple
 import tensorflow as tf
 
+from .convolutional import Conv2D as Conv2DConj
+
 # Definition of the GA, setup when upstride.type{1/2/3}.calling tf.keras.layers
 upstride_type = 3
 blade_indexes = ["", "1", "2", "3", "12", "13", "23", "123"]
 geometrical_def = (3, 0, 0)
 
-conjugate=False
+conjugate = False
 
 
 def set_conjugaison_mult(b):
@@ -103,7 +105,7 @@ def unit_multiplier(i: int, j: int) -> Tuple[int, int]:
     return blade_index_to_position(index), s
 
 
-def get_layers(layer: tf.keras.layers.Layer, *argv, **kwargs) -> Tuple[List[tf.keras.layers.Layer], bool, dict]:
+def get_layers(layer: tf.keras.layers.Layer, conj_layer: tf.keras.layers.Layer = None, *argv, **kwargs) -> Tuple[List[tf.keras.layers.Layer], bool, dict]:
     """instantiate layer several times to match the number needed by the GA definition
 
     Any parameter analysis need to be done here. For instance, we can't define several times 
@@ -145,7 +147,26 @@ def get_layers(layer: tf.keras.layers.Layer, *argv, **kwargs) -> Tuple[List[tf.k
         for i in range(multivector_length()):
             kwargs['name'] = f'{base_name}_{i}'
             layers.append(layer(**kwargs))
-    return layers, add_bias, bias_parameters
+
+    if conj_layer is not None:
+        kwargs['ga_dimension'] = multivector_length()
+        conj_layer = conj_layer(**kwargs)
+        return layers, add_bias, bias_parameters, conj_layer
+    else:
+        return layers, add_bias, bias_parameters, None
+
+
+def dagger_sign() -> List[int]:
+    """ return a array s such as for a vecor v of the GA, dagger{v} = s*v
+    dagger is defined by dagger{v} * v = 1
+    """
+    s = []
+    for i in blade_indexes:
+        if len(i) in [0, 1]:
+            s.append(1)
+        else:
+            s.append(-1)
+    return s
 
 
 def compute_all_cross_product(layers, inputs, convert_to_tf):
@@ -261,24 +282,42 @@ class BiasLayer(tf.keras.layers.Layer):
 
 
 class GenericLinear:
-    def __init__(self, layer, *argv, upstride2tf=False, **kwargs):
-        self.layers, self.add_bias, self.bias_parameters = get_layers(layer, *argv, **kwargs)
+    def __init__(self, layer, conj_layer=None, *argv, upstride2tf=False, **kwargs):
+        # if the layer can run conjugaison, then self.conj_layer is an instance of the conj layer, else none
+        self.layers, self.add_bias, self.bias_parameters, self.conj_layer = get_layers(layer, conj_layer, *argv, **kwargs)
         self.convert_to_tf = upstride2tf
-        
 
     def __call__(self, inputs):
-        if len(inputs) == 1:
-            # real input
-            x = inputs[0]
-            output = [self.layers[i](x) for i in range(multivector_length())]
+        if not conjugate or self.conj_layer is None:
+            if len(inputs) == 1:
+                # real input
+                x = inputs[0]
+                output = [self.layers[i](x) for i in range(multivector_length())]
+            else:
+                # R^{multivector_length()} input
+                layers_outputs = compute_all_cross_product(self.layers, inputs, self.convert_to_tf and not conjugate)
+                output = geometric_multiplication(layers_outputs)
         else:
-            # R^{multivector_length()} input
-            layers_outputs = compute_all_cross_product(self.layers, inputs, self.convert_to_tf and not conjugate)
-            output = geometric_multiplication(layers_outputs)
+            outputs = self.conj_layer(inputs)
+            print(outputs)
+            # now outputs is
+            # - a list of 3 dimension if inputs is a Tensor with outputs[i][j][0] = conv2D(pointwise_mult(w_i, w_j), x)
+            # - a list of 3 dimension if inputs is a list with outputs[i][j][k] = conv2D(pointwise_mult(w_i, w_j), x_k)
 
-        if conjugate:
-            layers_outputs = compute_all_cross_product(self.layers, output, self.convert_to_tf)
-            output = geometric_multiplication(layers_outputs, inverse=True)
+            # now sum the results
+            output = [None] * multivector_length()
+            d = dagger_sign()
+            for i in range(multivector_length()):
+                for j in range(multivector_length()):
+                    for k in range(len(outputs[0][0])):
+                        t, s1 = unit_multiplier(i, k)
+                        t, s2 = unit_multiplier(t, j)
+                        if output[t] is None:
+                            print(d)
+                            print(outputs[i][j][k])
+                            output[t] = s1*s2*d[i] * outputs[i][j][k]
+                        else:
+                            output[t] += s1*s2*d[i] * outputs[i][j][k]
 
         if self.add_bias:
             for i in range(multivector_length()):
@@ -299,7 +338,7 @@ def reorder(inputs):
 
 class GenericNonLinear:
     def __init__(self, layer, *argv, **kwargs):
-        self.layers, self.add_bias, self.bias_parameters = get_layers(layer, *argv, **kwargs)
+        self.layers, self.add_bias, self.bias_parameters, _ = get_layers(layer, None, *argv, **kwargs)
         self.list_as_input = False  # some layers like Add or Contatenates takes a list of tensor as input
 
     def __call__(self, inputs):
@@ -315,7 +354,7 @@ class GenericNonLinear:
 
 class Conv2D(GenericLinear):
     def __init__(self, *argv, **kwargs):
-        super().__init__(tf.keras.layers.Conv2D, *argv, **kwargs)
+        super().__init__(tf.keras.layers.Conv2D, Conv2DConj, *argv, **kwargs)
 
 
 class Dense(GenericLinear):
