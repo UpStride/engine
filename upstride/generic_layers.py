@@ -1,51 +1,87 @@
 """users shouldn't import this package directly. instead import upstride.typeX.tf.keras.layers
 """
+import functools
 import inspect
 from typing import List, Tuple
 import tensorflow as tf
 
-upstride_type = 3  # setup when calling upstride.type{1/2/3}
+# Definition of the GA, setup when upstride.type{1/2/3}.calling tf.keras.layers
+upstride_type = 3
+blade_indexes = ["", "1", "2", "3", "12", "13", "23", "123"]
+geometrical_def = (3, 0, 0)
 
-type_to_multivector_length = {
-    1: 2,
-    2: 4,
-    3: 8
-}
+conjugate=False
 
-type3_multivector_to_index = ["", "1", "2", "3", "12", "13", "23", "123"]
-type3_index_to_multivector = {
-    "": 0,
-    "1": 1,
-    "2": 2,
-    "3": 3,
-    "12": 4,
-    "13": 5,
-    "23": 6,
-    "123": 7
-}
+
+def set_conjugaison_mult(b):
+    global conjugate
+    conjugate = b
+
+
+def multivector_length() -> int:
+    """map the upstride type to the number of dimensions in our GA
+    """
+    return len(blade_indexes)
+
+
+def blade_index_to_position(index: str) -> int:
+    @functools.lru_cache(maxsize=1)
+    def get_dict():
+        """return a dictionary that map the blade index to the position in the list encoding the multivector
+        """
+        dict = {}
+        for i, e in enumerate(blade_indexes):
+            dict[e] = i
+        return dict
+    return get_dict()[index]
+
+
+def square_vector(index: int) -> int:
+    @functools.lru_cache(maxsize=1)
+    def get_list():
+        """return a list that map the indice to the sqare
+        """
+        list = [0]
+        possible_squares = [1, -1, 0]
+        for i in range(3):
+            list += [possible_squares[i]] * geometrical_def[i]
+        return list
+    return get_list()[index]
 
 
 def _ga_multiply_get_index(index_1: str, index_2: str) -> Tuple[int, str]:
     """given e_{index_1}, e_{index_2} return (s, index) such as e_{index_1} * e_{index_2} = s * e_{index}
     """
-    even_number_of_permutations = True
-    index = [int(i) for i in index_1 + index_2]
-    # first we sort the index
-    for i in range(len(index) - 1):
-        for j in range(len(index) - i - 1):
-            if int(index[j]) > int(index[j + 1]):
-                index[j], index[j + 1] = index[j + 1], index[j]
-                even_number_of_permutations = not even_number_of_permutations
-    # then we remove the doubles
-    i = 0
-    while i < len(index) - 1:
-        if index[i] == index[i + 1]:
-            index = index[:i] + index[i+2:]
-        else:
-            i += 1
-        # TODO for generic GA, we need to know the parameters of G(a,b,c), to know if the square is 1, -1, or 0
-        # one solution : add a,b and c as global variables and compare index[i] with a, a+b, a+b+c
-    return even_number_of_permutations, "".join([str(i) for i in index])
+    l1 = [int(i) for i in index_1]
+    l2 = [int(i) for i in index_2]
+    s = 1
+
+    # as l1 and l2 are already sorted, we can just merge them and count the number of permutation needed
+    i1, i2, length_l1 = 0, 0, len(l1)
+    out_l = []
+    while i1 < len(l1) and i2 < len(l2):
+        if l1[i1] == l2[i2]:
+            # then move the element of l2 near the element of l1 and remove them
+            if (length_l1 - 1) % 2 != 0:
+                s *= -1
+            # check the sign of the square
+            s *= square_vector(l1[i1])
+            length_l1 -= 1
+            i1 += 1
+            i2 += 1
+        elif l1[i1] > l2[i2]:
+            # then move the element of l2 before the element of l1
+            if length_l1 % 2 != 0:
+                s *= -1
+            out_l.append(l2[i2])
+            i2 += 1
+        elif l1[i1] < l2[i2]:
+            out_l.append(l1[i1])
+            length_l1 -= 1
+            i1 += 1
+    out_l += l1[i1:] + l2[i2:]
+
+    return s, "".join([str(i) for i in out_l])
 
 
 def unit_multiplier(i: int, j: int) -> Tuple[int, int]:
@@ -61,29 +97,10 @@ def unit_multiplier(i: int, j: int) -> Tuple[int, int]:
     (0, 1) -> (1, 1) because e_0 * e_1 = 1 * e_1
     (1, 1) -> (0, -1) because e_1 * e_1 = i**2 = -1 = -1 * e_0
     """
-    # rules are the same for complex and quaternion
-    if upstride_type in [1, 2]:
-        if i == 0 and j == 0:  # real multiplies by real gives real
-            return 0, 1
-        elif i == j:
-            return 0, -1
-        elif i == 0 or j == 0:
-            return max(i, j), 1
-        else:  # this case is only for quaternion
-            id = 6 - i - j
-            if i > j:
-                return id, -1
-            if i < j:
-                return id, 1
-    if upstride_type == 3:  # (scalar, e1, e2, e3, e12, e13, e23, e123)
-        index1 = type3_multivector_to_index[i]
-        index2 = type3_multivector_to_index[j]
-        even_number_of_permutations, index = _ga_multiply_get_index(index1, index2)
-        if even_number_of_permutations:
-            s = 1
-        else:
-            s = -1
-        return type3_index_to_multivector[index], s
+    index1 = blade_indexes[i]
+    index2 = blade_indexes[j]
+    s, index = _ga_multiply_get_index(index1, index2)
+    return blade_index_to_position(index), s
 
 
 def get_layers(layer: tf.keras.layers.Layer, *argv, **kwargs) -> Tuple[List[tf.keras.layers.Layer], bool, dict]:
@@ -118,17 +135,62 @@ def get_layers(layer: tf.keras.layers.Layer, *argv, **kwargs) -> Tuple[List[tf.k
     if add_bias:
         for param in ["bias_initializer", "bias_regularizer", "bias_constraint"]:
             bias_parameters[param] = kwargs[param]
-            
+
     # special case for the name of the layer : if defined, then we need to change it to create different operations
     if 'name' not in kwargs or kwargs['name'] is None:
-        layers = [layer(**kwargs) for _ in range(type_to_multivector_length[upstride_type])]
+        layers = [layer(**kwargs) for _ in range(multivector_length())]
     else:
         layers = []
         base_name = kwargs['name']
-        for i in range(type_to_multivector_length[upstride_type]):
+        for i in range(multivector_length()):
             kwargs['name'] = f'{base_name}_{i}'
             layers.append(layer(**kwargs))
     return layers, add_bias, bias_parameters
+
+
+def compute_all_cross_product(layers, inputs, convert_to_tf):
+    layers_outputs = []
+    if not convert_to_tf:
+        # if there is no chance to convert back to tf, we can use time-distribute layer to speed up and save memory
+        tdlayers = [tf.keras.layers.TimeDistributed(layer) for layer in layers]
+        reshaped_inputs = [tf.keras.layers.Reshape([1] + e.shape[1:])(e) for e in inputs]
+        inputs = tf.keras.layers.Concatenate(axis=1)(reshaped_inputs)
+        td_outputs = [tdlater(inputs) for tdlater in tdlayers]
+
+        for i in range(multivector_length()):
+            layers_outputs.append([])
+            for j in range(multivector_length()):
+                layers_outputs[i].append(td_outputs[i][:, j, :, :, :])
+    if convert_to_tf:
+        # if there is a chance to convert back to tf, keep the simple way so tf will be able to prune ops
+        for i in range(multivector_length()):
+            layers_outputs.append([])
+            for j in range(multivector_length()):
+                layers_outputs[i].append(layers[i](inputs[j]))
+    return layers_outputs
+
+
+def geometric_multiplication(cross_product_matrix, inverse=False):
+    output = [None] * multivector_length()
+    for i in range(multivector_length()):
+        for j in range(multivector_length()):
+            if not inverse:
+                k, s = unit_multiplier(i, j)
+            else:
+                k, s = unit_multiplier(j, i)
+
+            # same as output[k] += s*self.layers[i](inputs[j]), but cleaner graph
+            if s == 1:
+                if output[k] is None:
+                    output[k] = cross_product_matrix[i][j]
+                else:
+                    output[k] += cross_product_matrix[i][j]
+            elif s == -1:
+                if output[k] is None:
+                    output[k] = -cross_product_matrix[i][j]
+                else:
+                    output[k] -= cross_product_matrix[i][j]
+    return output
 
 
 class BiasLayer(tf.keras.layers.Layer):
@@ -199,33 +261,27 @@ class BiasLayer(tf.keras.layers.Layer):
 
 
 class GenericLinear:
-    def __init__(self, layer, *argv, **kwargs):
+    def __init__(self, layer, *argv, upstride2tf=False, **kwargs):
         self.layers, self.add_bias, self.bias_parameters = get_layers(layer, *argv, **kwargs)
+        self.convert_to_tf = upstride2tf
+        
 
     def __call__(self, inputs):
         if len(inputs) == 1:
             # real input
             x = inputs[0]
-            output = [self.layers[i](x) for i in range(type_to_multivector_length[upstride_type])]
+            output = [self.layers[i](x) for i in range(multivector_length())]
         else:
-            # R^{type_to_multivector_length[upstride_type]} input
-            output = [None] * type_to_multivector_length[upstride_type]
-            for i in range(type_to_multivector_length[upstride_type]):
-                for j in range(type_to_multivector_length[upstride_type]):
-                    k, s = unit_multiplier(i, j)
-                    # same as output[k] += s*self.layers[i](inputs[j]), but cleaner graph
-                    if s == 1:
-                        if output[k] is None:
-                            output[k] = self.layers[i](inputs[j])
-                        else:
-                            output[k] += self.layers[i](inputs[j])
-                    else:
-                        if output[k] is None:
-                            output[k] = -self.layers[i](inputs[j])
-                        else:
-                            output[k] -= self.layers[i](inputs[j])
+            # R^{multivector_length()} input
+            layers_outputs = compute_all_cross_product(self.layers, inputs, self.convert_to_tf and not conjugate)
+            output = geometric_multiplication(layers_outputs)
+
+        if conjugate:
+            layers_outputs = compute_all_cross_product(self.layers, output, self.convert_to_tf)
+            output = geometric_multiplication(layers_outputs, inverse=True)
+
         if self.add_bias:
-            for i in range(type_to_multivector_length[upstride_type]):
+            for i in range(multivector_length()):
                 output[i] = BiasLayer(self.bias_parameters['bias_initializer'], self.bias_parameters['bias_regularizer'], self.bias_parameters['bias_constraint'])(output[i])
         return output
 
@@ -251,9 +307,9 @@ class GenericNonLinear:
             inputs = reorder(inputs)
 
         if len(inputs) == 1:
-            output = [self.layers[i](inputs[0]) for i in range(type_to_multivector_length[upstride_type])]
+            output = [self.layers[i](inputs[0]) for i in range(multivector_length())]
         else:
-            output = [self.layers[i](inputs[i]) for i in range(type_to_multivector_length[upstride_type])]
+            output = [self.layers[i](inputs[i]) for i in range(multivector_length())]
         return output
 
 
@@ -290,6 +346,7 @@ class SeparableConv2D(GenericLinear):
 class MaxPooling2D(GenericNonLinear):
     def __init__(self, *argv, **kwargs):
         super().__init__(tf.keras.layers.MaxPooling2D, *argv, **kwargs)
+
 
 class AveragePooling2D(GenericNonLinear):
     def __init__(self, *argv, **kwargs):

@@ -5,6 +5,7 @@ from upstride.type1.tf.keras import layers
 
 class TestUpstride(unittest.TestCase):
     def test_network(self):
+        # layers.set_conjugaison_mult(True)
         inputs = tf.keras.layers.Input(shape=(224, 224, 3))
         x = layers.TF2Upstride()(inputs)
         self.assertEqual(len(x), 1)
@@ -13,9 +14,9 @@ class TestUpstride(unittest.TestCase):
         x = layers.Activation('relu')(x)
         x = layers.Conv2D(4, (3, 3))(x)
         x = layers.Activation('relu')(x)
-        x = layers.Conv2D(4, (3, 3))(x)
-        x = layers.Activation('relu')(x)
+        x = layers.Conv2D(4, (3, 3), upstride2tf=True)(x)
         x = layers.Upstride2TF()(x)
+        x = tf.keras.layers.Activation('relu')(x)
 
         model = tf.keras.Model(inputs=[inputs], outputs=[x])
         model.summary()

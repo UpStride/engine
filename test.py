@@ -6,20 +6,20 @@ from upstride.generic_layers import _ga_multiply_get_index, upstride_type, unit_
 
 class TestGAMultiplication(unittest.TestCase):
     def test_ga_multiply_get_index(self):
-        even_n_permutation, index = _ga_multiply_get_index("123", "12")
-        self.assertEqual(even_n_permutation, False)
+        s, index = _ga_multiply_get_index("123", "12")
+        self.assertEqual(s, -1)
         self.assertEqual(index, "3")
-        even_n_permutation, index = _ga_multiply_get_index("13", "12")
-        self.assertEqual(even_n_permutation, True)
+        s, index = _ga_multiply_get_index("13", "12")
+        self.assertEqual(s, 1)
         self.assertEqual(index, "23")
-        even_n_permutation, index = _ga_multiply_get_index("3", "2")
-        self.assertEqual(even_n_permutation, False)
+        s, index = _ga_multiply_get_index("3", "2")
+        self.assertEqual(s, -1)
         self.assertEqual(index, "23")
-        even_n_permutation, index = _ga_multiply_get_index("232", "32")
-        self.assertEqual(even_n_permutation, False)
-        self.assertEqual(index, "2")
-        even_n_permutation, index = _ga_multiply_get_index("2", "2")
-        self.assertEqual(even_n_permutation, True)
+        s, index = _ga_multiply_get_index("32", "32")
+        self.assertEqual(s, -1)
+        self.assertEqual(index, "")
+        s, index = _ga_multiply_get_index("2", "2")
+        self.assertEqual(s, 1)
         self.assertEqual(index, "")
 
     def test_unit_multiplier(self):
