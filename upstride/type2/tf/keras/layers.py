@@ -1,16 +1,16 @@
-from tf.keras.layers import Layer
-from tf.keras import initializers
+from tensorflow.keras.layers import Layer
+from tensorflow.keras import initializers
 from .... import generic_layers
 from .... generic_layers import *
 
 generic_layers.upstride_type = 2
-generic_layers.blade_indexes = ["", "12", "23", "31"]
+generic_layers.blade_indexes = ["", "12", "23", "13"]
 generic_layers.geometrical_def = (3, 0, 0)
 
 # If you wish to overwrite some layers, please implements them here
 
 
-class TF2Upstride(Layer):
+class TF2UpstrideUnfinished(Layer):
     """assume this function is called at the begining of the network. Put colors to imaginary parts and grayscale in real
     """
 

@@ -178,10 +178,12 @@ def compute_all_cross_product(layers, inputs, convert_to_tf):
         inputs = tf.keras.layers.Concatenate(axis=1)(reshaped_inputs)
         td_outputs = [tdlater(inputs) for tdlater in tdlayers]
 
+        print(td_outputs[0].shape)
+
         for i in range(multivector_length()):
             layers_outputs.append([])
             for j in range(multivector_length()):
-                layers_outputs[i].append(td_outputs[i][:, j, :, :, :])
+                layers_outputs[i].append(td_outputs[i][:, j, :])
     if convert_to_tf:
         # if there is a chance to convert back to tf, keep the simple way so tf will be able to prune ops
         for i in range(multivector_length()):
@@ -282,7 +284,7 @@ class BiasLayer(tf.keras.layers.Layer):
 
 
 class GenericLinear:
-    def __init__(self, layer, conj_layer=None, *argv, upstride2tf=False, **kwargs):
+    def __init__(self, layer, *argv, upstride2tf=False, conj_layer=None, **kwargs):
         # if the layer can run conjugaison, then self.conj_layer is an instance of the conj layer, else none
         self.layers, self.add_bias, self.bias_parameters, self.conj_layer = get_layers(layer, conj_layer, *argv, **kwargs)
         self.convert_to_tf = upstride2tf
@@ -354,7 +356,7 @@ class GenericNonLinear:
 
 class Conv2D(GenericLinear):
     def __init__(self, *argv, **kwargs):
-        super().__init__(tf.keras.layers.Conv2D, Conv2DConj, *argv, **kwargs)
+        super().__init__(tf.keras.layers.Conv2D, *argv, conj_layer=Conv2DConj, **kwargs)
 
 
 class Dense(GenericLinear):
