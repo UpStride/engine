@@ -2,6 +2,8 @@ from tensorflow.keras.layers import Layer
 from tensorflow.keras import initializers
 from .... import generic_layers
 from .... generic_layers import *
+from .convolutional import Conv2D
+from .dense import Dense
 
 generic_layers.upstride_type = 2
 generic_layers.blade_indexes = ["", "12", "23", "13"]
