@@ -178,8 +178,6 @@ class Conv(Layer):
     else:
       self.biases = None
     channel_axis = self._get_channel_axis()
-    self.input_spec = InputSpec(ndim=self.rank + 2,
-                                axes={channel_axis: input_channel})
 
     self._build_conv_op_input_shape = input_shape
     self._build_input_channel = input_channel
