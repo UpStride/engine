@@ -15,6 +15,8 @@ class TestUpstride(unittest.TestCase):
         x = layers.Activation('relu')(x)
         x = layers.Conv2D(4, (3, 3))(x)
         x = layers.Activation('relu')(x)
+        x = layers.Flatten()(x)
+        x = layers.Dense(100)(x)
         x = layers.Upstride2TF()(x)
 
         model = tf.keras.Model(inputs=[inputs], outputs=[x])

@@ -103,4 +103,4 @@ def quaternion_mult2(tf_op, inputs, kernels):
 
 
 multiply_by_a = multiply_by_a1
-quaternion_mult = quaternion_mult2
+quaternion_mult = quaternion_mult1
