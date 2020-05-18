@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.python.ops import gen_math_ops
 from upstride import generic_layers
 from upstride.generic_layers import _ga_multiply_get_index, upstride_type, unit_multiplier, reorder
-from upstride.type2.tf.keras.utils import quaternion_mult1, quaternion_mult2, multiply_by_a1, multiply_by_a2
+from upstride.type2.tf.keras.utils import quaternion_mult1, quaternion_mult2, multiply_by_a1, multiply_by_a2, quaternion_mult_naive
 
 
 class TestGAMultiplication(unittest.TestCase):
@@ -92,23 +92,32 @@ class TestQuaternionMult(unittest.TestCase):
         self.assertEqual(quaternion_mult2(op,  [1, 2, 0, 3], [0, 2, 2, 0]), [-4, -4, 8, 4])
         self.assertEqual(quaternion_mult2(op,  [1, 2, 3, 4], [5, 6, 7, 8]), [-60, 12, 30, 24])
 
-    def test_big_matric_precision(self):
-        shape = (1000, 1000)
-        type = tf.dtypes.float16
-        a = [tf.random.uniform(shape, minval=0, maxval=1, dtype=type, seed=None, name=None) for i in range(4)]
-        b = [tf.random.uniform(shape, minval=0, maxval=1/1000, dtype=type, seed=None, name=None) for i in range(4)]
-        c = quaternion_mult2(gen_math_ops.mat_mul, a, b)
-        d = c[0] - (gen_math_ops.mat_mul(a[0], b[0])-gen_math_ops.mat_mul(a[1], b[1])-gen_math_ops.mat_mul(a[2], b[2])-gen_math_ops.mat_mul(a[3], b[3]))
-        e = c[1] - (gen_math_ops.mat_mul(a[0], b[1])+gen_math_ops.mat_mul(a[1], b[0])+gen_math_ops.mat_mul(a[2], b[3])-gen_math_ops.mat_mul(a[3], b[2]))
-        print(c)
-        print(tf.math.reduce_max(tf.math.abs(d)))
-        print(tf.math.reduce_max(tf.math.abs(e)))
+    def test_quaternion_mult_naive(self):
+        def op(x, y): return x*y
+        self.assertEqual(quaternion_mult_naive(op,  [1, 0, 0, 0], [1, 0, 0, 0]), [1, 0, 0, 0])
+        self.assertEqual(quaternion_mult_naive(op,  [1, 0, 0, 0], [0, 2, 0, 0]), [0, 2, 0, 0])
+        self.assertEqual(quaternion_mult_naive(op,  [0, 2, 2, 0], [0, 2, 0, 0]), [-4, 0, 0, -4])
+        self.assertEqual(quaternion_mult_naive(op,  [1, 2, 0, 3], [0, 2, 2, 0]), [-4, -4, 8, 4])
+        self.assertEqual(quaternion_mult_naive(op,  [1, 2, 3, 4], [5, 6, 7, 8]), [-60, 12, 30, 24])
 
-        c = quaternion_mult1(gen_math_ops.mat_mul, a, b)
-        d = c[0] - (gen_math_ops.mat_mul(a[0], b[0])-gen_math_ops.mat_mul(a[1], b[1])-gen_math_ops.mat_mul(a[2], b[2])-gen_math_ops.mat_mul(a[3], b[3]))
-        e = c[1] - (gen_math_ops.mat_mul(a[0], b[1])+gen_math_ops.mat_mul(a[1], b[0])+gen_math_ops.mat_mul(a[2], b[3])-gen_math_ops.mat_mul(a[3], b[2]))
-        print(tf.math.reduce_max(tf.math.abs(d)))
-        print(tf.math.reduce_max(tf.math.abs(e)))
+
+    # def test_big_matric_precision(self):
+    #     shape = (1000, 1000)
+    #     type = tf.dtypes.float16
+    #     a = [tf.random.uniform(shape, minval=0, maxval=1, dtype=type, seed=None, name=None) for i in range(4)]
+    #     b = [tf.random.uniform(shape, minval=0, maxval=1/1000, dtype=type, seed=None, name=None) for i in range(4)]
+    #     c = quaternion_mult2(gen_math_ops.mat_mul, a, b)
+    #     d = c[0] - (gen_math_ops.mat_mul(a[0], b[0])-gen_math_ops.mat_mul(a[1], b[1])-gen_math_ops.mat_mul(a[2], b[2])-gen_math_ops.mat_mul(a[3], b[3]))
+    #     e = c[1] - (gen_math_ops.mat_mul(a[0], b[1])+gen_math_ops.mat_mul(a[1], b[0])+gen_math_ops.mat_mul(a[2], b[3])-gen_math_ops.mat_mul(a[3], b[2]))
+    #     print(c)
+    #     print(tf.math.reduce_max(tf.math.abs(d)))
+    #     print(tf.math.reduce_max(tf.math.abs(e)))
+
+    #     c = quaternion_mult1(gen_math_ops.mat_mul, a, b)
+    #     d = c[0] - (gen_math_ops.mat_mul(a[0], b[0])-gen_math_ops.mat_mul(a[1], b[1])-gen_math_ops.mat_mul(a[2], b[2])-gen_math_ops.mat_mul(a[3], b[3]))
+    #     e = c[1] - (gen_math_ops.mat_mul(a[0], b[1])+gen_math_ops.mat_mul(a[1], b[0])+gen_math_ops.mat_mul(a[2], b[3])-gen_math_ops.mat_mul(a[3], b[2]))
+    #     print(tf.math.reduce_max(tf.math.abs(d)))
+    #     print(tf.math.reduce_max(tf.math.abs(e)))
 
 
 if __name__ == "__main__":

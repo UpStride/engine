@@ -249,7 +249,7 @@ $$
 
 So 16 multiplications and 12 additions.
 
-In term of tensorflow operations, because of the isomorphism between $\mathbb{M} \circ \mathbb{G}$ and $\mathbb{G} \circ \mathbb{M}$
+In term of tensorflow operations, because of the isomorphism between $\mathbb{M} \circ \mathbb{G}$ and $\mathbb{G} \circ \mathbb{M}$, it means for implementing a linear layer on $\mathbb{H}$, it takes 16 calls to the linear layer on $\mathbb{R}$
 
 The same results can be achieved by computing: 
 
@@ -262,7 +262,124 @@ with
 
 $$ A = \begin{pmatrix} 1 & 1& 1& 1 \\ 1 & -1 &1&-1\\1&1&-1&-1\\1&-1&-1&1 \end{pmatrix}$$
 
-So 40 additions and 8 multiplications are needed
+We will call this method 1. 40 additions and 8 multiplications are needed, so for implementing a linear layer, 8 calls to the linear layer on $\mathbb{R}$ are needed.
+
+Another method is to compute :
+
+$$
+\begin{cases} 
+  A_1 = & (a_4 + a_2)(b_2 + b_3) \\
+  A_3 = & (a_1 - a_3)(b_1 + b_4) \\
+  A_4 = & (a_1 + a_3)(b_1 - b_4) \\
+  A_2 = & A_1 + A_3 + A_4 \\
+  A_5 = & 0.5(A_2 + (a_4-a_2)(b_2-b_3)) \\
+  Q_1 = & A_5 - A_1 + (a_4 - a_3)(b_3 - b_4) \\
+  Q_2 = & A_5 - A_2 + (a_2 + a_1)(b_2 + b_1) \\
+  Q_3 = & A_5 - A_3 + (a_1 - a_2)(b_3 + b_4) \\
+  Q_4 = & A_5 - A_4 + (a_4 + a_3)(b_1 - b_2) \\
+\end{cases}
+$$
+
+This method takes allso 8 calls to the linear layer on $\mathbb{R}$ to implement the layer on $\mathbb{H}$.
+
+After implementing these methods, we found that they work very well when working with float 32, but not in float 16.
+
+One posibiilities is that the precision error with with computation method prevent it from working in float 16, so we neede to
+do a precision computation
+
+### Noise analysis on float 16
+first lets found out the noise of the basic operations. To do so we generate 10000 random numbers, compute the product and addition in float 64, 32 and 16 and
+compare the difference between the results
+
+<!-- ```python
+import tensorflow as tf
+a = tf.random.uniform((10000,), maxval=1, dtype=tf.float64)
+b = tf.random.uniform((10000,), maxval=1, dtype=tf.float64)
+sum_64 = a+b
+sum_32 = tf.cast(tf.cast(a, tf.float32)+tf.cast(b, tf.float32), tf.float64)
+sum_16 = tf.cast(tf.cast(a, tf.float16)+tf.cast(b, tf.float16), tf.float64)
+diff_sum_32 = tf.sort(tf.abs(sum_64 - sum_32))
+diff_sum_16 = tf.sort(tf.abs(sum_64 - sum_16))
+max_sum_32 = tf.math.reduce_max(diff_sum_32)
+max_sum_16 = tf.math.reduce_max(diff_sum_16)
+``` -->
+
+The source code of these different experiments is available in the Readme
+
+for additions,
+  - max error on float 32 : $1.2 \times 10^{-7}$
+  - max error on float 16 : $9.7 \times 10^{-4}$
+
+the same work on multiplication give:
+<!-- ```python
+import tensorflow as tf
+a = tf.random.uniform((10000,), maxval=1, dtype=tf.float64)
+b = tf.random.uniform((10000,), maxval=1, dtype=tf.float64)
+sum_64 = a*b
+sum_32 = tf.cast(tf.cast(a, tf.float32)*tf.cast(b, tf.float32), tf.float64)
+sum_16 = tf.cast(tf.cast(a, tf.float16)*tf.cast(b, tf.float16), tf.float64)
+diff_sum_32 = tf.sort(tf.abs(sum_64 - sum_32))
+diff_sum_16 = tf.sort(tf.abs(sum_64 - sum_16))
+max_sum_32 = tf.math.reduce_max(diff_sum_32)
+max_sum_16 = tf.math.reduce_max(diff_sum_16)
+print(max_sum_32)
+print(max_sum_16)
+``` -->
+
+  - mean error on float 32 : $7.8 \times 10^{-8}$
+  - mean error on float 16 : $6.6 \times 10^{-4}$
+
+
+and on convolutions of kernels $(5, 5, 96, 256)$ it gives
+<!-- ```python
+import tensorflow as tf
+k = tf.random.uniform((5, 5, 96, 256), maxval=1/((5*5*96)), dtype=tf.float64)
+i = tf.random.uniform((1, 50,50, 96), maxval=1, dtype=tf.float64)
+out_64 = tf.nn.convolution(i,k)
+out_32 = tf.cast(tf.nn.convolution(tf.cast(i, tf.float32), tf.cast(k, tf.float32)), tf.float64)
+out_16 = tf.cast(tf.nn.convolution(tf.cast(i, tf.float16), tf.cast(k, tf.float16)), tf.float64)
+
+out_64 = tf.reshape(out_64, 46*46*256)
+out_32 = tf.reshape(out_32, 46*46*256)
+out_16 = tf.reshape(out_16, 46*46*256)
+
+diff_32 = tf.sort(tf.abs(out_64 - out_32))
+diff_16 = tf.sort(tf.abs(out_64 - out_16))
+max_32 = tf.math.reduce_max(diff_32)
+max_16 = tf.math.reduce_max(diff_16)
+print(max_32)
+print(max_16)
+``` -->
+
+  - mean error on float 32 : $7.4 \times 10^{-7}$
+  - mean error on float 16 : $1.3 \times 10^{-4}$
+
+For the several implementation of quaternion multiplication, we can check these results experimentally
+
+```python
+import tensorflow as tf 
+from upstride.type2.tf.keras import utils
+for j in range(1, 100):
+  i = [tf.random.uniform((1, 50,50, 96), maxval=1, dtype=tf.float32) for _ in range(4)]
+  k = [tf.random.uniform((5, 5, 96, 256), maxval=1/(300), dtype=tf.float32) for _ in range(4)]
+  conv_naive = lambda x, y : utils.quaternion_mult_naive(tf.nn.convolution, x,y)
+  # conv1 = lambda x, y : utils.quaternion_mult1(tf.nn.convolution, x,y, j)
+  conv2 = lambda x, y : utils.quaternion_mult2(tf.nn.convolution, x,y, j)
+  out_32 = tf.concat(conv_naive(tf.cast(i, tf.float32), tf.cast(k, tf.float32)), axis=-1)
+  out_16_n = tf.math.reduce_max(tf.sort(tf.abs(tf.cast(tf.concat(conv_naive(tf.cast(i, tf.float16), tf.cast(k, tf.float16)), axis=-1), tf.float32) - out_32))).numpy()
+  # out_16_1 = tf.math.reduce_max(tf.sort(tf.abs(tf.cast(tf.concat(conv1(tf.cast(i, tf.float16), tf.cast(k, tf.float16)), axis=-1), tf.float32) - out_32))).numpy()
+  out_16_2 = tf.math.reduce_max(tf.sort(tf.abs(tf.cast(tf.concat(conv2(tf.cast(i, tf.float16), tf.cast(k, tf.float16)), axis=-1), tf.float32) - out_32))).numpy()
+  # print(j, out_16_1, out_16_2, out_16_n)
+  print(j, out_16_2, out_16_n)
+
+
+```
+
+  * for naive conv, $\delta^{\mathbb{H}}_{conv} = 1.0 \times 10^{-3}$
+  * for method 1, $\delta^{\mathbb{H}}_{conv} = 1.7 \times 10^{-3}$
+  * for method 2, $\delta^{\mathbb{H}}_{conv} = 1.4 \times 10^{-3}$
+
+
 
 ## Other
   * Now the default docker image is running tensorflow 2.2.0.

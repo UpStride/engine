@@ -36,7 +36,7 @@ def multiply_by_a2(vector):
             a_minus_b - c_minus_d]
 
 
-def quaternion_mult1(tf_op, inputs, kernels):
+def quaternion_mult1(tf_op, inputs, kernels, f=100):
     """[summary]
 
     Args:
@@ -44,7 +44,7 @@ def quaternion_mult1(tf_op, inputs, kernels):
         input ([type]): [description]
         kernel ([type]): [description]
     """
-    kernels = kernels * 10
+    kernels = kernels * f
     if len(inputs) == 4:
         kernel_sum = multiply_by_a2(kernels)
         input_sum = multiply_by_a2(inputs)
@@ -61,14 +61,15 @@ def quaternion_mult1(tf_op, inputs, kernels):
             tf_op(inputs[2], kernels[1]),
         ]
 
-        outputs = [(output_sum[i]/4 - 2*output_rest[i])*0.1 for i in range(4)]
+        outputs = [(output_sum[i]/4 - 2*output_rest[i])*(1/f) for i in range(4)]
         outputs[0] = -outputs[0]
     else:
-        outputs = [tf_op(inputs[0], kernels[i]) *0.1 for i in range(4)]
+        outputs = [tf_op(inputs[0], kernels[i]) *(1/f) for i in range(4)]
     return outputs
 
 
-def quaternion_mult2(tf_op, inputs, kernels):
+def quaternion_mult2(tf_op, inputs, kernels, f=1):
+    kernels = kernels * f
     if len(inputs) == 4:
         k1 = kernels[1] + kernels[2]
         k3 = kernels[0] + kernels[3]
@@ -97,11 +98,19 @@ def quaternion_mult2(tf_op, inputs, kernels):
         q2 = a5 - a2 + tf_op(i2, k2)
         q3 = a5 - a3 + tf_op(i3, k3)
         q4 = a5 - a4 + tf_op(i4, k4)
-        return [q1, q2, q3, q4]
+        return [q1 *(1/f), q2 *(1/f), q3 *(1/f), q4 *(1/f)]
     else:
-        outputs = [tf_op(inputs[0], kernels[i]) for i in range(4)]
+        outputs = [tf_op(inputs[0], kernels[i]) *(1/f) for i in range(4)]
     return outputs
 
 
+def quaternion_mult_naive(tf_op, inputs, kernels):
+    c1 = tf_op(inputs[0], kernels[0]) - tf_op(inputs[1], kernels[1]) - tf_op(inputs[2], kernels[2]) - tf_op(inputs[3], kernels[3])
+    c2 = tf_op(inputs[0], kernels[1]) + tf_op(inputs[1], kernels[0]) + tf_op(inputs[2], kernels[3]) - tf_op(inputs[3], kernels[2])
+    c3 = tf_op(inputs[0], kernels[2]) + tf_op(inputs[2], kernels[0]) + tf_op(inputs[3], kernels[1]) - tf_op(inputs[1], kernels[3])
+    c4 = tf_op(inputs[0], kernels[3]) + tf_op(inputs[3], kernels[0]) + tf_op(inputs[1], kernels[2]) - tf_op(inputs[2], kernels[1])
+    return [c1, c2, c3, c4]
+
 multiply_by_a = multiply_by_a1
-quaternion_mult = quaternion_mult1
+# mult 2 is more stable than mult 1 when working in float 16
+quaternion_mult = quaternion_mult2
