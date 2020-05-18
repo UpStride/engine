@@ -44,6 +44,7 @@ def quaternion_mult1(tf_op, inputs, kernels):
         input ([type]): [description]
         kernel ([type]): [description]
     """
+    kernels = kernels * 10
     if len(inputs) == 4:
         kernel_sum = multiply_by_a2(kernels)
         input_sum = multiply_by_a2(inputs)
@@ -64,6 +65,7 @@ def quaternion_mult1(tf_op, inputs, kernels):
         outputs[0] = -outputs[0]
     else:
         outputs = [tf_op(inputs[0], kernels[i]) for i in range(4)]
+    outputs = outputs / 10
     return outputs
 
 
