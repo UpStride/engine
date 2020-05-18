@@ -61,11 +61,10 @@ def quaternion_mult1(tf_op, inputs, kernels):
             tf_op(inputs[2], kernels[1]),
         ]
 
-        outputs = [output_sum[i]/4 - 2*output_rest[i] for i in range(4)]
+        outputs = [(output_sum[i]/4 - 2*output_rest[i])*0.1 for i in range(4)]
         outputs[0] = -outputs[0]
     else:
-        outputs = [tf_op(inputs[0], kernels[i]) for i in range(4)]
-    outputs = outputs / 10
+        outputs = [tf_op(inputs[0], kernels[i]) *0.1 for i in range(4)]
     return outputs
 
 
