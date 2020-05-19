@@ -249,7 +249,7 @@ $$
 
 So 16 multiplications and 12 additions.
 
-In term of tensorflow operations, because of the isomorphism between $\mathbb{M} \circ \mathbb{G}$ and $\mathbb{G} \circ \mathbb{M}$
+In term of tensorflow operations, because of the isomorphism between $\mathbb{M} \circ \mathbb{G}$ and $\mathbb{G} \circ \mathbb{M}$, it means for implementing a linear layer on $\mathbb{H}$, it takes 16 calls to the linear layer on $\mathbb{R}$
 
 The same results can be achieved by computing: 
 
@@ -262,7 +262,52 @@ with
 
 $$ A = \begin{pmatrix} 1 & 1& 1& 1 \\ 1 & -1 &1&-1\\1&1&-1&-1\\1&-1&-1&1 \end{pmatrix}$$
 
-So 40 additions and 8 multiplications are needed
+We will call this method 1. 40 additions and 8 multiplications are needed, so for implementing a linear layer, 8 calls to the linear layer on $\mathbb{R}$ are needed.
+
+Another method is to compute :
+
+$$
+\begin{cases} 
+  A_1 = & (a_4 + a_2)(b_2 + b_3) \\
+  A_3 = & (a_1 - a_3)(b_1 + b_4) \\
+  A_4 = & (a_1 + a_3)(b_1 - b_4) \\
+  A_2 = & A_1 + A_3 + A_4 \\
+  A_5 = & 0.5(A_2 + (a_4-a_2)(b_2-b_3)) \\
+  Q_1 = & A_5 - A_1 + (a_4 - a_3)(b_3 - b_4) \\
+  Q_2 = & A_5 - A_2 + (a_2 + a_1)(b_2 + b_1) \\
+  Q_3 = & A_5 - A_3 + (a_1 - a_2)(b_3 + b_4) \\
+  Q_4 = & A_5 - A_4 + (a_4 + a_3)(b_1 - b_2) \\
+\end{cases}
+$$
+
+This method takes also 8 calls to the linear layer on $\mathbb{R}$ to implement the layer on $\mathbb{H}$.
+
+After implementing these methods, we found that they work very well when working with float 32, but not in float 16 for alexnet models.
+
+After checking the errors of the differents layers when working in float 16, we found that the second implementation is more stable then the first one.
+
+This can be checked using the following code:
+
+```python
+import tensorflow as tf 
+from upstride.type2.tf.keras import utils
+for j in range(1, 100):
+  i = [tf.random.uniform((1, 50,50, 96), maxval=1, dtype=tf.float32) for _ in range(4)]
+  k = [tf.random.uniform((5, 5, 96, 256), maxval=1/(300), dtype=tf.float32) for _ in range(4)]
+  # define the 3 ways to compute convolution
+  conv_naive = lambda x, y : utils.quaternion_mult_naive(tf.nn.convolution, x,y)
+  conv1 = lambda x, y : utils.quaternion_mult1(tf.nn.convolution, x,y, j)
+  conv2 = lambda x, y : utils.quaternion_mult2(tf.nn.convolution, x,y, j)
+  out_32 = tf.concat(conv_naive(tf.cast(i, tf.float32), tf.cast(k, tf.float32)), axis=-1)
+  out_16_n = tf.math.reduce_max(tf.sort(tf.abs(tf.cast(tf.concat(conv_naive(tf.cast(i, tf.float16), tf.cast(k, tf.float16)), axis=-1), tf.float32) - out_32))).numpy()
+  out_16_1 = tf.math.reduce_max(tf.sort(tf.abs(tf.cast(tf.concat(conv1(tf.cast(i, tf.float16), tf.cast(k, tf.float16)), axis=-1), tf.float32) - out_32))).numpy()
+  out_16_2 = tf.math.reduce_max(tf.sort(tf.abs(tf.cast(tf.concat(conv2(tf.cast(i, tf.float16), tf.cast(k, tf.float16)), axis=-1), tf.float32) - out_32))).numpy()
+  print(j, out_16_1, out_16_2, out_16_n)
+```
+
+So new, the engine use by default quaternion_mult2 with j=1. Investigating the behaviour of $j$ can be an interesting project for the futur
+
+![error](./doc/error.png "error"){width=100%}
 
 ## Other
   * Now the default docker image is running tensorflow 2.2.0.
