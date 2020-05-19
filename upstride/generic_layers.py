@@ -178,7 +178,7 @@ def compute_all_cross_product(layers, inputs, convert_to_tf):
         inputs = tf.keras.layers.Concatenate(axis=1)(reshaped_inputs)
         td_outputs = [tdlater(inputs) for tdlater in tdlayers]
 
-        print(td_outputs[0].shape)
+        # print(td_outputs[0].shape)
 
         for i in range(multivector_length()):
             layers_outputs.append([])
@@ -457,6 +457,11 @@ class LeakyReLU(GenericNonLinear):
 class Add(GenericNonLinear):
     def __init__(self, *argv, **kwargs):
         super().__init__(tf.keras.layers.Add, *argv, **kwargs)
+        self.list_as_input = True
+
+class Multiply(GenericNonLinear):
+    def __init__(self, *argv, **kwargs):
+        super().__init__(tf.keras.layers.Multiply, *argv, **kwargs)
         self.list_as_input = True
 
 
