@@ -12,16 +12,24 @@ generic_layers.geometrical_def = (3, 0, 0)
 # If you wish to overwrite some layers, please implements them here
 
 
-class TF2UpstrideUnfinished(Layer):
+class TF2Upstride(Layer):
     """assume this function is called at the begining of the network. Put colors to imaginary parts and grayscale in real
     """
 
-    def call(self, inputs):
-        red = inputs[:, :, :, 0]
-        green = inputs[:, :, :, 1]
-        blue = inputs[:, :, :, 2]
-        grayscale = (red + green + blue)/3
-        return [grayscale, red, green, blue]
+    def __init__(self, strategy=''):
+        rgb_in_img = False
+        if strategy == "rgbinimg":
+            rgb_in_img = True
+
+    def __call__(self, x):
+        if not rgb_in_img:
+            return [x]
+        else:
+            red = x[:, :, :, 0]
+            green = x[:, :, :, 1]
+            blue = x[:, :, :, 2]
+            grayscale = (red + green + blue)/3
+            return [grayscale, red, green, blue]
 
 
 def sqrt_init(shape, dtype=None):
@@ -57,7 +65,7 @@ class BatchNormalizationUnfinised(Layer):
         self.axis = axis
         self.momentum = momentum
         self.epsilon = epsilon
-        self.center = center # if true then use beta and gamma to add a bit of variance
+        self.center = center  # if true then use beta and gamma to add a bit of variance
         self.scale = scale
 
         self.gamma_off_initializer = initializers.get(gamma_off_initializer)
@@ -86,7 +94,6 @@ class BatchNormalizationUnfinised(Layer):
 
         # moving_mean (not trainable)
         self.moving_mean_initializer = initializers.get(moving_mean_initializer)
-
 
     def build(self, input_shape):
         ndim = len(input_shape)
@@ -133,7 +140,7 @@ class BatchNormalizationUnfinised(Layer):
         ndim = len(input_shape)
         reduction_axes = list(range(ndim))
         del reduction_axes[self.axis]
-        input_dim = input_shape[self.axis] // 4 # TODO or not ?
+        input_dim = input_shape[self.axis] // 4  # TODO or not ?
         mu = K.mean(inputs, axis=reduction_axes)
         broadcast_mu_shape = [1] * len(input_shape)
         broadcast_mu_shape[self.axis] = input_shape[self.axis]

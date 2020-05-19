@@ -112,5 +112,5 @@ def quaternion_mult_naive(tf_op, inputs, kernels):
     return [c1, c2, c3, c4]
 
 multiply_by_a = multiply_by_a1
-# mult 2 is more stable than mult 1 when working in float 16
+# mult 2 is more stable than mult 1 when working with float 16
 quaternion_mult = quaternion_mult2
