@@ -17,17 +17,17 @@ class TF2Upstride(Layer):
     """
 
     def __init__(self, strategy=''):
-        rgb_in_img = False
+        self.rgb_in_img = False
         if strategy == "rgbinimg":
-            rgb_in_img = True
+            self.rgb_in_img = True
 
     def __call__(self, x):
-        if not rgb_in_img:
+        if not self.rgb_in_img:
             return [x]
         else:
-            red = x[:, :, :, 0]
-            green = x[:, :, :, 1]
-            blue = x[:, :, :, 2]
+            red = tf.expand_dims(x[:, :, :, 0], -1)
+            green = tf.expand_dims(x[:, :, :, 1], -1)
+            blue = tf.expand_dims(x[:, :, :, 2], -1)
             grayscale = (red + green + blue)/3
             return [grayscale, red, green, blue]
 

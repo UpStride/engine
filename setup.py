@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="upstride",
-    version="0.1.1",
+    version="0.1.3",
     author="UpStride S.A.S",
     author_email="hello@upstride.io",
     description="A package to use Geometrical Algebra in pure tensorflow",

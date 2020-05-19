@@ -1,9 +1,11 @@
 import unittest
 import tensorflow as tf
+import numpy as np
 from tensorflow.python.ops import gen_math_ops
 from upstride import generic_layers
 from upstride.generic_layers import _ga_multiply_get_index, upstride_type, unit_multiplier, reorder
 from upstride.type2.tf.keras.utils import quaternion_mult1, quaternion_mult2, multiply_by_a1, multiply_by_a2, quaternion_mult_naive
+from upstride.type2.tf.keras.layers import TF2Upstride as QTF2Upstride
 
 
 class TestGAMultiplication(unittest.TestCase):
@@ -67,6 +69,21 @@ class TestGAMultiplication(unittest.TestCase):
         self.assertEqual(model.count_params(), 9*4*3+4)
 
 
+class TestQuaternionTF2Upstride(unittest.TestCase):
+    def test_QTF2Upstride(self):
+        inputs = tf.convert_to_tensor([[[[1, 3, 4]]]])
+        o = QTF2Upstride()(inputs)
+        self.assertEqual(type(o), list)
+        self.assertEqual(o[0].shape, (1, 1, 1, 3))
+
+        o = QTF2Upstride("rgbinimg")(inputs)
+        self.assertEqual(type(o), list)
+        self.assertEqual(o[0].shape, (1, 1, 1, 1))
+        self.assertEqual(o[1].shape, (1, 1, 1, 1))
+        self.assertEqual(o[2].shape, (1, 1, 1, 1))
+        self.assertEqual(o[3].shape, (1, 1, 1, 1))
+
+
 class TestQuaternionMult(unittest.TestCase):
     def test_multiply_by_a1(self):
         self.assertEqual(multiply_by_a1([1, 0, 0, 0]), [1, 1, 1, 1])
@@ -99,7 +116,6 @@ class TestQuaternionMult(unittest.TestCase):
         self.assertEqual(quaternion_mult_naive(op,  [0, 2, 2, 0], [0, 2, 0, 0]), [-4, 0, 0, -4])
         self.assertEqual(quaternion_mult_naive(op,  [1, 2, 0, 3], [0, 2, 2, 0]), [-4, -4, 8, 4])
         self.assertEqual(quaternion_mult_naive(op,  [1, 2, 3, 4], [5, 6, 7, 8]), [-60, 12, 30, 24])
-
 
     # def test_big_matric_precision(self):
     #     shape = (1000, 1000)

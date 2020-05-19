@@ -36,7 +36,7 @@ def multiply_by_a2(vector):
             a_minus_b - c_minus_d]
 
 
-def quaternion_mult1(tf_op, inputs, kernels, f=100):
+def quaternion_mult1(tf_op, inputs, kernels, f=1):
     """[summary]
 
     Args:
@@ -44,7 +44,7 @@ def quaternion_mult1(tf_op, inputs, kernels, f=100):
         input ([type]): [description]
         kernel ([type]): [description]
     """
-    kernels = kernels * f
+    kernels = [k * f for k in kernels]
     if len(inputs) == 4:
         kernel_sum = multiply_by_a2(kernels)
         input_sum = multiply_by_a2(inputs)
@@ -69,7 +69,7 @@ def quaternion_mult1(tf_op, inputs, kernels, f=100):
 
 
 def quaternion_mult2(tf_op, inputs, kernels, f=1):
-    kernels = kernels * f
+    kernels = [k * f for k in kernels]
     if len(inputs) == 4:
         k1 = kernels[1] + kernels[2]
         k3 = kernels[0] + kernels[3]
