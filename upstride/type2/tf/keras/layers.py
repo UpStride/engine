@@ -18,18 +18,27 @@ class TF2Upstride(Layer):
 
     def __init__(self, strategy=''):
         self.rgb_in_img = False
+        self.gray_in_real_rgb_in_img = False
         if strategy == "rgbinimg":
             self.rgb_in_img = True
+        elif strategy == 'grayinreal_rgbinimg':
+            self.gray_in_real_rgb_in_img = True
 
     def __call__(self, x):
-        if not self.rgb_in_img:
-            return [x]
-        else:
+        if self.rgb_in_img:
+            red = tf.expand_dims(x[:, :, :, 0], -1)
+            green = tf.expand_dims(x[:, :, :, 1], -1)
+            blue = tf.expand_dims(x[:, :, :, 2], -1)
+            zeros = tf.zeros_like(red)
+            return [zeros, red, green, blue]
+        elif self.gray_in_real_rgb_in_img:
             red = tf.expand_dims(x[:, :, :, 0], -1)
             green = tf.expand_dims(x[:, :, :, 1], -1)
             blue = tf.expand_dims(x[:, :, :, 2], -1)
             grayscale = (red + green + blue)/3
             return [grayscale, red, green, blue]
+        else:
+            return [x]
 
 
 def sqrt_init(shape, dtype=None):
