@@ -282,14 +282,28 @@ class DepthwiseConv2DTranspose(GenericLinear):
         super().__init__(tf.keras.layers.DepthwiseConv2DTranspose, *argv, **kwargs)
 
 
+class SeparableConv2D(GenericLinear):
+    def __init__(self, *argv, **kwargs):
+        super().__init__(tf.keras.layers.SeparableConv2D, *argv, **kwargs)
+
+
 class MaxPooling2D(GenericNonLinear):
     def __init__(self, *argv, **kwargs):
         super().__init__(tf.keras.layers.MaxPooling2D, *argv, **kwargs)
+
+class AveragePooling2D(GenericNonLinear):
+    def __init__(self, *argv, **kwargs):
+        super().__init__(tf.keras.layers.AveragePooling2D, *argv, **kwargs)
 
 
 class MaxPool2D(GenericNonLinear):
     def __init__(self, *argv, **kwargs):
         super().__init__(tf.keras.layers.MaxPool2D, *argv, **kwargs)
+
+
+class AveragePool2D(GenericNonLinear):
+    def __init__(self, *argv, **kwargs):
+        super().__init__(tf.keras.layers.AveragePool2D, *argv, **kwargs)
 
 
 class GlobalMaxPooling2D(GenericNonLinear):
@@ -325,6 +339,11 @@ class Flatten(GenericNonLinear):
 class ZeroPadding2D(GenericNonLinear):
     def __init__(self, *argv, **kwargs):
         super().__init__(tf.keras.layers.ZeroPadding2D, *argv, **kwargs)
+
+
+class Cropping2D(GenericNonLinear):
+    def __init__(self, *argv, **kwargs):
+        super().__init__(tf.keras.layers.Cropping2D, *argv, **kwargs)
 
 
 class ReLU(GenericNonLinear):
