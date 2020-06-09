@@ -6,6 +6,7 @@ from upstride import generic_layers
 from upstride.generic_layers import _ga_multiply_get_index, upstride_type, unit_multiplier, reorder
 from upstride.type2.tf.keras.utils import quaternion_mult1, quaternion_mult2, multiply_by_a1, multiply_by_a2, quaternion_mult_naive
 from upstride.type2.tf.keras.layers import TF2Upstride as QTF2Upstride
+from upstride.type2.tf.keras.layers import BatchNormalization as QBatchNormalization
 
 
 class TestGAMultiplication(unittest.TestCase):
@@ -27,7 +28,7 @@ class TestGAMultiplication(unittest.TestCase):
         self.assertEqual(index, "")
 
     def test_unit_multiplier(self):
-        generic_layers.upstride_type = 3
+        generic_layers.change_upstride_type(3, ["", "1", "2", "3", "12", "13", "23", "123"], (3, 0, 0))
         # order : (scalar, e1, e2, e3, e12, e13, e23, e123)
         self.assertEqual(unit_multiplier(0, 0), (0, 1))  # 1*1 = 1
         self.assertEqual(unit_multiplier(3, 3), (0, 1))  # e_3*e_3 = 1
@@ -134,6 +135,16 @@ class TestQuaternionMult(unittest.TestCase):
     #     e = c[1] - (gen_math_ops.mat_mul(a[0], b[1])+gen_math_ops.mat_mul(a[1], b[0])+gen_math_ops.mat_mul(a[2], b[3])-gen_math_ops.mat_mul(a[3], b[2]))
     #     print(tf.math.reduce_max(tf.math.abs(d)))
     #     print(tf.math.reduce_max(tf.math.abs(e)))
+
+
+class TestQuaternionBN(unittest.TestCase):
+    def test_init(self):
+        inputs = tf.convert_to_tensor([[[[1., 3, 4, 5, 6], [1, 3, 4, 5, 6], [1, 3, 4, 5, 6]],
+                                        [[1, 3, 4, 5, 6], [1, 3, 4, 5, 6], [1, 3, 4, 5, 6]]]])
+        self.assertEqual(inputs.shape, (1, 2, 3, 5))
+        inputs = [inputs for _ in range(4)]
+        bn_layer = QBatchNormalization()
+        outputs = bn_layer(inputs)
 
 
 if __name__ == "__main__":

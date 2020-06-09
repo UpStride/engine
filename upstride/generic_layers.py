@@ -15,6 +15,12 @@ geometrical_def = (3, 0, 0)
 conjugate = False
 
 
+def change_upstride_type(type, new_blade_indexes,  new_geometrical_def):
+    global upstride_type, blade_indexes, geometrical_def
+    upstride_type = type
+    blade_indexes = new_blade_indexes
+    geometrical_def = new_geometrical_def
+
 def set_conjugaison_mult(b):
     global conjugate
     conjugate = b
@@ -463,6 +469,7 @@ class Add(GenericNonLinear):
     def __init__(self, *argv, **kwargs):
         super().__init__(tf.keras.layers.Add, *argv, **kwargs)
         self.list_as_input = True
+
 
 class Multiply(GenericNonLinear):
     def __init__(self, *argv, **kwargs):

@@ -1,3 +1,4 @@
+from typing import Dict
 from tensorflow.keras.layers import Layer
 from tensorflow.keras import initializers
 from .... import generic_layers
@@ -174,10 +175,89 @@ def sqrt_init(shape, dtype=None):
     return value
 
 
-class BatchNormalizationUnfinised(Layer):
+def quaternion_standardization(input_centred, v: Dict, axis=-1):
+    # input_centred is a list of 4 tensors
+
+    # Chokesky decomposition of 4x4 symmetric matrix
+    w = {}
+    w['rr'] = tf.sqrt(v['rr'])
+    w['ri'] = (1.0 / w['rr']) * (v['ri'])
+    w['ii'] = tf.sqrt((v['ii'] - (w['ri']*w['ri'])))
+    w['rj'] = (1.0 / w['rr']) * (v['rj'])
+    w['ij'] = (1.0 / w['ii']) * (v['ij'] - (w['ri']*w['rj']))
+    w['jj'] = tf.sqrt((v['jj'] - (w['ij']*w['ij'] + w['rj']*w['rj'])))
+    w['rk'] = (1.0 / w['rr']) * (v['rk'])
+    w['ik'] = (1.0 / w['ii']) * (v['ik'] - (w['ri']*w['rk']))
+    w['jk'] = (1.0 / w['jj']) * (v['jk'] - (w['ij']*w['ik'] + w['rj']*w['rk']))
+    w['kk'] = tf.sqrt((v['kk'] - (w['jk']*w['jk'] + w['ik']*w['ik'] + w['rk']*w['rk'])))
+
+    # Normalization. We multiply, x_normalized = W.x.
+    # The returned result will be a quaternion standardized input
+    # where the r, i, j, and k parts are obtained as follows:
+    # x_r_normed = Wrr * x_r_cent + Wri * x_i_cent + Wrj * x_j_cent + Wrk * x_k_cent
+    # x_i_normed = Wri * x_r_cent + Wii * x_i_cent + Wij * x_j_cent + Wik * x_k_cent
+    # x_j_normed = Wrj * x_r_cent + Wij * x_i_cent + Wjj * x_j_cent + Wjk * x_k_cent
+    # x_k_normed = Wrk * x_r_cent + Wik * x_i_cent + Wjk * x_j_cent + Wkk * x_k_cent
+    output = []
+    dim_names = "rijk"
+    for p1 in range(4):
+        tmp_out = 0
+        for p2 in range(4):
+            i1 = min(p1, p2)
+            i2 = max(p1, p2)
+            tmp_out += w[dim_names[i1]+dim_names[i2]] * input_centred[p2]
+        output.append(tmp_out)
+    return output
+
+
+def quaternion_bn(input_centred, v: Dict, beta, gamma: Dict, scale=True, center=True, axis=-1):
+    if scale:
+        standardized_output = quaternion_standardization(input_centred, v, axis=axis)  # shape (BS, H, W, C) * 4
+
+        # Now we perform the scaling and shifting of the normalized x using
+        # the scaling parameter
+        #           [  gamma_rr gamma_ri gamma_rj gamma_rk  ]
+        #   Gamma = [  gamma_ri gamma_ii gamma_ij gamma_ik  ]
+        #           [  gamma_rj gamma_ij gamma_jj gamma_jk  ]
+        #           [  gamma_rk gamma_ik gamma_jk gamma_kk  ]
+        # and the shifting parameter
+        #    Beta = [beta_r beta_i beta_j beta_k].T
+        # where:
+        # x_r_BN = gamma_rr * x_r + gamma_ri * x_i + gamma_rj * x_j + gamma_rk * x_k + beta_r
+        # x_i_BN = gamma_ri * x_r + gamma_ii * x_i + gamma_ij * x_j + gamma_ik * x_k + beta_i
+        # x_j_BN = gamma_rj * x_r + gamma_ij * x_i + gamma_jj * x_j + gamma_jk * x_k + beta_j
+        # x_k_BN = gamma_rk * x_r + gamma_ik * x_i + gamma_jk * x_j + gamma_kk * x_k + beta_k
+
+        output = []
+        broadcast_beta_shape = [1] * len(input_centred[0].shape)
+        broadcast_beta_shape[axis] = input_centred[0].shape[axis]  # unittest [1, 1, 1, 5]
+
+        dim_names = "rijk"
+        for p1 in range(4):
+            tmp_out = 0
+            for p2 in range(4):
+                i1 = min(p1, p2)
+                i2 = max(p1, p2)
+                tmp_out += gamma[dim_names[i1]+dim_names[i2]] * standardized_output[p2]
+            if center:
+                output.append(tmp_out + tf.reshape(beta[dim_names[p1]], broadcast_beta_shape))
+            else:
+                output.append(tmp_out)
+        return output
+    else:
+        if center:
+            return input_centred + beta
+        else:
+            return input_centred
+
+
+class BatchNormalization(Layer):
     """
     quaternion implementation : https://github.com/gaudetcj/DeepQuaternionNetworks/blob/43b321e1701287ce9cf9af1eb16457bdd2c85175/quaternion_layers/bn.py
     tf implementation : https://github.com/tensorflow/tensorflow/blob/2b96f3662bd776e277f86997659e61046b56c315/tensorflow/python/keras/layers/normalization.py#L46
+    paper : https://arxiv.org/pdf/1712.04604.pdf
+
+    this version perform the same operations as the quaternion version, but has been rewritten to be cleaner
     """
 
     def __init__(self, axis=-1, momentum=0.9, epsilon=1e-4, center=True, scale=True, beta_initializer='zeros',
@@ -205,49 +285,51 @@ class BatchNormalizationUnfinised(Layer):
         self.center = center  # if true then use beta and gamma to add a bit of variance
         self.scale = scale
 
-        self.gamma_off_initializer = initializers.get(gamma_off_initializer)
-        self.moving_covariance_initializer = initializers.get(moving_covariance_initializer)
-        self.gamma_off_regularizer = regularizers.get(gamma_off_regularizer)
-        self.gamma_off_constraint = constraints.get(gamma_off_constraint)
-
-        # gamma parameter (trainable)
+        # gamma parameter, diagonale (trainable)
         if gamma_diag_initializer != 'sqrt_init':
-            self.gamma_diag_initializer = initializers.get(gamma_diag_initializer)
+            self.gamma_diag_initializer = tf.keras.initializers.get(gamma_diag_initializer)
         else:
             self.gamma_diag_initializer = sqrt_init
-        self.gamma_diag_regularizer = regularizers.get(gamma_diag_regularizer)
-        self.gamma_diag_constraint = constraints.get(gamma_diag_constraint)
+        self.gamma_diag_regularizer = tf.keras.regularizers.get(gamma_diag_regularizer)
+        self.gamma_diag_constraint = tf.keras.constraints.get(gamma_diag_constraint)
+
+        # gamma parameter, outside of diagonale (trainable)
+        self.gamma_off_initializer = tf.keras.initializers.get(gamma_off_initializer)
+        self.gamma_off_regularizer = tf.keras.regularizers.get(gamma_off_regularizer)
+        self.gamma_off_constraint = tf.keras.constraints.get(gamma_off_constraint)
 
         # beta parameter (trainable)
-        self.beta_initializer = initializers.get(beta_initializer)
-        self.beta_regularizer = regularizers.get(beta_regularizer)
-        self.beta_constraint = constraints.get(beta_constraint)
+        self.beta_initializer = tf.keras.initializers.get(beta_initializer)
+        self.beta_regularizer = tf.keras.regularizers.get(beta_regularizer)
+        self.beta_constraint = tf.keras.constraints.get(beta_constraint)
 
         # moving_V parameter (not trainable)
         if moving_variance_initializer != 'sqrt_init':
-            self.moving_variance_initializer = initializers.get(moving_variance_initializer)
+            self.moving_variance_initializer = tf.keras.initializers.get(moving_variance_initializer)
         else:
             self.moving_variance_initializer = sqrt_init
 
+        # moving covariance
+        self.moving_covariance_initializer = tf.keras.initializers.get(moving_covariance_initializer)
+
         # moving_mean (not trainable)
-        self.moving_mean_initializer = initializers.get(moving_mean_initializer)
+        self.moving_mean_initializer = tf.keras.initializers.get(moving_mean_initializer)
 
     def build(self, input_shape):
-        ndim = len(input_shape)
-        dim = input_shape[self.axis]
-        if dim is None:
+        ndim = len(input_shape[0])  # usually 4
+        # update self.axis
+        if self.axis < 0:
+            self.axis = ndim + self.axis  # usually 3
+        param_shape = input_shape[0][self.axis]  # 5 for unit-tests
+        if param_shape is None:
             raise ValueError(f'Axis {self.axis} of input tensor should have a defined dimension '
                              f'but the layer received an input with shape {input_shape}.')
-        self.input_spec = InputSpec(ndim=len(input_shape), axes={self.axis: dim})
-        param_shape = (input_shape[self.axis] // 4,)
-
         self.gamma = {}
         self.moving_V = {}
         dim_names = "rijk"
-
         for p1 in range(4):
             for p2 in range(p1, 4):
-                postfix = dim_names[pi]+dim_names[p2]
+                postfix = dim_names[p1]+dim_names[p2]
                 if self.scale:
                     self.gamma[postfix] = self.add_weight(shape=param_shape,
                                                           name=f'gamma_{postfix}',
@@ -261,183 +343,92 @@ class BatchNormalizationUnfinised(Layer):
                 else:
                     self.gamma[postfix] = None
                     self.moving_V[postfix] = None
-        if self.center:
-            self.beta = self.add_weight(shape=(input_shape[self.axis],), name='beta', initializer=self.beta_initializer, regularizer=self.beta_regularizer,
-                                        constraint=self.beta_constraint)
-            self.moving_mean = self.add_weight(shape=(input_shape[self.axis],), initializer=self.moving_mean_initializer, name='moving_mean',
-                                               trainable=False)
-        else:
-            self.beta = None
-            self.moving_mean = None
+        self.beta = {}
+        self.moving_mean = []
+        for p1 in range(4):
+            if self.center:
+                postfix = dim_names[p1]
+                self.beta[postfix] = self.add_weight(shape=(input_shape[0][self.axis],), name=f'beta{[postfix]}', initializer=self.beta_initializer, regularizer=self.beta_regularizer,
+                                                     constraint=self.beta_constraint)
+                self.moving_mean.append(self.add_weight(shape=(input_shape[0][self.axis],), initializer=self.moving_mean_initializer, name=f'moving_mean{[postfix]}',
+                                                            trainable=False))
+            else:
+                self.beta[postfix] = None
+                self.moving_mean.append(None) 
 
         self.built = True
 
     def call(self, inputs, training=None):
-        input_shape = inputs.shape
-        ndim = len(input_shape)
-        reduction_axes = list(range(ndim))
-        del reduction_axes[self.axis]
-        input_dim = input_shape[self.axis] // 4  # TODO or not ?
-        mu = K.mean(inputs, axis=reduction_axes)
-        broadcast_mu_shape = [1] * len(input_shape)
-        broadcast_mu_shape[self.axis] = input_shape[self.axis]
-        broadcast_mu = K.reshape(mu, broadcast_mu_shape)
+        # inputs is an array of 4 tensors
+        input_shape = inputs[0].shape  # typically [BS, H, W, C]. For unittest (1,2,3,5)
+        ndims = len(input_shape)  # typically 4
+        reduction_axes = [i for i in range(ndims) if i != self.axis]  # [0, 1, 2]
+
+        # substract by mean
+        mu = []
+        broadcast_mu = []
+        broadcast_mu_shape = [1] * ndims
+        broadcast_mu_shape[self.axis] = input_shape[self.axis]  # unittest [1, 1, 1, 5]
+        for i in range(4):
+            mu.append(tf.math.reduce_mean(inputs[i], axis=reduction_axes))  # compute mean for all blades. Unittest gives tf.Tensor([1 3 4 5 6], shape=(5,), dtype=int32)
+            broadcast_mu.append(tf.reshape(mu[i], broadcast_mu_shape))
         if self.center:
-            input_centred = inputs - broadcast_mu
+            input_centred = [inputs[i] - broadcast_mu[i] for i in range(4)]
         else:
             input_centred = inputs
-        centred_squared = input_centred ** 2
-        if (self.axis == 1 and ndim != 3) or ndim == 2:
-            centred_squared_r = centred_squared[:, :input_dim]
-            centred_squared_i = centred_squared[:, input_dim:input_dim*2]
-            centred_squared_j = centred_squared[:, input_dim*2:input_dim*3]
-            centred_squared_k = centred_squared[:, input_dim*3:]
-            centred_r = input_centred[:, :input_dim]
-            centred_i = input_centred[:, input_dim:input_dim*2]
-            centred_j = input_centred[:, input_dim*2:input_dim*3]
-            centred_k = input_centred[:, input_dim*3:]
-        elif ndim == 3:
-            centred_squared_r = centred_squared[:, :, :input_dim]
-            centred_squared_i = centred_squared[:, :, input_dim:input_dim*2]
-            centred_squared_j = centred_squared[:, :, input_dim*2:input_dim*3]
-            centred_squared_k = centred_squared[:, :, input_dim*3:]
-            centred_r = input_centred[:, :, :input_dim]
-            centred_i = input_centred[:, :, input_dim:input_dim*2]
-            centred_j = input_centred[:, :, input_dim*2:input_dim*3]
-            centred_k = input_centred[:, :, input_dim*3:]
-        elif self.axis == -1 and ndim == 4:
-            centred_squared_r = centred_squared[:, :, :, :input_dim]
-            centred_squared_i = centred_squared[:, :, :, input_dim:input_dim*2]
-            centred_squared_j = centred_squared[:, :, :, input_dim*2:input_dim*3]
-            centred_squared_k = centred_squared[:, :, :, input_dim*3:]
-            centred_r = input_centred[:, :, :, :input_dim]
-            centred_i = input_centred[:, :, :, input_dim:input_dim*2]
-            centred_j = input_centred[:, :, :, input_dim*2:input_dim*3]
-            centred_k = input_centred[:, :, :, input_dim*3:]
-        elif self.axis == -1 and ndim == 5:
-            centred_squared_r = centred_squared[:, :, :, :, :input_dim]
-            centred_squared_i = centred_squared[:, :, :, :, input_dim:input_dim*2]
-            centred_squared_j = centred_squared[:, :, :, :, input_dim*2:input_dim*3]
-            centred_squared_k = centred_squared[:, :, :, :, input_dim*3:]
-            centred_r = input_centred[:, :, :, :, :input_dim]
-            centred_i = input_centred[:, :, :, :, input_dim:input_dim*2]
-            centred_j = input_centred[:, :, :, :, input_dim*2:input_dim*3]
-            centred_k = input_centred[:, :, :, :, input_dim*3:]
-        else:
-            raise ValueError(
-                'Incorrect Batchnorm combination of axis and dimensions. axis should be either 1 or -1. '
-                'axis: ' + str(self.axis) + '; ndim: ' + str(ndim) + '.'
-            )
-        if self.scale:
-            Vrr = K.mean(
-                centred_squared_r,
-                axis=reduction_axes
-            ) + self.epsilon
-            Vii = K.mean(
-                centred_squared_i,
-                axis=reduction_axes
-            ) + self.epsilon
-            Vjj = K.mean(
-                centred_squared_j,
-                axis=reduction_axes
-            ) + self.epsilon
-            Vkk = K.mean(
-                centred_squared_k,
-                axis=reduction_axes
-            ) + self.epsilon
-            Vri = K.mean(
-                centred_r * centred_i,
-                axis=reduction_axes,
-            )
-            Vrj = K.mean(
-                centred_r * centred_j,
-                axis=reduction_axes,
-            )
-            Vrk = K.mean(
-                centred_r * centred_k,
-                axis=reduction_axes,
-            )
-            Vij = K.mean(
-                centred_i * centred_j,
-                axis=reduction_axes,
-            )
-            Vik = K.mean(
-                centred_i * centred_k,
-                axis=reduction_axes,
-            )
-            Vjk = K.mean(
-                centred_j * centred_k,
-                axis=reduction_axes,
-            )
-        elif self.center:
-            Vrr = None
-            Vii = None
-            Vjj = None
-            Vkk = None
-            Vri = None
-            Vrj = None
-            Vrk = None
-            Vij = None
-            Vik = None
-            Vjk = None
-        else:
-            raise ValueError('Error. Both scale and center in batchnorm are set to False.')
 
-        input_bn = QuaternionBN(
-            input_centred,
-            Vrr, Vri, Vrj, Vrk, Vii,
-            Vij, Vik, Vjj, Vjk, Vkk,
+        v = {}
+        dim_names = "rijk"
+        for p1 in range(4):
+            for p2 in range(p1, 4):
+                postfix = dim_names[p1]+dim_names[p2]
+                if self.scale:
+                    v[postfix] = tf.reduce_mean(input_centred[p1] * input_centred[p2], axis=reduction_axes)
+                    if p1 == p2:
+                        v[postfix] += self.epsilon
+
+                elif self.center:
+                    v[postfix] = None
+                else:
+                    raise ValueError('Error. Both scale and center in batchnorm are set to False.')
+
+        input_bn = quaternion_bn(
+            input_centred, v,
             self.beta,
-            self.gamma_rr, self.gamma_ri,
-            self.gamma_rj, self.gamma_rk,
-            self.gamma_ii, self.gamma_ij,
-            self.gamma_ik, self.gamma_jj,
-            self.gamma_jk, self.gamma_kk,
+            self.gamma,
             self.scale, self.center,
             axis=self.axis
-        )
+        ) # unittest shape : 4* shape=(1, 2, 3, 5)
+        
         if training in {0, False}:
             return input_bn
         else:
             update_list = []
             if self.center:
-                update_list.append(K.moving_average_update(self.moving_mean, mu, self.momentum))
+                for i in range(4):
+                    update_list.append(tf.keras.backend.moving_average_update(self.moving_mean[i], mu[i], self.momentum))
             if self.scale:
-                update_list.append(K.moving_average_update(self.moving_Vrr, Vrr, self.momentum))
-                update_list.append(K.moving_average_update(self.moving_Vii, Vii, self.momentum))
-                update_list.append(K.moving_average_update(self.moving_Vjj, Vjj, self.momentum))
-                update_list.append(K.moving_average_update(self.moving_Vkk, Vkk, self.momentum))
-                update_list.append(K.moving_average_update(self.moving_Vri, Vri, self.momentum))
-                update_list.append(K.moving_average_update(self.moving_Vrj, Vrj, self.momentum))
-                update_list.append(K.moving_average_update(self.moving_Vrk, Vrk, self.momentum))
-                update_list.append(K.moving_average_update(self.moving_Vij, Vij, self.momentum))
-                update_list.append(K.moving_average_update(self.moving_Vik, Vik, self.momentum))
-                update_list.append(K.moving_average_update(self.moving_Vjk, Vjk, self.momentum))
+                dim_names = "rijk"
+                for p1 in range(4):
+                    for p2 in range(p1, 4):
+                        postfix = dim_names[p1]+dim_names[p2]
+                        update_list.append(tf.keras.backend.moving_average_update(self.moving_V[postfix], v[postfix], self.momentum))
             self.add_update(update_list, inputs)
 
             def normalize_inference():
                 if self.center:
-                    inference_centred = inputs - K.reshape(self.moving_mean, broadcast_mu_shape)
+                    inference_centred = [inputs[i] - tf.reshape(self.moving_mean[i], broadcast_mu_shape) for i in range(4)]
                 else:
                     inference_centred = inputs
-                return QuaternionBN(
-                    inference_centred,
-                    self.moving_Vrr, self.moving_Vri,
-                    self.moving_Vrj, self.moving_Vrk,
-                    self.moving_Vii, self.moving_Vij,
-                    self.moving_Vik, self.moving_Vjj,
-                    self.moving_Vjk, self.moving_Vkk,
+                return quaternion_bn(
+                    inference_centred, self.moving_V,
                     self.beta,
-                    self.gamma_rr, self.gamma_ri,
-                    self.gamma_rj, self.gamma_rk,
-                    self.gamma_ii, self.gamma_ij,
-                    self.gamma_ik, self.gamma_jj,
-                    self.gamma_jk, self.gamma_kk,
+                    self.gamma,
                     self.scale, self.center, axis=self.axis
                 )
 
         # Pick the normalized form corresponding to the training phase.
-        return K.in_train_phase(input_bn,
+        return tf.keras.backend.in_train_phase(input_bn,
                                 normalize_inference,
                                 training=training)
 
@@ -454,12 +445,12 @@ class BatchNormalizationUnfinised(Layer):
             'moving_mean_initializer': initializers.serialize(self.moving_mean_initializer),
             'moving_variance_initializer': initializers.serialize(self.moving_variance_initializer) if self.moving_variance_initializer != sqrt_init else 'sqrt_init',
             'moving_covariance_initializer': initializers.serialize(self.moving_covariance_initializer),
-            'beta_regularizer': regularizers.serialize(self.beta_regularizer),
-            'gamma_diag_regularizer': regularizers.serialize(self.gamma_diag_regularizer),
-            'gamma_off_regularizer': regularizers.serialize(self.gamma_off_regularizer),
-            'beta_constraint': constraints.serialize(self.beta_constraint),
-            'gamma_diag_constraint': constraints.serialize(self.gamma_diag_constraint),
-            'gamma_off_constraint': constraints.serialize(self.gamma_off_constraint),
+            'beta_regularizer': tf.keras.regularizers.serialize(self.beta_regularizer),
+            'gamma_diag_regularizer': tf.keras.regularizers.serialize(self.gamma_diag_regularizer),
+            'gamma_off_regularizer': tf.keras.regularizers.serialize(self.gamma_off_regularizer),
+            'beta_constraint': tf.keras.constraints.serialize(self.beta_constraint),
+            'gamma_diag_constraint': tf.keras.constraints.serialize(self.gamma_diag_constraint),
+            'gamma_off_constraint': tf.keras.constraints.serialize(self.gamma_off_constraint),
         }
-        base_config = super(QuaternionBatchNormalization, self).get_config()
+        base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
