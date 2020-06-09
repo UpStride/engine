@@ -12,6 +12,25 @@ generic_layers.geometrical_def = (3, 0, 0)
 # If you wish to overwrite some layers, please implements them here
 
 
+def learn_vector_component(x, channels=3):
+    """
+    Learning module taken from this paper (https://arxiv.org/pdf/1712.04604.pdf)
+    BN --> ReLU --> Conv --> BN --> ReLU --> Conv
+
+    :param x: input x
+    :param channels: number of channels
+    :return: leaned  multi - vector (could have multiple channels)
+    """
+    x = tf.keras.layers.BatchNormalization()(x)
+    x = tf.keras.layers.Activation('relu')(x)
+    x = tf.keras.layers.Conv2D(channels, (3, 3), padding='same')(x)
+    x = tf.keras.layers.BatchNormalization()(x)
+    x = tf.keras.layers.Activation('relu')(x)
+    x = tf.keras.layers.Conv2D(channels, (3, 3), padding='same')(x)
+
+    return x
+
+
 class TF2Upstride(Layer):
     """assume this function is called at the begining of the network. Put colors to imaginary parts and grayscale in real
     """
@@ -23,6 +42,8 @@ class TF2Upstride(Layer):
             self.rgb_in_img = True
         elif strategy == 'grayinreal_rgbinimg':
             self.gray_in_real_rgb_in_img = True
+        elif strategy == 'learn_multivector':
+            self.learn_multivector = True
 
     def __call__(self, x):
         if self.rgb_in_img:
@@ -37,8 +58,31 @@ class TF2Upstride(Layer):
             blue = tf.expand_dims(x[:, :, :, 2], -1)
             grayscale = (red + green + blue)/3
             return [grayscale, red, green, blue]
+        elif self.learn_multivector:
+            r = learn_vector_component(x, 3)
+            i = learn_vector_component(x, 3)
+            j = learn_vector_component(x, 3)
+            k = learn_vector_component(x, 3)
+            return [r, i, j, k]
+
         else:
             return [x]
+
+
+class Upstride2TF(Layer):
+    """convert multivector back to real values.
+    """
+
+    def __init__(self, strategy='default'):
+        self.concat = False
+        if strategy == "concat":
+            self.concat = True
+
+    def __call__(self, x):
+        if self.concat:
+            return tf.concat(x, -1)
+        else:
+            return x[0]
 
 
 def sqrt_init(shape, dtype=None):
