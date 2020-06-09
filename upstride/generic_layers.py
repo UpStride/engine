@@ -369,6 +369,11 @@ class Conv2DTranspose(GenericLinear):
         super().__init__(tf.keras.layers.Conv2DTranspose, *argv, **kwargs)
 
 
+class UpSampling2D(GenericLinear):
+    def __init__(self, *argv, **kwargs):
+        super().__init__(tf.keras.layers.UpSampling2D, *argv, **kwargs)
+
+
 class DepthwiseConv2D(GenericLinear):
     def __init__(self, *argv, **kwargs):
         super().__init__(tf.keras.layers.DepthwiseConv2D, *argv, **kwargs)

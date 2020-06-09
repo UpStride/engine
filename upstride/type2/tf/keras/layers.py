@@ -56,7 +56,7 @@ class TF2Upstride(Layer):
             red = tf.expand_dims(x[:, :, :, 0], -1)
             green = tf.expand_dims(x[:, :, :, 1], -1)
             blue = tf.expand_dims(x[:, :, :, 2], -1)
-            grayscale = (red + green + blue)/3
+            grayscale = tf.image.rgb_to_grayscale(x)
             return [grayscale, red, green, blue]
         elif self.learn_multivector:
             r = learn_vector_component(x, 3)
