@@ -1,4 +1,6 @@
 from typing import Dict
+from tensorflow.python.keras.engine import base_layer_utils
+from tensorflow.python.keras.utils import tf_utils
 from tensorflow.keras.layers import Layer
 from tensorflow.keras import initializers
 from .... import generic_layers
@@ -176,7 +178,16 @@ def sqrt_init(shape, dtype=None):
 
 
 def quaternion_standardization(input_centred, v: Dict, axis=-1):
-    # input_centred is a list of 4 tensors
+    """compute the multiplication of the Cholesky decomposition of the var by the centered input
+
+    Args:
+        input_centred (List): list of 4 tensors
+        v (Dict): variance. Labels are 'rr', 'ri', 'rj', ....
+        axis (int, optional): Defaults to -1.
+
+    Returns:
+        List: list of 4 tensors
+    """
 
     # Chokesky decomposition of 4x4 symmetric matrix
     w = {}
@@ -210,48 +221,52 @@ def quaternion_standardization(input_centred, v: Dict, axis=-1):
     return output
 
 
-def quaternion_bn(input_centred, v: Dict, beta, gamma: Dict, scale=True, center=True, axis=-1):
-    if scale:
-        standardized_output = quaternion_standardization(input_centred, v, axis=axis)  # shape (BS, H, W, C) * 4
+def quaternion_bn(input_centred, v: Dict, beta, gamma: Dict, axis=-1):
+    """take a centred input and compute the BN
 
-        # Now we perform the scaling and shifting of the normalized x using
-        # the scaling parameter
-        #           [  gamma_rr gamma_ri gamma_rj gamma_rk  ]
-        #   Gamma = [  gamma_ri gamma_ii gamma_ij gamma_ik  ]
-        #           [  gamma_rj gamma_ij gamma_jj gamma_jk  ]
-        #           [  gamma_rk gamma_ik gamma_jk gamma_kk  ]
-        # and the shifting parameter
-        #    Beta = [beta_r beta_i beta_j beta_k].T
-        # where:
-        # x_r_BN = gamma_rr * x_r + gamma_ri * x_i + gamma_rj * x_j + gamma_rk * x_k + beta_r
-        # x_i_BN = gamma_ri * x_r + gamma_ii * x_i + gamma_ij * x_j + gamma_ik * x_k + beta_i
-        # x_j_BN = gamma_rj * x_r + gamma_ij * x_i + gamma_jj * x_j + gamma_jk * x_k + beta_j
-        # x_k_BN = gamma_rk * x_r + gamma_ik * x_i + gamma_jk * x_j + gamma_kk * x_k + beta_k
+    Args:
+        input_centred (List): list of 4 tensors
+        v (Dict): variance. Labels are 'rr', 'ri', 'rj', ....
+        beta (Dict): Labels are 'r' 'i' 'j' 'k'
+        gamma (Dict): Labels are 'rr', 'ri', 'rj', ....
+        axis (int, optional): Defaults to -1.
 
-        output = []
-        broadcast_beta_shape = [1] * len(input_centred[0].shape)
-        broadcast_beta_shape[axis] = input_centred[0].shape[axis]  # unittest [1, 1, 1, 5]
+    Returns:
+        List: list of 4 tensors
+    """
+    standardized_output = quaternion_standardization(input_centred, v, axis=axis)  # shape (BS, H, W, C) * 4
 
-        dim_names = "rijk"
-        for p1 in range(4):
-            tmp_out = 0
-            for p2 in range(4):
-                i1 = min(p1, p2)
-                i2 = max(p1, p2)
-                tmp_out += gamma[dim_names[i1]+dim_names[i2]] * standardized_output[p2]
-            if center:
-                output.append(tmp_out + tf.reshape(beta[dim_names[p1]], broadcast_beta_shape))
-            else:
-                output.append(tmp_out)
-        return output
-    else:
-        if center:
-            return input_centred + beta
-        else:
-            return input_centred
+    # Now we perform the scaling and shifting of the normalized x using
+    # the scaling parameter
+    #           [  gamma_rr gamma_ri gamma_rj gamma_rk  ]
+    #   Gamma = [  gamma_ri gamma_ii gamma_ij gamma_ik  ]
+    #           [  gamma_rj gamma_ij gamma_jj gamma_jk  ]
+    #           [  gamma_rk gamma_ik gamma_jk gamma_kk  ]
+    # and the shifting parameter
+    #    Beta = [beta_r beta_i beta_j beta_k].T
+    # where:
+    # x_r_BN = gamma_rr * x_r + gamma_ri * x_i + gamma_rj * x_j + gamma_rk * x_k + beta_r
+    # x_i_BN = gamma_ri * x_r + gamma_ii * x_i + gamma_ij * x_j + gamma_ik * x_k + beta_i
+    # x_j_BN = gamma_rj * x_r + gamma_ij * x_i + gamma_jj * x_j + gamma_jk * x_k + beta_j
+    # x_k_BN = gamma_rk * x_r + gamma_ik * x_i + gamma_jk * x_j + gamma_kk * x_k + beta_k
+
+    output = []
+    broadcast_beta_shape = [1] * len(input_centred[0].shape)
+    broadcast_beta_shape[axis] = input_centred[0].shape[axis]  # unittest [1, 1, 1, 5]
+
+    dim_names = "rijk"
+    for p1 in range(4):
+        tmp_out = 0
+        for p2 in range(4):
+            i1 = min(p1, p2)
+            i2 = max(p1, p2)
+            tmp_out += gamma[dim_names[i1]+dim_names[i2]] * standardized_output[p2]
+        output.append(tmp_out + tf.reshape(beta[dim_names[p1]], broadcast_beta_shape))
+
+    return output
 
 
-class BatchNormalization(Layer):
+class BatchNormalizationQ(Layer):
     """
     quaternion implementation : https://github.com/gaudetcj/DeepQuaternionNetworks/blob/43b321e1701287ce9cf9af1eb16457bdd2c85175/quaternion_layers/bn.py
     tf implementation : https://github.com/tensorflow/tensorflow/blob/2b96f3662bd776e277f86997659e61046b56c315/tensorflow/python/keras/layers/normalization.py#L46
@@ -330,32 +345,28 @@ class BatchNormalization(Layer):
         for p1 in range(4):
             for p2 in range(p1, 4):
                 postfix = dim_names[p1]+dim_names[p2]
-                if self.scale:
-                    self.gamma[postfix] = self.add_weight(shape=param_shape,
-                                                          name=f'gamma_{postfix}',
-                                                          initializer=self.gamma_diag_initializer,
-                                                          regularizer=self.gamma_diag_regularizer,
-                                                          constraint=self.gamma_diag_constraint)
-                    self.moving_V[postfix] = self.add_weight(shape=param_shape,
-                                                             initializer=self.moving_variance_initializer,
-                                                             name=f'moving_V{postfix}',
-                                                             trainable=False)
-                else:
-                    self.gamma[postfix] = None
-                    self.moving_V[postfix] = None
+                self.gamma[postfix] = self.add_weight(shape=param_shape,
+                                                      name=f'gamma_{postfix}',
+                                                      initializer=self.gamma_diag_initializer,
+                                                      regularizer=self.gamma_diag_regularizer,
+                                                      constraint=self.gamma_diag_constraint)
+                self.moving_V[postfix] = self.add_weight(shape=param_shape,
+                                                         initializer=self.moving_variance_initializer,
+                                                         name=f'moving_V{postfix}',
+                                                         trainable=False)
         self.beta = {}
         self.moving_mean = []
         for p1 in range(4):
-            if self.center:
-                postfix = dim_names[p1]
-                self.beta[postfix] = self.add_weight(shape=(input_shape[0][self.axis],), name=f'beta{[postfix]}', initializer=self.beta_initializer, regularizer=self.beta_regularizer,
-                                                     constraint=self.beta_constraint)
-                self.moving_mean.append(self.add_weight(shape=(input_shape[0][self.axis],), initializer=self.moving_mean_initializer, name=f'moving_mean{[postfix]}',
-                                                            trainable=False))
-            else:
-                self.beta[postfix] = None
-                self.moving_mean.append(None) 
-
+            postfix = dim_names[p1]
+            self.beta[postfix] = self.add_weight(shape=(input_shape[0][self.axis],),
+                                                 name=f'beta{[postfix]}',
+                                                 initializer=self.beta_initializer,
+                                                 regularizer=self.beta_regularizer,
+                                                 constraint=self.beta_constraint)
+            self.moving_mean.append(self.add_weight(shape=(input_shape[0][self.axis],),
+                                                    initializer=self.moving_mean_initializer,
+                                                    name=f'moving_mean{[postfix]}',
+                                                    trainable=False))
         self.built = True
 
     def call(self, inputs, training=None):
@@ -372,11 +383,9 @@ class BatchNormalization(Layer):
         for i in range(4):
             mu.append(tf.math.reduce_mean(inputs[i], axis=reduction_axes))  # compute mean for all blades. Unittest gives tf.Tensor([1 3 4 5 6], shape=(5,), dtype=int32)
             broadcast_mu.append(tf.reshape(mu[i], broadcast_mu_shape))
-        if self.center:
-            input_centred = [inputs[i] - broadcast_mu[i] for i in range(4)]
-        else:
-            input_centred = inputs
-
+        input_centred = [inputs[i] - broadcast_mu[i] for i in range(4)]
+        
+        # compute covariance matrix
         v = {}
         dim_names = "rijk"
         for p1 in range(4):
@@ -396,41 +405,35 @@ class BatchNormalization(Layer):
             input_centred, v,
             self.beta,
             self.gamma,
-            self.scale, self.center,
             axis=self.axis
-        ) # unittest shape : 4* shape=(1, 2, 3, 5)
-        
-        if training in {0, False}:
+        )  # unittest shape : 4* shape=(1, 2, 3, 5)
+        training_value = tf_utils.constant_value(training)
+        if training_value == False:  # not the same as "not training_value" because of possible none
             return input_bn
-        else:
-            update_list = []
-            if self.center:
-                for i in range(4):
-                    update_list.append(tf.keras.backend.moving_average_update(self.moving_mean[i], mu[i], self.momentum))
-            if self.scale:
-                dim_names = "rijk"
-                for p1 in range(4):
-                    for p2 in range(p1, 4):
-                        postfix = dim_names[p1]+dim_names[p2]
-                        update_list.append(tf.keras.backend.moving_average_update(self.moving_V[postfix], v[postfix], self.momentum))
-            self.add_update(update_list, inputs)
 
-            def normalize_inference():
-                if self.center:
-                    inference_centred = [inputs[i] - tf.reshape(self.moving_mean[i], broadcast_mu_shape) for i in range(4)]
-                else:
-                    inference_centred = inputs
-                return quaternion_bn(
-                    inference_centred, self.moving_V,
-                    self.beta,
-                    self.gamma,
-                    self.scale, self.center, axis=self.axis
-                )
+        update_list = []
+        for i in range(4):
+            update_list.append(tf.keras.backend.moving_average_update(self.moving_mean[i], mu[i], self.momentum))
+        for p1 in range(4):
+            for p2 in range(p1, 4):
+                postfix = dim_names[p1]+dim_names[p2]
+                update_list.append(tf.keras.backend.moving_average_update(self.moving_V[postfix], v[postfix], self.momentum))  
+        self.add_update(update_list, inputs)
+
+        def normalize_inference():
+            if self.center:
+                inference_centred = [inputs[i] - tf.reshape(self.moving_mean[i], broadcast_mu_shape) for i in range(4)]
+            else:
+                inference_centred = inputs
+            return quaternion_bn(
+                inference_centred, self.moving_V,
+                self.beta,
+                self.gamma,
+                axis=self.axis
+            )
 
         # Pick the normalized form corresponding to the training phase.
-        return tf.keras.backend.in_train_phase(input_bn,
-                                normalize_inference,
-                                training=training)
+        return tf.keras.backend.in_train_phase(input_bn, normalize_inference, training=training)
 
     def get_config(self):
         config = {
