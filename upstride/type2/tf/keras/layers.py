@@ -38,6 +38,7 @@ class TF2Upstride(Layer):
     def __init__(self, strategy=''):
         self.rgb_in_img = False
         self.gray_in_real_rgb_in_img = False
+        self.learn_multivector = False
         if strategy == "rgbinimg":
             self.rgb_in_img = True
         elif strategy == 'grayinreal_rgbinimg':
