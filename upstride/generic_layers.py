@@ -393,10 +393,6 @@ class MaxPooling2D(GenericNonLinear):
     def __init__(self, *argv, **kwargs):
         super().__init__(tf.keras.layers.MaxPooling2D, *argv, **kwargs)
 
-class AveragePooling2D(GenericNonLinear):
-    def __init__(self, *argv, **kwargs):
-        super().__init__(tf.keras.layers.AveragePooling2D, *argv, **kwargs)
-
 
 class AveragePooling2D(GenericNonLinear):
     def __init__(self, *argv, **kwargs):
