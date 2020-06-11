@@ -15,8 +15,9 @@
 #
 # this file comes from https://github.com/tensorflow/tensorflow/blob/v2.2.0/tensorflow/python/keras/layers/convolutional.py
 # to see the diff, do
-# meld upstride/type2/tf/keras/convolutional.py https://raw.githubusercontent.com/tensorflow/tensorflow/v2.2.0/tensorflow/python/keras/layers/convolutional.py
-#  https://math.stackexchange.com/questions/1103399/alternative-quaternion-multiplication-method
+# curl https://raw.githubusercontent.com/tensorflow/tensorflow/v2.2.0/tensorflow/python/keras/layers/convolutional.py > /tmp/keras.py
+# autopep8 --in-place /tmp/keras.py
+# meld upstride/type2/tf/keras/convolutional.py /tmp/keras.py
 """Keras convolution layers and image transformation layers.
 """
 
