@@ -88,6 +88,87 @@ class Upstride2TF(Layer):
             return x[0]
 
 
+class MaxNormPooling2D(Layer):
+    """ Max Pooling layer for quaternions which considers the norm of quaternions to choose the quaternions
+    which exhibits maximum norm within a small window of pool size.
+    Arguments:
+      pool_size: An integer or tuple/list of 2 integers: (pool_height, pool_width)
+        specifying the size of the pooling window.
+        Can be a single integer to specify the same value for
+        all spatial dimensions.
+      strides: An integer or tuple/list of 2 integers,
+        specifying the strides of the pooling operation.
+        Can be a single integer to specify the same value for
+        all spatial dimensions.
+      padding: A string. The padding method, either 'valid' or 'same'.
+        Case-insensitive.
+      norm_type: A string or integer. Order of the norm.
+        Supported values are 'fro', 'euclidean', 1, 2, np.inf and
+        any positive real number yielding the corresponding p-norm.
+      data_format: A string, one of `channels_last` (default) or `channels_first`.
+        The ordering of the dimensions in the inputs.
+        `channels_last` corresponds to inputs with shape
+        `(batch, height, width, channels)` while `channels_first` corresponds to
+        inputs with shape `(batch, channels, height, width)`.
+      name: A string, the name of the layer.
+    """
+
+    def __init__(self, pool_size, strides=None, padding='valid', norm_type='euclidean',
+                 data_format=None, name=None, **kwargs):
+        super(MaxNormPooling2D, self).__init__(name=name, **kwargs)
+        if data_format is None:
+            data_format = backend.image_data_format()
+        if strides is None:
+            strides = pool_size
+        self.pool_size = conv_utils.normalize_tuple(pool_size, 2, 'pool_size')
+        self.strides = conv_utils.normalize_tuple(strides, 2, 'strides')
+        self.padding = conv_utils.normalize_padding(padding)
+        self.data_format = conv_utils.normalize_data_format(data_format)
+        self.norm_type = norm_type
+
+    def call(self, inputs):
+        inputs = [tf.expand_dims(inputs[i], -1) for i in range(len(inputs))]
+        inputs = tf.keras.layers.concatenate(inputs, axis=-1)
+
+        if self.data_format == 'channels_last':
+            pool_shape = (1,) + self.pool_size + (1,)
+            strides = (1,) + self.strides + (1,)
+        else:
+            pool_shape = (1, 1) + self.pool_size
+            strides = (1, 1) + self.strides
+        padding = self.padding.upper()
+
+        norm = tf.norm(inputs, ord=self.norm_type, axis=-1)
+
+        _, indices = tf.nn.max_pool_with_argmax(norm, ksize=pool_shape, strides=strides, padding=padding,
+                                                include_batch_in_index=True)
+
+        input_shape = tf.shape(norm)
+        output_shape = tf.shape(indices)
+
+        flat_input_size = tf.reduce_prod(input_shape)
+        flat_indices_size = tf.reduce_prod(output_shape)
+
+        indices = tf.reshape(indices, [flat_indices_size, 1])
+
+        inputs = tf.reshape(inputs, [flat_input_size, 4])
+
+        pooled = [tf.reshape(tf.gather_nd(inputs[:, i], indices), output_shape) for i in range(4)]
+
+        return pooled
+
+    def get_config(self):
+        config = {
+            'pool_size': self.pool_size,
+            'padding': self.padding,
+            'strides': self.strides,
+            'data_format': self.data_format,
+            'norm_type': self.norm_type
+        }
+        base_config = super(MaxNormPooling2D, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
 def sqrt_init(shape, dtype=None):
     value = (1 / tf.sqrt(4.0)) * tf.ones(shape)
     return value
@@ -382,85 +463,3 @@ class BatchNormalizationUnfinised(Layer):
         }
         base_config = super(QuaternionBatchNormalization, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
-
-
-class MaxNormPooling2D(Layer):
-    """ Max Pooling layer for quaternions which considers the norm of quaternions to choose the quaternions
-    which exhibits maximum norm within a small window of pool size.
-    Arguments:
-      pool_size: An integer or tuple/list of 2 integers: (pool_height, pool_width)
-        specifying the size of the pooling window.
-        Can be a single integer to specify the same value for
-        all spatial dimensions.
-      strides: An integer or tuple/list of 2 integers,
-        specifying the strides of the pooling operation.
-        Can be a single integer to specify the same value for
-        all spatial dimensions.
-      padding: A string. The padding method, either 'valid' or 'same'.
-        Case-insensitive.
-      norm_type: A string or integer. Order of the norm.
-        Supported values are 'fro', 'euclidean', 1, 2, np.inf and
-        any positive real number yielding the corresponding p-norm.
-      data_format: A string, one of `channels_last` (default) or `channels_first`.
-        The ordering of the dimensions in the inputs.
-        `channels_last` corresponds to inputs with shape
-        `(batch, height, width, channels)` while `channels_first` corresponds to
-        inputs with shape `(batch, channels, height, width)`.
-      name: A string, the name of the layer.
-    """
-
-    def __init__(self, pool_size, strides, padding='valid', norm_type='euclidean',
-                 data_format=None, name=None, **kwargs):
-        super(MaxNormPooling2D, self).__init__(name=name, **kwargs)
-        if data_format is None:
-            data_format = backend.image_data_format()
-        if strides is None:
-            strides = pool_size
-        self.pool_size = conv_utils.normalize_tuple(pool_size, 2, 'pool_size')
-        self.strides = conv_utils.normalize_tuple(strides, 2, 'strides')
-        self.padding = conv_utils.normalize_padding(padding)
-        self.data_format = conv_utils.normalize_data_format(data_format)
-        self.norm_type = norm_type
-
-    def call(self, inputs):
-        inputs = [tf.expand_dims(inputs[i], -1) for i in range(len(inputs))]
-        inputs = tf.keras.layers.concatenate(inputs, axis=-1)
-
-        if self.data_format == 'channels_last':
-            pool_shape = (1,) + self.pool_size + (1,)
-            strides = (1,) + self.strides + (1,)
-        else:
-            pool_shape = (1, 1) + self.pool_size
-            strides = (1, 1) + self.strides
-        padding = self.padding.upper()
-
-        norm = tf.norm(inputs, ord=self.norm_type, axis=-1)
-
-        _, indices = tf.nn.max_pool_with_argmax(norm, ksize=pool_shape, strides=strides, padding=padding,
-                                                include_batch_in_index=True)
-
-        input_shape = tf.shape(norm)
-        output_shape = tf.shape(indices)
-
-        flat_input_size = tf.reduce_prod(input_shape)
-        flat_indices_size = tf.reduce_prod(output_shape)
-
-        indices = tf.reshape(indices, [flat_indices_size, 1])
-
-        inputs = tf.reshape(inputs, [flat_input_size, 4])
-
-        pooled = [tf.reshape(tf.gather_nd(inputs[:, i], indices), output_shape) for i in range(4)]
-
-        return pooled
-
-    def get_config(self):
-        config = {
-            'pool_size': self.pool_size,
-            'padding': self.padding,
-            'strides': self.strides,
-            'data_format': self.data_format,
-            'norm_type': self.norm_type
-        }
-        base_config = super(MaxNormPooling2D, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
-
