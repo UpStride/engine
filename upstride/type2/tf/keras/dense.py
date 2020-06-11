@@ -55,7 +55,7 @@ from tensorflow.python.platform import tf_logging
 from tensorflow.python.training.tracking import base as trackable
 from tensorflow.python.util import nest
 from tensorflow.python.util import tf_inspect
-from .utils import quaternion_mult
+from .utils import quaternion_mult, is_quaternion_init
 from .initializers import QInitializerDense
 
 
@@ -1126,7 +1126,7 @@ class Dense(Layer):
         self.units = int(units) if not isinstance(units, int) else units
         self.activation = activations.get(activation)
         self.use_bias = use_bias
-        self.kernel_initializer_type = kernel_initializer,  # initializers.get(kernel_initializer)
+        self.kernel_initializer_type = kernel_initializer  # initializers.get(kernel_initializer)
         self.bias_initializer = initializers.get(bias_initializer)
         self.kernel_regularizer = regularizers.get(kernel_regularizer)
         self.bias_regularizer = regularizers.get(bias_regularizer)
@@ -1146,18 +1146,15 @@ class Dense(Layer):
                              'should be defined. Found `None`.')
         last_dim = tensor_shape.dimension_value(input_shape[-1])
 
-        if isinstance(self.kernel_initializer_type, tuple) and isinstance(self.kernel_initializer_type[0], str):
-            self.kernel_initializer_type = self.kernel_initializer_type[0]
-
-        if not isinstance(self.kernel_initializer_type, str) or 'up2_init' not in self.kernel_initializer_type:
-            self.kernel_initializer = initializers.get(self.kernel_initializer_type)
-        else:
+        if is_quaternion_init(self.kernel_initializer_type):
             self.kernel_initializer = QInitializerDense(shape=(input_shape[-1], self.units),
                                                         criterion=self.kernel_initializer_type.split("_")[-1])
+        else:
+            self.kernel_initializer = initializers.get(self.kernel_initializer_type)
 
         self.kernels = []
         for i in range(4):
-            if isinstance(self.kernel_initializer_type, str) and 'up2_init' in self.kernel_initializer_type:
+            if is_quaternion_init(self.kernel_initializer_type):
                 self.kernel_initializer.part_index = i
             self.kernels.append(self.add_weight(
                 f'kernel_{i}',

@@ -156,17 +156,17 @@ class Conv(Layer):
         input_channel = self._get_input_channel(input_shape)
         kernel_shape = self.kernel_size + (input_channel, self.filters)
 
-        if not isinstance(self.kernel_initializer_type, str) or 'up2_init' not in self.kernel_initializer_type:
-            self.kernel_initializer = initializers.get(self.kernel_initializer_type)
-        else:
+        if utils.is_quaternion_init(self.kernel_initializer_type):
             self.kernel_initializer = QInitializerConv(kernel_size=self.kernel_size, input_dim=input_channel,
-                                                   weight_dim=self.rank, nb_filters=self.filters,
-                                                   criterion=self.kernel_initializer_type.split("_")[-1], seed=None,
-                                                   part_index=0)
+                                                       weight_dim=self.rank, nb_filters=self.filters,
+                                                       criterion=self.kernel_initializer_type.split("_")[-1], seed=None,
+                                                       part_index=0)
+        else:
+            self.kernel_initializer = initializers.get(self.kernel_initializer_type)
 
         self.kernels = []
         for i in range(self.ga_dimension):
-            if isinstance(self.kernel_initializer_type, str) and 'up2_init' in self.kernel_initializer_type:
+            if utils.is_quaternion_init(self.kernel_initializer_type):
                 self.kernel_initializer.part_index = i
             self.kernels.append(self.add_weight(
                 name=f'kernel_{i}',

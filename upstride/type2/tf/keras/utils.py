@@ -114,3 +114,17 @@ def quaternion_mult_naive(tf_op, inputs, kernels):
 multiply_by_a = multiply_by_a1
 # mult 2 is more stable than mult 1 when working with float 16
 quaternion_mult = quaternion_mult2
+
+
+def is_quaternion_init(init_type):
+    """
+    Determine whether it is a quaternion initialization or not
+    Args:
+        init_type: str or tf.keras.initializers.Initializer, initialization type for upstride quaternion, either
+        'up2_init_he'  or 'up2_init_glorot' for real valued initialization should be tensorflow
+    """
+
+    if isinstance(init_type, str) and 'up2_init' in init_type:
+        return True
+
+    return False
