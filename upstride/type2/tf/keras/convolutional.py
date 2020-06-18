@@ -1983,7 +1983,7 @@ class DepthwiseConv2D(Conv2D):
                  data_format=None,
                  activation=None,
                  use_bias=True,
-                 depthwise_initializer='glorot_uniform',
+                 depthwise_initializer='up2_init_he', # upstride initialization, either 'up2_init_he'  or 'up2_init_glorot'
                  bias_initializer='zeros',
                  depthwise_regularizer=None,
                  bias_regularizer=None,
@@ -2004,12 +2004,14 @@ class DepthwiseConv2D(Conv2D):
             bias_constraint=bias_constraint,
             **kwargs)
         self.depth_multiplier = depth_multiplier
-        self.depthwise_initializer = initializers.get(depthwise_initializer)
+        self.depthwise_initializer_type = depthwise_initializer
         self.depthwise_regularizer = regularizers.get(depthwise_regularizer)
         self.depthwise_constraint = constraints.get(depthwise_constraint)
         self.bias_initializer = initializers.get(bias_initializer)
 
     def build(self, input_shape):
+        self.ga_dimension = 4
+				input_shape = input_shape[0]
         if len(input_shape) < 4:
             raise ValueError('Inputs to `DepthwiseConv2D` should have rank 4. '
                              'Received input shape:', str(input_shape))
@@ -2025,42 +2027,62 @@ class DepthwiseConv2D(Conv2D):
                                   input_dim,
                                   self.depth_multiplier)
 
-        self.depthwise_kernel = self.add_weight(
-            shape=depthwise_kernel_shape,
-            initializer=self.depthwise_initializer,
-            name='depthwise_kernel',
-            regularizer=self.depthwise_regularizer,
-            constraint=self.depthwise_constraint)
+				if utils.is_quaternion_init(self.depthwise_initializer_type):
+						self.depthwise_initializer = QInitializerConv(kernel_size=self.kernel_size, input_dim=input_dim,
+																					weight_dim=self.rank, nb_filters=self.filters,
+																					criterion=self.depthwise_initializer_type.split("_")[-1], seed=None,
+																					part_index=0)										
+				else:
+            self.depthwise_initializer = initializers.get(self.depthwise_initializer_type)
+
+				self.depthwise_kernels = list()
+				for i in range(self.ga_dimension):
+            if utils.is_quaternion_init(self.depthwise_initializer_type):
+                self.depthwise_initializer.part_index = i
+						self.depthwise_kernels.append(self.add_weight(
+								shape=depthwise_kernel_shape,
+								initializer=self.depthwise_initializer,
+								name=f'depthwise_kernels_{i}',
+								regularizer=self.depthwise_regularizer,
+								constraint=self.depthwise_constraint))
+
 
         if self.use_bias:
-            self.bias = self.add_weight(shape=(input_dim * self.depth_multiplier,),
-                                        initializer=self.bias_initializer,
-                                        name='bias',
-                                        regularizer=self.bias_regularizer,
-                                        constraint=self.bias_constraint)
+						self.biases = list()
+						for i in range(self.ga_dimension):
+								self.biases.append(self.add_weight(shape=(input_dim * self.depth_multiplier,),
+																						initializer=self.bias_initializer,
+																						name=f'bias_{i}',
+																						regularizer=self.bias_regularizer,
+																						constraint=self.bias_constraint))
         else:
-            self.bias = None
+            self.biases = None
         # Set input spec.
-        self.input_spec = InputSpec(ndim=4, axes={channel_axis: input_dim})
+        # self.input_spec = InputSpec(ndim=4, axes={channel_axis: input_dim})
         self.built = True
 
     def call(self, inputs):
         outputs = backend.depthwise_conv2d(
             inputs,
-            self.depthwise_kernel,
+            self.depthwise_kernels,
             strides=self.strides,
             padding=self.padding,
             dilation_rate=self.dilation_rate,
             data_format=self.data_format)
+						
+				outputs = utils.quaternion_mult2(outputs, inputs, outputs.self.depthwise_kernels)
 
         if self.use_bias:
-            outputs = backend.bias_add(
-                outputs,
-                self.bias,
-                data_format=self.data_format)
+						for i in range(self.ga_dimension):
+								outputs[i] = backend.bias_add(
+										outputs[i],
+										self.biases[i],
+										data_format=self.data_format)
 
         if self.activation is not None:
-            return self.activation(outputs)
+						for i in range(self.ga_dimension):
+								outputs[i] = self.activation(outputs[i])
+            return outputs
 
         return outputs
 
