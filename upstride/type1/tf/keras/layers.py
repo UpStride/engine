@@ -1,5 +1,5 @@
 from .... import generic_layers
-from .... generic_layers import *
+from ....generic_layers import *
 
 generic_layers.upstride_type = 1
 generic_layers.blade_indexes = ["", "12"]
