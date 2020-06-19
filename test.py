@@ -6,7 +6,7 @@ from upstride import generic_layers
 from upstride.generic_layers import _ga_multiply_get_index, upstride_type, unit_multiplier, reorder
 from upstride.type2.tf.keras.utils import quaternion_mult1, quaternion_mult2, multiply_by_a1, multiply_by_a2, quaternion_mult_naive
 from upstride.type2.tf.keras.layers import TF2Upstride as QTF2Upstride
-from upstride.type2.tf.keras.layers import BatchNormalization as QBatchNormalization
+from upstride.type2.tf.keras.layers import BatchNormalizationQ
 
 
 class TestGAMultiplication(unittest.TestCase):
@@ -144,7 +144,7 @@ class TestQuaternionBN(unittest.TestCase):
                                         [[1, 3, 4, 5, 6], [1, 3, 4, 5, 6], [1, 3, 4, 5, 6]]]])
         self.assertEqual(inputs.shape, (1, 2, 3, 5))
         inputs = [inputs for _ in range(4)]
-        bn_layer = QBatchNormalization()
+        bn_layer = BatchNormalizationQ()
         outputs = bn_layer(inputs, training=False)
 
 
