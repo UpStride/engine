@@ -139,12 +139,13 @@ class TestQuaternionMult(unittest.TestCase):
 
 class TestQuaternionBN(unittest.TestCase):
     def test_init(self):
+        generic_layers.change_upstride_type(2, ["", "12", "13", "23"], (3, 0, 0))
         inputs = tf.convert_to_tensor([[[[1., 3, 4, 5, 6], [1, 3, 4, 5, 6], [1, 3, 4, 5, 6]],
                                         [[1, 3, 4, 5, 6], [1, 3, 4, 5, 6], [1, 3, 4, 5, 6]]]])
         self.assertEqual(inputs.shape, (1, 2, 3, 5))
         inputs = [inputs for _ in range(4)]
         bn_layer = QBatchNormalization()
-        outputs = bn_layer(inputs)
+        outputs = bn_layer(inputs, training=False)
 
 
 if __name__ == "__main__":

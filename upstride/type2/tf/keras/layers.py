@@ -202,6 +202,21 @@ def quaternion_standardization(input_centred, v: Dict, axis=-1):
     w['jk'] = (1.0 / w['jj']) * (v['jk'] - (w['ij']*w['ik'] + w['rj']*w['rk']))
     w['kk'] = tf.sqrt((v['kk'] - (w['jk']*w['jk'] + w['ik']*w['ik'] + w['rk']*w['rk'])))
 
+    # compute the oposite
+    o = {}
+    o['rr'] = 1 / w['rr']
+    o['ii'] = 1 / w['ii']
+    o['jj'] = 1 / w['jj']
+    o['kk'] = 1 / w['kk']
+    o['ri'] = -(w['ri'] * o['rr']) / w['ii']
+    o['rj'] = -(w['rj'] * o['rr'] + w['ij'] * o['ri']) / w['jj']
+    o['rk'] = -(w['rk'] * o['rr'] + w['ik'] * o['ri'] + w['jk'] * o['rj'])/w['kk']
+    o['ij'] = -(w['ij'] * o['ii']) / w['jj']
+    o['ik'] = -(w['ik'] * o['ii'] + w['jk'] * o['ij']) / w['kk']
+    o['jk'] = -(w['jk'] * o['jj']) / w['kk']
+
+    w = o
+
     # Normalization. We multiply, x_normalized = W.x.
     # The returned result will be a quaternion standardized input
     # where the r, i, j, and k parts are obtained as follows:
@@ -272,7 +287,7 @@ class BatchNormalizationQ(Layer):
     tf implementation : https://github.com/tensorflow/tensorflow/blob/2b96f3662bd776e277f86997659e61046b56c315/tensorflow/python/keras/layers/normalization.py#L46
     paper : https://arxiv.org/pdf/1712.04604.pdf
 
-    this version perform the same operations as the quaternion version, but has been rewritten to be cleaner
+    this version perform the same operations as the deep quaternion network version, but has been rewritten to be cleaner
     """
 
     def __init__(self, axis=-1, momentum=0.9, epsilon=1e-4, center=True, scale=True, beta_initializer='zeros',
@@ -384,7 +399,7 @@ class BatchNormalizationQ(Layer):
             mu.append(tf.math.reduce_mean(inputs[i], axis=reduction_axes))  # compute mean for all blades. Unittest gives tf.Tensor([1 3 4 5 6], shape=(5,), dtype=int32)
             broadcast_mu.append(tf.reshape(mu[i], broadcast_mu_shape))
         input_centred = [inputs[i] - broadcast_mu[i] for i in range(4)]
-        
+
         # compute covariance matrix
         v = {}
         dim_names = "rijk"
@@ -417,7 +432,7 @@ class BatchNormalizationQ(Layer):
         for p1 in range(4):
             for p2 in range(p1, 4):
                 postfix = dim_names[p1]+dim_names[p2]
-                update_list.append(tf.keras.backend.moving_average_update(self.moving_V[postfix], v[postfix], self.momentum))  
+                update_list.append(tf.keras.backend.moving_average_update(self.moving_V[postfix], v[postfix], self.momentum))
         self.add_update(update_list, inputs)
 
         def normalize_inference():
