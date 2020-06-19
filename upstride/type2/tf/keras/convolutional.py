@@ -2008,6 +2008,8 @@ class DepthwiseConv2D(Conv2D):
         self.depthwise_regularizer = regularizers.get(depthwise_regularizer)
         self.depthwise_constraint = constraints.get(depthwise_constraint)
         self.bias_initializer = initializers.get(bias_initializer)
+        self.kernel_initializer = None # initializing to None and its not used. 
+        #This required in order for get_config() of super() to work. 
 
     def build(self, input_shape):
       self.ga_dimension = 4
