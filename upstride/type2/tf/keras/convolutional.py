@@ -2010,78 +2010,77 @@ class DepthwiseConv2D(Conv2D):
         self.bias_initializer = initializers.get(bias_initializer)
 
     def build(self, input_shape):
-        self.ga_dimension = 4
-				input_shape = input_shape[0]
-        if len(input_shape) < 4:
-            raise ValueError('Inputs to `DepthwiseConv2D` should have rank 4. '
-                             'Received input shape:', str(input_shape))
-        input_shape = tensor_shape.TensorShape(input_shape)
-        channel_axis = self._get_channel_axis()
-        if input_shape.dims[channel_axis].value is None:
-            raise ValueError('The channel dimension of the inputs to '
-                             '`DepthwiseConv2D` '
-                             'should be defined. Found `None`.')
-        input_dim = int(input_shape[channel_axis])
-        depthwise_kernel_shape = (self.kernel_size[0],
-                                  self.kernel_size[1],
-                                  input_dim,
-                                  self.depth_multiplier)
+      self.ga_dimension = 4
+      input_shape = input_shape[0]
+      if len(input_shape) < 4:
+          raise ValueError('Inputs to `DepthwiseConv2D` should have rank 4. '
+                            'Received input shape:', str(input_shape))
+      input_shape = tensor_shape.TensorShape(input_shape)
+      channel_axis = self._get_channel_axis()
+      if input_shape.dims[channel_axis].value is None:
+          raise ValueError('The channel dimension of the inputs to '
+                            '`DepthwiseConv2D` '
+                            'should be defined. Found `None`.')
+      input_dim = int(input_shape[channel_axis])
+      depthwise_kernel_shape = (self.kernel_size[0],
+                                self.kernel_size[1],
+                                input_dim,
+                                self.depth_multiplier)
 
-				if utils.is_quaternion_init(self.depthwise_initializer_type):
-						self.depthwise_initializer = QInitializerConv(kernel_size=self.kernel_size, input_dim=input_dim,
-																					weight_dim=self.rank, nb_filters=self.filters,
-																					criterion=self.depthwise_initializer_type.split("_")[-1], seed=None,
-																					part_index=0)										
-				else:
-            self.depthwise_initializer = initializers.get(self.depthwise_initializer_type)
+      if utils.is_quaternion_init(self.depthwise_initializer_type):
+          self.depthwise_initializer = QInitializerConv(kernel_size=self.kernel_size, input_dim=input_dim,
+                                        weight_dim=self.rank, nb_filters=self.depth_multiplier, #specific for DepthWise
+                                        criterion=self.depthwise_initializer_type.split("_")[-1], seed=None,
+                                        part_index=0)
+      else:
+          self.depthwise_initializer = initializers.get(self.depthwise_initializer_type)
 
-				self.depthwise_kernels = list()
-				for i in range(self.ga_dimension):
-            if utils.is_quaternion_init(self.depthwise_initializer_type):
-                self.depthwise_initializer.part_index = i
-						self.depthwise_kernels.append(self.add_weight(
-								shape=depthwise_kernel_shape,
-								initializer=self.depthwise_initializer,
-								name=f'depthwise_kernels_{i}',
-								regularizer=self.depthwise_regularizer,
-								constraint=self.depthwise_constraint))
+      self.depthwise_kernels = list()
+      for i in range(self.ga_dimension):
+          if utils.is_quaternion_init(self.depthwise_initializer_type):
+              self.depthwise_initializer.part_index = i
+          self.depthwise_kernels.append(self.add_weight(
+              shape=depthwise_kernel_shape,
+              initializer=self.depthwise_initializer,
+              name=f'depthwise_kernels_{i}',
+              regularizer=self.depthwise_regularizer,
+              constraint=self.depthwise_constraint))
 
 
-        if self.use_bias:
-						self.biases = list()
-						for i in range(self.ga_dimension):
-								self.biases.append(self.add_weight(shape=(input_dim * self.depth_multiplier,),
-																						initializer=self.bias_initializer,
-																						name=f'bias_{i}',
-																						regularizer=self.bias_regularizer,
-																						constraint=self.bias_constraint))
-        else:
-            self.biases = None
-        # Set input spec.
-        # self.input_spec = InputSpec(ndim=4, axes={channel_axis: input_dim})
-        self.built = True
+      if self.use_bias:
+          self.biases = list()
+          for i in range(self.ga_dimension):
+              self.biases.append(self.add_weight(shape=(input_dim * self.depth_multiplier,),
+                                          initializer=self.bias_initializer,
+                                          name=f'bias_{i}',
+                                          regularizer=self.bias_regularizer,
+                                          constraint=self.bias_constraint))
+      else:
+          self.biases = None
+      self.built = True
 
     def call(self, inputs):
-        outputs = backend.depthwise_conv2d(
-            inputs,
-            self.depthwise_kernels,
-            strides=self.strides,
-            padding=self.padding,
-            dilation_rate=self.dilation_rate,
-            data_format=self.data_format)
+        def tf_op(i, k):
+          return backend.depthwise_conv2d(
+              i,
+              k,
+              strides=self.strides,
+              padding=self.padding,
+              dilation_rate=self.dilation_rate,
+              data_format=self.data_format)
 						
-				outputs = utils.quaternion_mult2(outputs, inputs, outputs.self.depthwise_kernels)
+        outputs = utils.quaternion_mult(tf_op, inputs, self.depthwise_kernels)
 
         if self.use_bias:
-						for i in range(self.ga_dimension):
-								outputs[i] = backend.bias_add(
-										outputs[i],
-										self.biases[i],
-										data_format=self.data_format)
+            for i in range(self.ga_dimension):
+                outputs[i] = backend.bias_add(
+                    outputs[i],
+                    self.biases[i],
+                    data_format=self.data_format)
 
         if self.activation is not None:
-						for i in range(self.ga_dimension):
-								outputs[i] = self.activation(outputs[i])
+            for i in range(self.ga_dimension):
+                outputs[i] = self.activation(outputs[i])
             return outputs
 
         return outputs
