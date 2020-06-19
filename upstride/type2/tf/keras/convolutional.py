@@ -112,7 +112,7 @@ class Conv(Layer):
                  dilation_rate=1,
                  activation=None,
                  use_bias=True,
-                 kernel_initializer='up2_init_he', # upstride initialization, either 'up2_init_he'  or 'up2_init_glorot'
+                 kernel_initializer='up2_init_he',  # upstride initialization, either 'up2_init_he'  or 'up2_init_glorot'
                  bias_initializer='zeros',
                  kernel_regularizer=None,
                  bias_regularizer=None,
@@ -608,7 +608,7 @@ class Conv2D(Conv):
             dilation_rate=dilation_rate,
             activation=activations.get(activation),
             use_bias=use_bias,
-            kernel_initializer=kernel_initializer, #initializers.get(kernel_initializer),
+            kernel_initializer=kernel_initializer,  # initializers.get(kernel_initializer),
             bias_initializer=initializers.get(bias_initializer),
             kernel_regularizer=regularizers.get(kernel_regularizer),
             bias_regularizer=regularizers.get(bias_regularizer),
@@ -1478,7 +1478,7 @@ class SeparableConv(Conv):
         depthwise_kernel_shape = self.kernel_size + (input_dim,
                                                      self.depth_multiplier)
         pointwise_kernel_shape = (
-                                     1,) * self.rank + (self.depth_multiplier * input_dim, self.filters)
+            1,) * self.rank + (self.depth_multiplier * input_dim, self.filters)
 
         self.depthwise_kernel = self.add_weight(
             name='depthwise_kernel',
@@ -1983,7 +1983,7 @@ class DepthwiseConv2D(Conv2D):
                  data_format=None,
                  activation=None,
                  use_bias=True,
-                 depthwise_initializer='up2_init_he', # upstride initialization, either 'up2_init_he'  or 'up2_init_glorot'
+                 depthwise_initializer='up2_init_he',  # upstride initialization, either 'up2_init_he'  or 'up2_init_glorot'
                  bias_initializer='zeros',
                  depthwise_regularizer=None,
                  bias_regularizer=None,
@@ -2008,69 +2008,68 @@ class DepthwiseConv2D(Conv2D):
         self.depthwise_regularizer = regularizers.get(depthwise_regularizer)
         self.depthwise_constraint = constraints.get(depthwise_constraint)
         self.bias_initializer = initializers.get(bias_initializer)
-        self.kernel_initializer = None # initializing to None and its not used. 
-        #This required in order for get_config() of super() to work. 
+        self.kernel_initializer = None  # initializing to None and its not used.
+        # This required in order for get_config() of super() to work.
 
     def build(self, input_shape):
-      self.ga_dimension = 4
-      input_shape = input_shape[0]
-      if len(input_shape) < 4:
-          raise ValueError('Inputs to `DepthwiseConv2D` should have rank 4. '
-                            'Received input shape:', str(input_shape))
-      input_shape = tensor_shape.TensorShape(input_shape)
-      channel_axis = self._get_channel_axis()
-      if input_shape.dims[channel_axis].value is None:
-          raise ValueError('The channel dimension of the inputs to '
-                            '`DepthwiseConv2D` '
-                            'should be defined. Found `None`.')
-      input_dim = int(input_shape[channel_axis])
-      depthwise_kernel_shape = (self.kernel_size[0],
-                                self.kernel_size[1],
-                                input_dim,
-                                self.depth_multiplier)
+        self.ga_dimension = 4
+        input_shape = input_shape[0]
+        if len(input_shape) < 4:
+            raise ValueError('Inputs to `DepthwiseConv2D` should have rank 4. '
+                             'Received input shape:', str(input_shape))
+        input_shape = tensor_shape.TensorShape(input_shape)
+        channel_axis = self._get_channel_axis()
+        if input_shape.dims[channel_axis].value is None:
+            raise ValueError('The channel dimension of the inputs to '
+                             '`DepthwiseConv2D` '
+                             'should be defined. Found `None`.')
+        input_dim = int(input_shape[channel_axis])
+        depthwise_kernel_shape = (self.kernel_size[0],
+                                  self.kernel_size[1],
+                                  input_dim,
+                                  self.depth_multiplier)
 
-      if utils.is_quaternion_init(self.depthwise_initializer_type):
-          self.depthwise_initializer = QInitializerConv(kernel_size=self.kernel_size, input_dim=input_dim,
-                                        weight_dim=self.rank, nb_filters=self.depth_multiplier, #specific for DepthWise
-                                        criterion=self.depthwise_initializer_type.split("_")[-1], seed=None,
-                                        part_index=0)
-      else:
-          self.depthwise_initializer = initializers.get(self.depthwise_initializer_type)
+        if utils.is_quaternion_init(self.depthwise_initializer_type):
+            self.depthwise_initializer = QInitializerConv(kernel_size=self.kernel_size, input_dim=input_dim,
+                                                          weight_dim=self.rank, nb_filters=self.depth_multiplier,  # specific for DepthWise
+                                                          criterion=self.depthwise_initializer_type.split("_")[-1], seed=None,
+                                                          part_index=0)
+        else:
+            self.depthwise_initializer = initializers.get(self.depthwise_initializer_type)
 
-      self.depthwise_kernels = list()
-      for i in range(self.ga_dimension):
-          if utils.is_quaternion_init(self.depthwise_initializer_type):
-              self.depthwise_initializer.part_index = i
-          self.depthwise_kernels.append(self.add_weight(
-              shape=depthwise_kernel_shape,
-              initializer=self.depthwise_initializer,
-              name=f'depthwise_kernels_{i}',
-              regularizer=self.depthwise_regularizer,
-              constraint=self.depthwise_constraint))
+        self.depthwise_kernels = list()
+        for i in range(self.ga_dimension):
+            if utils.is_quaternion_init(self.depthwise_initializer_type):
+                self.depthwise_initializer.part_index = i
+            self.depthwise_kernels.append(self.add_weight(
+                shape=depthwise_kernel_shape,
+                initializer=self.depthwise_initializer,
+                name=f'depthwise_kernels_{i}',
+                regularizer=self.depthwise_regularizer,
+                constraint=self.depthwise_constraint))
 
-
-      if self.use_bias:
-          self.biases = list()
-          for i in range(self.ga_dimension):
-              self.biases.append(self.add_weight(shape=(input_dim * self.depth_multiplier,),
-                                          initializer=self.bias_initializer,
-                                          name=f'bias_{i}',
-                                          regularizer=self.bias_regularizer,
-                                          constraint=self.bias_constraint))
-      else:
-          self.biases = None
-      self.built = True
+        if self.use_bias:
+            self.biases = list()
+            for i in range(self.ga_dimension):
+                self.biases.append(self.add_weight(shape=(input_dim * self.depth_multiplier,),
+                                                   initializer=self.bias_initializer,
+                                                   name=f'bias_{i}',
+                                                   regularizer=self.bias_regularizer,
+                                                   constraint=self.bias_constraint))
+        else:
+            self.biases = None
+        self.built = True
 
     def call(self, inputs):
         def tf_op(i, k):
-          return backend.depthwise_conv2d(
-              i,
-              k,
-              strides=self.strides,
-              padding=self.padding,
-              dilation_rate=self.dilation_rate,
-              data_format=self.data_format)
-						
+            return backend.depthwise_conv2d(
+                i,
+                k,
+                strides=self.strides,
+                padding=self.padding,
+                dilation_rate=self.dilation_rate,
+                data_format=self.data_format)
+
         outputs = utils.quaternion_mult(tf_op, inputs, self.depthwise_kernels)
 
         if self.use_bias:
@@ -2839,24 +2838,24 @@ class Cropping2D(Layer):
                 return inputs[:, :, self.cropping[0][0]:, self.cropping[1][0]:]
             elif self.cropping[0][1] == 0:
                 return inputs[:, :, self.cropping[0][0]:, self.cropping[1][0]:
-                                                          -self.cropping[1][1]]
+                              -self.cropping[1][1]]
             elif self.cropping[1][1] == 0:
                 return inputs[:, :, self.cropping[0][0]:-self.cropping[0][1],
-                       self.cropping[1][0]:]
+                              self.cropping[1][0]:]
             return inputs[:, :, self.cropping[0][0]:-self.cropping[0][1],
-                   self.cropping[1][0]:-self.cropping[1][1]]
+                          self.cropping[1][0]:-self.cropping[1][1]]
         else:
             if self.cropping[0][1] == self.cropping[1][1] == 0:
                 return inputs[:, self.cropping[0][0]:, self.cropping[1][0]:, :]
             elif self.cropping[0][1] == 0:
                 return inputs[:, self.cropping[0][0]:, self.cropping[1][0]:
-                                                       -self.cropping[1][1], :]
+                              -self.cropping[1][1], :]
             elif self.cropping[1][1] == 0:
                 return inputs[:, self.cropping[0][0]:-self.cropping[0][1],
-                       self.cropping[1][0]:, :]
+                              self.cropping[1][0]:, :]
             return inputs[:, self.cropping[0][0]:-self.cropping[0][1], self.cropping[
-                                                                           1][0]:-self.cropping[1][1],
-                   :]  # pylint: disable=invalid-unary-operand-type
+                1][0]:-self.cropping[1][1],
+                :]  # pylint: disable=invalid-unary-operand-type
         # pylint: enable=invalid-unary-operand-type
 
     def get_config(self):
@@ -2988,60 +2987,60 @@ class Cropping3D(Layer):
         if self.data_format == 'channels_first':
             if self.cropping[0][1] == self.cropping[1][1] == self.cropping[2][1] == 0:
                 return inputs[:, :, self.cropping[0][0]:, self.cropping[1][0]:,
-                       self.cropping[2][0]:]
+                              self.cropping[2][0]:]
             elif self.cropping[0][1] == self.cropping[1][1] == 0:
                 return inputs[:, :, self.cropping[0][0]:, self.cropping[1][0]:,
-                       self.cropping[2][0]:-self.cropping[2][1]]
+                              self.cropping[2][0]:-self.cropping[2][1]]
             elif self.cropping[1][1] == self.cropping[2][1] == 0:
                 return inputs[:, :, self.cropping[0][0]:-self.cropping[0][1],
-                       self.cropping[1][0]:, self.cropping[2][0]:]
+                              self.cropping[1][0]:, self.cropping[2][0]:]
             elif self.cropping[0][1] == self.cropping[2][1] == 0:
                 return inputs[:, :, self.cropping[0][0]:, self.cropping[1][0]:
-                                                          -self.cropping[1][1], self.cropping[2][0]:]
+                              -self.cropping[1][1], self.cropping[2][0]:]
             elif self.cropping[0][1] == 0:
                 return inputs[:, :, self.cropping[0][0]:, self.cropping[1][
-                                                              0]:-self.cropping[1][1],
-                       self.cropping[2][0]:-self.cropping[2][1]]
+                    0]:-self.cropping[1][1],
+                    self.cropping[2][0]:-self.cropping[2][1]]
             elif self.cropping[1][1] == 0:
                 return inputs[:, :, self.cropping[0][0]:-self.cropping[0][1], self.
-                                                                                  cropping[1][0]:,
-                       self.cropping[2][0]:-self.cropping[2][1]]
+                              cropping[1][0]:,
+                              self.cropping[2][0]:-self.cropping[2][1]]
             elif self.cropping[2][1] == 0:
                 return inputs[:, :, self.cropping[0][0]:-self.cropping[0][1], self.
-                                                                                  cropping[1][0]:-self.cropping[1][1],
-                       self.cropping[2][0]:]
+                              cropping[1][0]:-self.cropping[1][1],
+                              self.cropping[2][0]:]
             return inputs[:, :, self.cropping[0][0]:-self.cropping[0][1],
-                   self.cropping[1][0]:-self.cropping[1][1], self.cropping[2][
-                                                                 0]:-self.cropping[2][1]]
+                          self.cropping[1][0]:-self.cropping[1][1], self.cropping[2][
+                0]:-self.cropping[2][1]]
         else:
             if self.cropping[0][1] == self.cropping[1][1] == self.cropping[2][1] == 0:
                 return inputs[:, self.cropping[0][0]:, self.cropping[1][0]:,
-                       self.cropping[2][0]:, :]
+                              self.cropping[2][0]:, :]
             elif self.cropping[0][1] == self.cropping[1][1] == 0:
                 return inputs[:, self.cropping[0][0]:, self.cropping[1][0]:,
-                       self.cropping[2][0]:-self.cropping[2][1], :]
+                              self.cropping[2][0]:-self.cropping[2][1], :]
             elif self.cropping[1][1] == self.cropping[2][1] == 0:
                 return inputs[:, self.cropping[0][0]:-self.cropping[0][1],
-                       self.cropping[1][0]:, self.cropping[2][0]:, :]
+                              self.cropping[1][0]:, self.cropping[2][0]:, :]
             elif self.cropping[0][1] == self.cropping[2][1] == 0:
                 return inputs[:, self.cropping[0][0]:, self.cropping[1][0]:
-                                                       -self.cropping[1][1], self.cropping[2][0]:, :]
+                              -self.cropping[1][1], self.cropping[2][0]:, :]
             elif self.cropping[0][1] == 0:
                 return inputs[:, self.cropping[0][0]:, self.cropping[1][
-                                                           0]:-self.cropping[1][1], self.cropping[2][0]:
-                                                                                    -self.cropping[2][1], :]
+                    0]:-self.cropping[1][1], self.cropping[2][0]:
+                    -self.cropping[2][1], :]
             elif self.cropping[1][1] == 0:
                 return inputs[:, self.cropping[0][
-                                     0]:-self.cropping[0][1], self.cropping[1][0]:, self.cropping[2][0]:
-                                                                                    -self.cropping[2][1], :]
+                    0]:-self.cropping[0][1], self.cropping[1][0]:, self.cropping[2][0]:
+                    -self.cropping[2][1], :]
             elif self.cropping[2][1] == 0:
                 return inputs[:, self.cropping[0][0]:-self.cropping[0][1],
-                       self.cropping[1][0]:-self.cropping[1][1], self.cropping[
-                                                                     2][0]:, :]
+                              self.cropping[1][0]:-self.cropping[1][1], self.cropping[
+                    2][0]:, :]
             return inputs[:, self.cropping[0][0]:-self.cropping[0][1], self.cropping[
-                                                                           1][0]:-self.cropping[1][1],
-                   self.cropping[2][0]:  # pylint: disable=invalid-unary-operand-type
-                   -self.cropping[2][1], :]  # pylint: disable=invalid-unary-operand-type
+                1][0]:-self.cropping[1][1],
+                self.cropping[2][0]:  # pylint: disable=invalid-unary-operand-type
+                -self.cropping[2][1], :]  # pylint: disable=invalid-unary-operand-type
         # pylint: enable=invalid-unary-operand-type
 
     def get_config(self):
