@@ -351,9 +351,9 @@ The new features are:
 
 - a quaternion version of batch normalization following the idea of https://arxiv.org/pdf/1712.04604.pdf
 - a depthwise implementation using the optimized quaternion multiplication. How there are 3 optimized linear layer : Conv2D, Dense and DepthwiseConv2D
-- MaxNormPooling2D version for quaternion (TODO Rifat : add comments)
-- improved TF2Upstride for quaternion, with several initializations strategies (TODO Rifat : add comments)
-- new kernel initialization: `up2_init_he` (TODO Rifat : add comments)
+- MaxNormPooling2D version for quaternion
+- improved TF2Upstride for quaternion, with several initializations strategies
+- new kernel initialization: `up2_init_he`
 
 
 ## MaxNormPooling2D
