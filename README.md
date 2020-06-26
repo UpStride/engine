@@ -385,7 +385,7 @@ this paper (https://arxiv.org/pdf/1712.04604.pdf) which has the following struct
 
 ## Upstride2TF
 Conversion from UpStride datatype to real datatype is necessary to calculate the loss. This can be done in several ways. 
-In this version we added the 'concat' option.
+In this version we added the `concat` option.
 
 ### concat
 It concatenates all the hyper-complex components to make the real (TF) datatype
@@ -394,7 +394,9 @@ It concatenates all the hyper-complex components to make the real (TF) datatype
 Proper weight initialization is very important for the convergence of the model. To train a deeper model
 it is essential to make weight initialization in such a way that reduces the risk of exploding or
 vanishing gradient problem. Moreover, a hyper-complex model has interactions between components thus we can exploit that interaction
-during the initialization. This initialization strategy is described in (https://arxiv.org/pdf/1806.04418.pdf)
+during the initialization. This initialization strategy is described in (https://arxiv.org/pdf/1806.04418.pdf).
+`up2_init_he` and `up2_init_glorot` can be passed as parameter to initialize weights similar to the the idea of
+`he` and `glorot` initializations respectively.
 
 # TODO in future Version 
 
