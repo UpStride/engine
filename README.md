@@ -242,6 +242,7 @@ so if a layer is not implemented in the C++ engine, this runtime patch will allo
 
 # Future improvement
 This are some idea of things we could do in the future that wasn't done in v0.1
+
   - better gradient computation
   - optimize specific implementation (for instance quaternion)
   - improve BatchNormalization
