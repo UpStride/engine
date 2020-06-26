@@ -356,4 +356,58 @@ The new features are:
 - new kernel initialization: `up2_init_he` (TODO Rifat : add comments)
 
 
+## MaxNormPooling2D
+To sustain the rotation equivariance property of quaternion algebra, Quaternion MaxNormPooling2D 
+is implemented based on this paper (https://arxiv.org/abs/1911.09040) (proof is in the paper). 
+The idea is to pick the quaternion which has the largest norm. 
 
+It can be defined as:
+
+$MaxNormPooling2D(f) = \operatorname*{arg\,max}_{f_i} (||f_i||), i = 1, . . . , d$
+
+Here, $d$ is the number of quaternions, from them one quaternion is chosen.
+
+## TF2Upstride
+Conversion from TF datatype to UpStride datatype can be done in several ways. In this version of the engine, 
+two of them are added. Following two can be passed as a parameter to TF2Upstride layer:
+
+### rgbinimg
+To create Quaternion multi-vector, real part is initialized with zeros and thee imaginary parts of 
+$i, j, k$ has been initialized with $r, g, b$ channels of rgb image respectively.
+
+### learn_multivector
+Each component of quaternions can be learned using a small real valued network. This learning module taken from 
+this paper (https://arxiv.org/pdf/1712.04604.pdf) which has the following structure of real valued neural network.
+
+```
+    BN --> ReLU --> Conv --> BN --> ReLU --> Conv
+```
+
+## Upstride2TF
+Conversion from UpStride datatype to real datatype is necessary to calculate the loss. This can be done in several ways. 
+In this version we added the 'concat' option.
+
+### concat
+It concatenates all the hyper-complex components to make the real (TF) datatype
+
+## QInitializer
+Proper weight initialization is very important for the convergence of the model. To train a deeper model
+it is essential to make weight initialization in such a way that reduces the risk of exploding or
+vanishing gradient problem. Moreover, a hyper-complex model has interactions between components thus we can exploit that interaction
+during the initialization. This initialization strategy is described in (https://arxiv.org/pdf/1806.04418.pdf)
+
+# TODO in future Version 
+
+## TF2Upstride
+- One option could be added where rgb will be in real and other imaginary parts will be learnt from the 
+rgb using real networks
+- For learning the components some complex real networks can be explored
+
+## Upstride2TF
+- Norm of hyper-complex components should be explored
+- Different pooling strategy can be explored in the component axis
+
+## RInitializer for Quaternion
+- Scaled down version of the real initializer needs to be explored as well. Before QInitializer
+we just used the default TF initializer without scaling down their variances to match for quaternion.
+This needs to be done to explore the effectiveness of QInitializer.
