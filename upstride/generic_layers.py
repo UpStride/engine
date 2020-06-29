@@ -37,10 +37,10 @@ def blade_index_to_position(index: str) -> int:
     def get_dict():
         """return a dictionary that map the blade index to the position in the list encoding the multivector
         """
-        dict = {}
+        d = {}
         for i, e in enumerate(blade_indexes):
-            dict[e] = i
-        return dict
+            d[e] = i
+        return d
     return get_dict()[index]
 
 
@@ -49,11 +49,11 @@ def square_vector(index: int) -> int:
     def get_list():
         """return a list that map the indice to the sqare
         """
-        list = [0]
+        l = [0]
         possible_squares = [1, -1, 0]
         for i in range(3):
-            list += [possible_squares[i]] * geometrical_def[i]
-        return list
+            l += [possible_squares[i]] * geometrical_def[i]
+        return l
     return get_list()[index]
 
 
