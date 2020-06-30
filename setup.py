@@ -5,18 +5,24 @@ from distutils.sysconfig import get_config_vars as default_get_config_vars
 import distutils.sysconfig as dsc
 
 from Cython.Build import cythonize
+from Cython.Compiler import Options
+
+# remove python doc strings in the so files 
+Cython.Compiler.Options.docstrings = False
+emit_code_comments = False
+
 
 extensions = [
     Extension("upstride.convolutional", ["upstride/convolutional.py"]),
-    Extension("upstride.generic_layers", ["upstride/generic_layers.py"]),
-    Extension("upstride.type1.tf.keras.layers", ["upstride/type1/tf/keras/layers.py"]),
-    Extension("upstride.type2.tf.keras.layers", ["upstride/type2/tf/keras/layers.py"]),
-    Extension("upstride.type2.tf.keras.convolutional", ["upstride/type2/tf/keras/convolutional.py"]),
-    Extension("upstride.type2.tf.keras.dense", ["upstride/type2/tf/keras/dense.py"]),
-    Extension("upstride.type2.tf.keras.initializers", ["upstride/type2/tf/keras/initializers.py"]),
-    Extension("upstride.type2.tf.keras.utils", ["upstride/type2/tf/keras/utils.py"]),
-    Extension("upstride.type3.tf.keras.layers", ["upstride/type3/tf/keras/layers.py"]),
-    Extension("upstride.type_generic.tf.keras.layers", ["upstride/type_generic/tf/keras/layers.py"])
+    # Extension("upstride.generic_layers", ["upstride/generic_layers.py"]),
+    # Extension("upstride.type1.tf.keras.layers", ["upstride/type1/tf/keras/layers.py"]),
+    # Extension("upstride.type2.tf.keras.layers", ["upstride/type2/tf/keras/layers.py"]),
+    # Extension("upstride.type2.tf.keras.convolutional", ["upstride/type2/tf/keras/convolutional.py"]),
+    # Extension("upstride.type2.tf.keras.dense", ["upstride/type2/tf/keras/dense.py"]),
+    # Extension("upstride.type2.tf.keras.initializers", ["upstride/type2/tf/keras/initializers.py"]),
+    # Extension("upstride.type2.tf.keras.utils", ["upstride/type2/tf/keras/utils.py"]),
+    # Extension("upstride.type3.tf.keras.layers", ["upstride/type3/tf/keras/layers.py"]),
+    # Extension("upstride.type_generic.tf.keras.layers", ["upstride/type_generic/tf/keras/layers.py"])
 ]
 
 
@@ -28,8 +34,12 @@ class build_py(build_py_orig):
 
 def remove_certain_flags(x):
     if type(x) is str:
-        return x.replace("-DNDEBUG", "").replace("-g","").replace("-fstack-protector-strong","")
+        x = x.strip()
+        x = x.replace("-DNDEBUG", "")
+        x = x.replace("-g ","-fvisibility=hidden ")
+        x = x.replace("-fstack-protector-strong","")
     return x
+
 
 def my_get_config_vars(*args):
   result = default_get_config_vars(*args)
