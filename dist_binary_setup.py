@@ -38,6 +38,7 @@ def remove_certain_flags(x):
         x = x.replace("-DNDEBUG", "")
         x = x.replace("-g "," ")
         x = x.replace("-fstack-protector-strong","")
+        # on the tensorflow 2.2 docker the compiler flag already has -fvisibility=hidden
     return x
 
 
@@ -51,30 +52,13 @@ def my_get_config_vars(*args):
   else:
      raise Exception("cannot handle type"+type(result))
 
-# 2.step: replace original get_config_vars to the updated one.    
+# replace original get_config_vars to the updated one.    
 dsc.get_config_vars = my_get_config_vars
 
-
-# class InstallCommand(Command):
-#     description = "Switch to compile with cython or plain install"
-#     user_options = [
-#         ('--with_cython=', False, 'Specify the foo to bar.'),
-#     ]
-#     def initialize_options(self):
-#         self.with_cython = False
-#     def finalize_options(self):
-#         assert type(self.with_cython) in [str, bool], "Invalid type"
-#         self.with_cython.capitalize()
-#         assert bool(self.with_cython) in [True, False], 'Needs to be a boolean '
-#     def run(self):
-#         global _custom_ext_value
-#         _custom_ext_value = None
-#         if self.with_cython:
-#             _custom_ext_value = cythonize(extensions,language_level=3,nthreads=12)
-        
+     
 setup(
     name="upstride",
-    version="1.0rc1",
+    version="1.0-cython",
     author="UpStride S.A.S",
     author_email="hello@upstride.io",
     description="A package to benefit from Upstride's Datatype.",
