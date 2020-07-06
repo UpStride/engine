@@ -77,7 +77,7 @@ class TestQuaternionTF2Upstride(unittest.TestCase):
         self.assertEqual(type(o), list)
         self.assertEqual(o[0].shape, (1, 1, 1, 3))
 
-        o = QTF2Upstride("rgbinimg")(inputs)
+        o = QTF2Upstride("joint")(inputs)
         self.assertEqual(type(o), list)
         self.assertEqual(o[0].shape, (1, 1, 1, 1))
         self.assertEqual(o[1].shape, (1, 1, 1, 1))

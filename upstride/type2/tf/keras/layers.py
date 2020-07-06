@@ -44,12 +44,14 @@ class TF2Upstride(Layer):
         self.rgb_in_img = False
         self.gray_in_real_rgb_in_img = False
         self.learn_multivector = False
-        if strategy == "rgbinimg":
+        if strategy == "joint":
             self.rgb_in_img = True
-        elif strategy == 'grayinreal_rgbinimg':
+        elif strategy == 'grayscale':
             self.gray_in_real_rgb_in_img = True
-        elif strategy == 'learn_multivector':
+        elif strategy == 'learned':
             self.learn_multivector = True
+        elif strategy != '':
+            raise ValueError(f"unknown strategy: {strategy}")
 
     def __call__(self, x):
         if self.rgb_in_img:
