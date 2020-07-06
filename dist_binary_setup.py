@@ -1,4 +1,4 @@
-from setuptools import setup, Extension, find_packages, Command
+from setuptools import setup, Extension, find_packages 
 from setuptools.command.build_py import build_py as build_py_orig
 
 from distutils.sysconfig import get_config_vars as default_get_config_vars
@@ -7,23 +7,17 @@ import distutils.sysconfig as dsc
 from Cython.Build import cythonize
 from Cython.Compiler import Options
 
-# remove python doc strings in the so files 
+import glob
+
+#remove python doc strings in the so files 
 Options.docstrings = False
 Options.emit_code_comments = False
 
-
-extensions = [
-    Extension("upstride.convolutional", ["upstride/convolutional.py"]),
-    Extension("upstride.generic_layers", ["upstride/generic_layers.py"]),
-    Extension("upstride.type1.tf.keras.layers", ["upstride/type1/tf/keras/layers.py"]),
-    Extension("upstride.type2.tf.keras.layers", ["upstride/type2/tf/keras/layers.py"]),
-    Extension("upstride.type2.tf.keras.convolutional", ["upstride/type2/tf/keras/convolutional.py"]),
-    Extension("upstride.type2.tf.keras.dense", ["upstride/type2/tf/keras/dense.py"]),
-    Extension("upstride.type2.tf.keras.initializers", ["upstride/type2/tf/keras/initializers.py"]),
-    Extension("upstride.type2.tf.keras.utils", ["upstride/type2/tf/keras/utils.py"]),
-    Extension("upstride.type3.tf.keras.layers", ["upstride/type3/tf/keras/layers.py"]),
-    Extension("upstride.type_generic.tf.keras.layers", ["upstride/type_generic/tf/keras/layers.py"])
-]
+py_files = glob.glob('upstride/**/*[!_].py',recursive=True)
+ext_names = [x.split('.')[0].replace('/','.') for x in py_files]
+ext_modules_list = list()
+for name, pyfile in zip(ext_names, py_files):
+    ext_modules_list.append(Extension(name,[pyfile],extra_compile_args=["-fvisibility=protected"])) 
 
 
 # This is required so that .py files are not added to the build folder
@@ -38,7 +32,6 @@ def remove_certain_flags(x):
         x = x.replace("-DNDEBUG", "")
         x = x.replace("-g "," ")
         x = x.replace("-fstack-protector-strong","")
-        # on the tensorflow 2.2 docker the compiler flag already has -fvisibility=hidden
     return x
 
 
@@ -58,7 +51,7 @@ dsc.get_config_vars = my_get_config_vars
      
 setup(
     name="upstride",
-    version="1.0-cython",
+    version="1.0",
     author="UpStride S.A.S",
     author_email="hello@upstride.io",
     description="A package to benefit from Upstride's Datatype.",
@@ -68,6 +61,6 @@ setup(
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
-    ext_modules=cythonize(extensions,language_level=3,nthreads=12),
+    ext_modules=cythonize(ext_modules_list,language_level=3,nthreads=12),
     cmdclass = {'build_py': build_py },
 )
