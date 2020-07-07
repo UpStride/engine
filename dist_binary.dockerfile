@@ -1,5 +1,8 @@
 FROM tensorflow/tensorflow:2.2.0-gpu
 
+# Upstride bash welcome screen 
+COPY bash.bashrc /etc/bash.bashrc
+
 COPY upstride /opt/upstride/upstride
 COPY dist_binary_setup.py /opt/upstride/dist_binary_setup.py
 RUN pip3 install --no-cache-dir Cython && \ 

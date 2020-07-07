@@ -13,11 +13,23 @@ import glob
 Options.docstrings = False
 Options.emit_code_comments = False
 
+compile_args = ["-fvisibility=protected",
+                "-ffast-math", 
+                "-funroll-loops", 
+                "-floop-nest-optimize", 
+                "-fipa-pta", 
+                "-flto", 
+                "-ftree-vectorize", 
+                "-fno-signed-zeros", 
+                "-march=native", 
+                "-mfma"
+            ]
+
 py_files = glob.glob('upstride/**/*[!_].py',recursive=True)
 ext_names = [x.split('.')[0].replace('/','.') for x in py_files]
 ext_modules_list = list()
 for name, pyfile in zip(ext_names, py_files):
-    ext_modules_list.append(Extension(name,[pyfile],extra_compile_args=["-fvisibility=protected"])) 
+    ext_modules_list.append(Extension(name,[pyfile],extra_compile_args=compile_args)) 
 
 
 # This is required so that .py files are not added to the build folder
@@ -31,6 +43,9 @@ def remove_certain_flags(x):
         x = x.strip()
         x = x.replace("-DNDEBUG", "")
         x = x.replace("-g "," ")
+        x = x.replace("-D_FORTIFY_SOURCE=2","-D_FORTIFY_SOURCE=1")
+        x = x.replace("-O1","-O3")
+        x = x.replace("-O2","-O3")
         x = x.replace("-fstack-protector-strong","")
     return x
 
