@@ -14,7 +14,7 @@
 # ==============================================================================
 #
 # this file comes from https://github.com/tensorflow/tensorflow/blob/v2.2.0/tensorflow/python/keras/layers/convolutional.py#L450-L599
-# to see teh diff, do 
+# to see teh diff, do
 # `meld upstride/convolutional.py https://raw.githubusercontent.com/tensorflow/tensorflow/v2.2.0/tensorflow/python/keras/layers/convolutional.py`
 # and has been modified by Upstride to change the multiplication used in GA.
 # These convolution performs conjugaison
@@ -225,7 +225,6 @@ class Conv(Layer):
         outputs[i].append([])
         for k in range(len(inputs)):
           outputs[i][j].append(self._convolution_op(inputs[k], pw_kernels[i][j]))
-    
 
     if self.use_bias:
       if self.data_format == 'channels_first':
@@ -341,7 +340,7 @@ class Conv(Layer):
     for axis in range(1, len(call_input_shape)):
       if (call_input_shape[axis] is not None
           and self._build_conv_op_input_shape[axis] is not None
-          and call_input_shape[axis] != self._build_conv_op_input_shape[axis]):
+              and call_input_shape[axis] != self._build_conv_op_input_shape[axis]):
         return True
     return False
 
@@ -3002,18 +3001,18 @@ class Cropping3D(Layer):
       elif self.cropping[0][1] == 0:
         return inputs[:, self.cropping[0][0]:, self.cropping[1][
             0]:-self.cropping[1][1], self.cropping[2][0]:
-                      -self.cropping[2][1], :]
+            -self.cropping[2][1], :]
       elif self.cropping[1][1] == 0:
         return inputs[:, self.cropping[0][
             0]:-self.cropping[0][1], self.cropping[1][0]:, self.cropping[2][0]:
-                      -self.cropping[2][1], :]
+            -self.cropping[2][1], :]
       elif self.cropping[2][1] == 0:
         return inputs[:, self.cropping[0][0]:-self.cropping[0][1],
                       self.cropping[1][0]:-self.cropping[1][1], self.cropping[
                           2][0]:, :]
       return inputs[:, self.cropping[0][0]:-self.cropping[0][1], self.cropping[
           1][0]:-self.cropping[1][1], self.cropping[2][0]:  # pylint: disable=invalid-unary-operand-type
-                    -self.cropping[2][1], :]  # pylint: disable=invalid-unary-operand-type
+          -self.cropping[2][1], :]  # pylint: disable=invalid-unary-operand-type
     # pylint: enable=invalid-unary-operand-type
 
   def get_config(self):
