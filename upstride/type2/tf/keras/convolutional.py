@@ -437,7 +437,7 @@ class Conv1D(Conv):
                dilation_rate=1,
                activation=None,
                use_bias=True,
-               kernel_initializer='glorot_uniform',
+               kernel_initializer='up2_init_he',  # upstride initialization, either 'up2_init_he'  or 'up2_init_glorot'
                bias_initializer='zeros',
                kernel_regularizer=None,
                bias_regularizer=None,
@@ -589,7 +589,7 @@ class Conv2D(Conv):
                dilation_rate=(1, 1),
                activation=None,
                use_bias=True,
-               kernel_initializer='glorot_uniform',
+               kernel_initializer='up2_init_he',  # upstride initialization, either 'up2_init_he'  or 'up2_init_glorot'
                bias_initializer='zeros',
                kernel_regularizer=None,
                bias_regularizer=None,
@@ -732,7 +732,7 @@ class Conv3D(Conv):
                dilation_rate=(1, 1, 1),
                activation=None,
                use_bias=True,
-               kernel_initializer='glorot_uniform',
+               kernel_initializer='up2_init_he',  # upstride initialization, either 'up2_init_he'  or 'up2_init_glorot'
                bias_initializer='zeros',
                kernel_regularizer=None,
                bias_regularizer=None,

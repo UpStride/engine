@@ -13,7 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 #
-# https://raw.githubusercontent.com/tensorflow/tensorflow/v2.2.0/tensorflow/python/keras/layers/core.py
+# meld https://raw.githubusercontent.com/tensorflow/tensorflow/v2.2.0/tensorflow/python/keras/layers/core.py upstride/type2/tf/keras/dense.py
 """Core Keras layers.
 """
 from __future__ import absolute_import

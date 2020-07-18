@@ -4,12 +4,10 @@ Implementation is done following this open-source:
  https://github.com/Orkis-Research/Quaternion-Convolutional-Neural-Networks-for-End-to-End-Automatic-Speech-Recognition/blob/master/complexnn/init.py
 
 """
-
-
-import numpy as np
-from numpy.random import RandomState
-import tensorflow as tf
 import math
+import numpy as np
+import tensorflow as tf
+from numpy.random import RandomState
 
 
 def _compute_fans(shape, data_format='channels_last'):
