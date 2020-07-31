@@ -283,7 +283,7 @@ def quaternion_bn(input_centred, v: Dict, beta, gamma: Dict, axis=-1):
   return output
 
 
-class BatchNormalizationQ(Layer):
+class BatchNormalization(Layer):
   """
   quaternion implementation : https://github.com/gaudetcj/DeepQuaternionNetworks/blob/43b321e1701287ce9cf9af1eb16457bdd2c85175/quaternion_layers/bn.py
   tf implementation : https://github.com/tensorflow/tensorflow/blob/2b96f3662bd776e277f86997659e61046b56c315/tensorflow/python/keras/layers/normalization.py#L46
