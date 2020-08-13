@@ -1,0 +1,71 @@
+pipeline {
+    agent { docker { image 'localhost:5000/dtr/tensorflow/tensorflow:2.2.0-gpu' } }
+    environment {
+        SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
+    }
+    stages {
+        stage('setup') {
+            steps {
+                script {
+                    env.SLACK_POST = '\'{"text":"integration of branch <'+env.GIT_BRANCH+'>"}\''
+                }
+            }
+        }
+        stage('smoke tests') {
+            options {
+                timeout(time: 30, unit: "SECONDS")
+            }
+            steps {
+                script {
+                    try {
+                        sh """
+                        python3 test.py
+                        python3 test_tf.py
+                        python3 test_type1.py
+                        python3 test_type2.py
+                        python3 test_type3.py
+                        """
+                    }
+                    catch (err) {
+                        env.SLACK_POST = '\'{"text":"FAILURE of branch <'+env.GIT_BRANCH+'>\n LOG:\n'+err.getMessage()+'"}\''
+                        sh """
+                        curl -X POST -H 'Content-type: application/json' --data $SLACK_POST --url $SLACK_WEBHOOK
+                        """
+                        throw err
+                    }
+                }
+            }
+        }
+        stage('slack') {
+            steps {
+                script {
+                    if (env.SLACK_POST == null) {
+                        throw new Exception("x Missing webhook for notification :: ABORT");
+                    }
+                    sh """
+                    curl -X POST -H 'Content-type: application/json' --data $SLACK_POST --url $SLACK_WEBHOOK
+                    """
+                }
+            }
+        }
+    }
+
+}
+
+def slack(String msg){
+    env.SLACK_POST = '\'{"text":"- branch <'+env.GIT_BRANCH+'>\n LOG:\n'+msg+'"}\''
+    sh """
+    curl -X POST -H 'Content-type: application/json' --data $SLACK_POST --url $SLACK_WEBHOOK
+    """
+}
+
+def shell(String command){
+    def responseCode = sh returnStatus: true, script: "${command} &> tmp.txt"
+    def output =  readFile(file: "tmp.txt")
+    if (responseCode != 0){
+      slack("[ERROR] ${output}")
+      throw new Exception("${output}")
+    }else{
+      return "${output}"
+    }
+}
