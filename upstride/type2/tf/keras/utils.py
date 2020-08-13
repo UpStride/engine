@@ -1,4 +1,5 @@
 # see code in https://math.stackexchange.com/questions/1103399/alternative-quaternion-multiplication-method
+from . import custom_ops
 
 
 def multiply_by_a1(vector):
@@ -104,6 +105,21 @@ def quaternion_mult2(tf_op, inputs, kernels, f=1):
   return outputs
 
 
+def quaternion_mult_cpp(tf_op, inputs, kernels, f=1):
+  if f != 1:
+    kernels = [k * f for k in kernels]
+  if len(inputs) != 4:
+    output = [tf_op(inputs[0], kernels[i]) for i in range(4)]
+    if f != 1:
+      output = [o * (1/f) for o in output]
+    return output
+  inputs_p = custom_ops.upstride_inputs(*inputs)
+  kernels_p = custom_ops.upstride_kernels(*kernels)
+  outputs_p = [tf_op(inputs_p[i], kernels_p[i]) for i in range(8)]
+  outputs = custom_ops.upstride_outputs(*outputs_p)
+  return outputs
+
+
 def quaternion_mult_naive(tf_op, inputs, kernels):
   c1 = tf_op(inputs[0], kernels[0]) - tf_op(inputs[1], kernels[1]) - tf_op(inputs[2], kernels[2]) - tf_op(inputs[3], kernels[3])
   c2 = tf_op(inputs[0], kernels[1]) + tf_op(inputs[1], kernels[0]) + tf_op(inputs[2], kernels[3]) - tf_op(inputs[3], kernels[2])
@@ -114,7 +130,7 @@ def quaternion_mult_naive(tf_op, inputs, kernels):
 
 multiply_by_a = multiply_by_a1
 # mult 2 is more stable than mult 1 when working with float 16
-quaternion_mult = quaternion_mult2
+quaternion_mult = quaternion_mult_cpp
 
 
 def is_quaternion_init(init_type):
