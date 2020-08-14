@@ -1,3 +1,21 @@
+import java.util.logging.FileHandler
+import java.util.logging.SimpleFormatter
+import java.util.logging.LogManager
+import jenkins.model.Jenkins
+
+// Log into a file
+def setLogger(){
+    def RunLogger = LogManager.getLogManager().getLogger("global")
+    def logsDir = new File(Jenkins.instance.rootDir, "logs")
+    if(!logsDir.exists()){logsDir.mkdirs()}
+    env.LOGFILE = logsDir.absolutePath+'/default.log'
+    FileHandler handler = new FileHandler("${env.LOGFILE}", 1024 * 1024, 10, true);
+    handler.setFormatter(new SimpleFormatter());
+    RunLogger.addHandler(handler)
+}
+
+//setLogger()
+
 pipeline {
     agent { docker { image 'localhost:5000/dtr/tensorflow/tensorflow:2.2.0-gpu' } }
     environment {
@@ -7,8 +25,10 @@ pipeline {
         stage('setup') {
             steps {
                 script {
-                    env.SLACK_POST = '\'{"text":"integration of branch <'+env.GIT_BRANCH+'>"}\''
+                    env.SLACK_HEADER = '- branch <'+env.GIT_BRANCH+'>\n'
                 }
+                setLogger()
+                slack("[INFO] Starting the pipeline")
             }
         }
         stage('smoke tests') {
@@ -18,54 +38,68 @@ pipeline {
             steps {
                 script {
                     try {
-                        sh """
-                        python3 test.py
-                        python3 test_tf.py
-                        python3 test_type1.py
-                        python3 test_type2.py
-                        python3 test_type3.py
-                        """
+                        tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
+                        for (int i = 0; i < tests.size(); i++) {
+                            shell("""python3 ${tests[i]}""")
+                        }
+//                         shell("""
+//                         python3 test.py
+//                         python3 test_tf.py
+//                         python3 test_type1.py
+//                         python3 test_type2.py
+//                         python3 test_type3.py
+//                         """)
                     }
                     catch (err) {
-                        env.SLACK_POST = '\'{"text":"FAILURE of branch <'+env.GIT_BRANCH+'>\n LOG:\n'+err.getMessage()+'"}\''
-                        sh """
-                        curl -X POST -H 'Content-type: application/json' --data $SLACK_POST --url $SLACK_WEBHOOK
-                        """
                         throw err
                     }
                 }
             }
         }
-        stage('slack') {
+        stage('exit') {
             steps {
                 script {
-                    if (env.SLACK_POST == null) {
-                        throw new Exception("x Missing webhook for notification :: ABORT");
-                    }
-                    sh """
-                    curl -X POST -H 'Content-type: application/json' --data $SLACK_POST --url $SLACK_WEBHOOK
-                    """
+                    slack("[INFO] pipeline SUCCESS")
+
                 }
             }
         }
     }
-
 }
 
-def slack(String msg){
-    env.SLACK_POST = '\'{"text":"- branch <'+env.GIT_BRANCH+'>\n LOG:\n'+msg+'"}\''
+def slack(String body){
+//     echo "--- into slack ---\n${body}"
+    post = '\'{"text":"'+env.SLACK_HEADER+body.toString()+'"}\''
+    env.SLACK_HEADER = ''
     sh """
-    curl -X POST -H 'Content-type: application/json' --data $SLACK_POST --url $SLACK_WEBHOOK
+    curl -X POST -H 'Content-type: application/json' --data ${post} --url $SLACK_WEBHOOK
     """
 }
 
+def readLogs(){
+    echo "--- ${LOGFILE} ---"
+    try {
+        def logs = readFile(env.LOGFILE)
+        echo "-- BEGIN --\n${logs}\n-- EOF --"
+        return logs
+    }
+    catch(e){
+        def logs = "-- no logs --"
+        echo "${logs}"
+        return logs
+    }
+}
+
 def shell(String command){
-    def responseCode = sh returnStatus: true, script: "${command} &> tmp.txt"
-    def output =  readFile(file: "tmp.txt")
-    if (responseCode != 0){
-      slack("[ERROR] ${output}")
-      throw new Exception("${output}")
-    }else{
-      return "${output}"
+
+    try {
+        def output = sh(returnStatus: true, script: "${command} >${LOGFILE} 2>&1")
+        if (output != 0){throw new Exception("--- FAILED ---\n- command: >> "+command)}
+        else { return output }
+    }
+    catch (error){
+        //post(readLogs())
+        slack("[ERROR] "+error.getMessage()+'\n- logs: https://upstride-deployment-service/id-1234')
+        throw error
     }
 }
