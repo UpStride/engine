@@ -75,15 +75,18 @@ def upstride_outputs_backprop_py(dc_1, dc_2, dc_3, dc_4):
 
 
 def upstride_inputs(a1, a2, a3, a4):
-  return upstride_ops.upstride_input(a1, a2, a3, a4)
+  output = upstride_ops.upstride_input(a1, a2, a3, a4)
+  return [output[i] for i in range(8)] 
 
 
 def upstride_kernels(b1, b2, b3, b4):
-  return upstride_ops.upstride_kernel(b1, b2, b3, b4)
+  output = upstride_ops.upstride_kernel(b1, b2, b3, b4)
+  return [output[i] for i in range(8)] 
 
 
 def upstride_outputs(cp_1, cp_2, cp_3, cp_4, cp_5, cp_6, cp_7, cp_8):
-  return upstride_ops.upstride_output(cp_1, cp_2, cp_3, cp_4, cp_5, cp_6, cp_7, cp_8)
+  output = upstride_ops.upstride_output(cp_1, cp_2, cp_3, cp_4, cp_5, cp_6, cp_7, cp_8)
+  return [output[i] for i in range(4)] 
 
 
 @ops.RegisterGradient("UpstrideInput")
