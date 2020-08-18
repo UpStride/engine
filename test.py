@@ -123,11 +123,11 @@ class TestQuaternionMult(unittest.TestCase):
   def test_quaternion_mult_cpp(self):
     def op(x, y): return x*y
     def convert_to_list(op_result): return [op_result[i] for i in range(len(op_result))]
-    self.assertEqual(convert_to_list(quaternion_mult_cpp(op,  [1, 0, 0, 0], [1, 0, 0, 0])), [1, 0, 0, 0])
-    self.assertEqual(convert_to_list(quaternion_mult_cpp(op,  [1, 0, 0, 0], [0, 2, 0, 0])), [0, 2, 0, 0])
-    self.assertEqual(convert_to_list(quaternion_mult_cpp(op,  [0, 2, 2, 0], [0, 2, 0, 0])), [-4, 0, 0, -4])
-    self.assertEqual(convert_to_list(quaternion_mult_cpp(op,  [1, 2, 0, 3], [0, 2, 2, 0])), [-4, -4, 8, 4])
-    self.assertEqual(convert_to_list(quaternion_mult_cpp(op,  [1, 2, 3, 4], [5, 6, 7, 8])), [-60, 12, 30, 24])
+    self.assertEqual(convert_to_list(quaternion_mult_cpp(op,  [1., 0., 0., 0.], [1., 0., 0., 0.])), [1., 0., 0., 0.])
+    self.assertEqual(convert_to_list(quaternion_mult_cpp(op,  [1., 0., 0., 0.], [0., 2., 0., 0.])), [0., 2., 0., 0.])
+    self.assertEqual(convert_to_list(quaternion_mult_cpp(op,  [0., 2., 2., 0.], [0., 2., 0., 0.])), [-4., 0., 0., -4.])
+    self.assertEqual(convert_to_list(quaternion_mult_cpp(op,  [1., 2., 0., 3.], [0., 2., 2., 0.])), [-4., -4., 8., 4.])
+    self.assertEqual(convert_to_list(quaternion_mult_cpp(op,  [1., 2., 3., 4.], [5., 6., 7., 8.])), [-60., 12., 30., 24.])
 
 
 class TestQuaternionBN(unittest.TestCase):

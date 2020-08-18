@@ -91,14 +91,14 @@ def upstride_outputs(cp_1, cp_2, cp_3, cp_4, cp_5, cp_6, cp_7, cp_8):
 
 @ops.RegisterGradient("UpstrideInput")
 def _upstride_input_grad(op, *grads):
-  return upstride_inputs_backprop_py(*grads)
+  return upstride_ops.upstride_input_grad(*grads)
 
 
 @ops.RegisterGradient("UpstrideKernel")
 def _upstride_kernel_grad(op, *grads):
-  return upstride_kernels_backprop_py(*grads)
+  return upstride_ops.upstride_kernel_grad(*grads)
 
 
 @ops.RegisterGradient("UpstrideOutput")
 def _upstride_output_grad(op, *grads):
-  return upstride_outputs_backprop_py(*grads)
+  return upstride_ops.upstride_output_grad(*grads)
