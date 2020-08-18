@@ -22,6 +22,7 @@
 """
 
 import functools
+import six
 
 from tensorflow.python.eager import context
 from tensorflow.python.framework import tensor_shape
@@ -258,9 +259,10 @@ class Conv(Layer):
       inputs = array_ops.pad(inputs, self._compute_causal_padding(inputs))
 
     outputs = utils.quaternion_mult(self._convolution_op, inputs, self.kernels)
+    # outputs = utils.quaternion_mult_conv(self._convolution_op, inputs, self.kernels, self._get_channel_axis())
 
     if self.use_bias:
-      output_rank = outputs.shape.rank
+      output_rank = outputs[0].shape.rank
       if self.rank == 1 and self._channels_first:
         # nn.bias_add does not accept a 1D input tensor.
           for i in range(self.ga_dimension):
@@ -1052,8 +1054,6 @@ class Conv1DTranspose(Conv1D):
     return config
 
 
-@keras_export('keras.layers.Conv2DTranspose',
-              'keras.layers.Convolution2DTranspose')
 class Conv2DTranspose(Conv2D):
   """Transposed convolution layer (sometimes called Deconvolution).
 
