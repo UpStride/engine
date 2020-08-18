@@ -6,7 +6,7 @@ with codecs.open("README.md", encoding='utf-8') as fh:
 
 setuptools.setup(
     name="upstride",
-    version="1.0.1",
+    version="1.1.0",
     author="UpStride S.A.S",
     author_email="hello@upstride.io",
     description="A package to use Geometrical Algebra in pure tensorflow",
