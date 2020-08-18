@@ -3,6 +3,61 @@ import java.util.logging.SimpleFormatter
 import java.util.logging.LogManager
 import jenkins.model.Jenkins
 
+
+pipeline {
+    agent { docker { image 'localhost:5000/dtr/tensorflow/tensorflow:2.2.0-gpu' } }
+    //agent { local { image 'tensorflow/tensorflow:2.2.0-gpu' } }
+    environment {
+        SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
+        REGISTRY_PROD = 'registryupstrideprod.azurecr.io'
+    }
+    stages {
+        stage('setup') {
+            steps {
+                script {
+                    env.SLACK_HEADER = '[INFO] \n- push on branch <'+env.GIT_BRANCH+'>\n'+'- author <'+env.CHANGE_AUTHOR_EMAIL+'>\n'
+                    env.SLACK_MESSAGE = ''
+                }
+                setLogger()
+                //sh 'echo $CHANGE_TITLE, $TAG_NAME, $CHANGE_ID, $TAG_DATE, $CHANGE_AUTHOR_DISPLAY_NAME'
+                //throw new Exception("break")
+                //publish("123", "recorded", "push on branch $GIT_BRANCH")
+                aggregate("[INFO] Starting the pipeline")
+            }
+        }
+        stage('smoke tests') {
+            options {
+                timeout(time: 30, unit: "SECONDS")
+            }
+            steps {
+                script {
+                    tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
+                    for (int i = 0; i < tests.size(); i++) {
+                        shell("""python3 ${tests[i]}""")
+                    }
+                }
+            }
+        }
+        stage('promote image to prod') {
+            steps {
+                script {
+                    docker.withRegistry('${env.REGISTRY_PROD}','registry-prod'){}
+                        def newImage = docker.build("${env.REGISTRY_PROD}/upstride:${env.BUILD_ID}")
+                        newImage.push()
+                }
+            }
+        }
+        stage('exit') {
+            steps {
+                script {
+                    //publish('completed','OK')
+                    slack("[INFO] pipeline SUCCESS")
+                }
+            }
+        }
+    }
+}
+
 // Log into a file
 def setLogger(){
     def RunLogger = LogManager.getLogManager().getLogger("global")
@@ -12,63 +67,6 @@ def setLogger(){
     FileHandler handler = new FileHandler("${env.LOGFILE}", 1024 * 1024, 10, true);
     handler.setFormatter(new SimpleFormatter());
     RunLogger.addHandler(handler)
-}
-
-//setLogger()
-
-pipeline {
-    agent { docker { image 'localhost:5000/dtr/tensorflow/tensorflow:2.2.0-gpu' } }
-    environment {
-        SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
-    }
-    stages {
-        stage('setup') {
-            steps {
-                script {
-                    env.SLACK_HEADER = '- push on branch <'+env.GIT_BRANCH+'>\n'
-                }
-                setLogger()
-                //publish("123", "recorded", "push on branch $GIT_BRANCH")
-                slack("[INFO] Starting the pipeline")
-            }
-        }
-        stage('smoke tests') {
-            options {
-                timeout(time: 30, unit: "SECONDS")
-            }
-            steps {
-                script {
-                    try {
-                        tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
-                        for (int i = 0; i < tests.size(); i++) {
-                            shell("""python3 ${tests[i]}""")
-                        }
-                    }
-                    catch (err) {
-                        throw err
-                    }
-                }
-            }
-        }
-        stage('promote dev image') {
-            steps {
-                sh 'az acr login --name $URL_REGISTRY_PROD -u $USER_REGISTRY_PROD -p $PASSWORD_REGISTRY_PROD'
-                sh 'docker login -u $USER_REGISTRY_PROD -p $PASSWORD_REGISTRY_PROD $URL_REGISTRY_PROD'
-                sh 'docker build -f dockerFile -t $TAG'
-                sh 'docker tag $TAG $URL_REGISTRY_DEV:$TAG'
-                sh 'docker push $URL_REGISTRY_DEV:$TAG'
-            }
-        }
-        stage('exit') {
-            steps {
-                script {
-                    //publish('completed','OK')
-                    slack("[INFO] pipeline SUCCESS")
-
-                }
-            }
-        }
-    }
 }
 
 import groovy.json.JsonOutput;
@@ -90,24 +88,24 @@ def publish(String id, String status, String infos){
 }
 
 def slack(String body){
-//     echo "--- into slack ---\n${body}"
-    post = '\'{"text":"'+env.SLACK_HEADER+body.toString()+'"}\''
-    env.SLACK_HEADER = ''
+    aggregate(body)
+    DATA = '\'{"text":"'+env.SLACK_HEADER+'\n'+env.SLACK_MESSAGE+'"}\''
     sh """
-    curl -X POST -H 'Content-type: application/json' --data ${post} --url $SLACK_WEBHOOK
+    curl -X POST -H 'Content-type: application/json' --data ${DATA} --url $SLACK_WEBHOOK
     """
 }
 
+def aggregate(String body){
+    env.SLACK_MESSAGE = env.SLACK_MESSAGE+'\n'+body.toString()
+}
+
 def readLogs(){
-    echo "--- ${LOGFILE} ---"
     try {
         def logs = readFile(env.LOGFILE)
-        //echo "-- BEGIN --\n${logs}\n-- EOF --"
         return logs
     }
     catch(e){
         def logs = "-- no logs --"
-        //echo "${logs}"
         return logs
     }
 }
@@ -115,7 +113,7 @@ def readLogs(){
 def shell(String command){
     try {
         def output = sh(returnStatus: true, script: "${command} >${LOGFILE} 2>&1")
-        if (output != 0){throw new Exception("Pipeline failed\n- command: >> "+command)}
+        if (output != 0){throw new Exception("Pipeline failed\n- command:: "+command)}
         else { return output }
     }
     catch (error){
