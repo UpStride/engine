@@ -18,7 +18,8 @@ pipeline {
                 script {
                     env.SLACK_HEADER = '[INFO] \n- push on branch <'+env.GIT_BRANCH+'>\n'+'- author <'+env.GIT_COMMITTER_NAME+'>\n'+'- email <'+env.GIT_COMMITTER_EMAIL+'>'
                     env.SLACK_MESSAGE = ''
-                    env.BUILD_VERSION = sh('cat version')
+                    sh('ls')
+                    env.BUILD_VERSION = sh("""cat version""")
                 }
                 setLogger()
                 //publish("123", "recorded", "push on branch $GIT_BRANCH")
