@@ -21,8 +21,7 @@ pipeline {
                     env.BUILD_VERSION = readFile("version")
                 }
                 setLogger()
-                //publish("123", "recorded", "push on branch $GIT_BRANCH")
-                aggregate("[INFO] Starting the pipeline")
+                info("Starting the pipeline")
             }
         }
         stage('smoke tests') {
@@ -37,7 +36,7 @@ pipeline {
                     for (int i = 0; i < tests.size(); i++) {
                         shell("""python3 ${tests[i]}""")
                     } */
-                    aggregate('[INFO] tests cleared')
+                    info('tests cleared')
                 }
             }
         }
@@ -47,7 +46,7 @@ pipeline {
                     docker.withRegistry("https://${REGISTRY_PROD}",'registry-prod'){
                         shell("""docker build . -f dockerfile -t ${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION} """)
                         shell("""docker push ${REGISTRY_PROD}/upstride:${BUILD_TAG}-${BUILD_VERSION}""")
-                        aggregate('[INFO] image promoted to prod')
+                        info('image promoted to prod')
                     }
                 }
             }
@@ -55,8 +54,7 @@ pipeline {
         stage('exit') {
             steps {
                 script {
-                    //publish('completed','OK')
-                    aggregate("[INFO] logs :${BUILD_URL}console")
+                    info("logs :${BUILD_URL}console")
                     slack("[INFO] pipeline SUCCESS")
                 }
             }
@@ -94,15 +92,19 @@ def publish(String id, String status, String infos){
 }
 
 def slack(String body){
-    aggregate(body)
-    DATA = '\'{"text":"'+env.SLACK_HEADER+'\n'+env.SLACK_MESSAGE+'"}\''
+    env.SLACK_MESSAGE = env.SLACK_MESSAGE+'\n'+body.toString()
+    DATA = '\'{"text":"'+env.SLACK_HEADER+env.SLACK_MESSAGE+'"}\''
     sh """
     curl -X POST -H 'Content-type: application/json' --data ${DATA} --url $SLACK_WEBHOOK
     """
 }
 
-def aggregate(String body){
-    env.SLACK_MESSAGE = env.SLACK_MESSAGE+'\n'+body.toString()
+def info(String body){
+    env.SLACK_MESSAGE = env.SLACK_MESSAGE+'\n [INFO]'+body.toString()
+}
+
+def error(String body){
+    env.SLACK_MESSAGE = env.SLACK_MESSAGE+'\n [ERROR]'+body.toString()
 }
 
 def readLogs(){
