@@ -5,12 +5,11 @@ import jenkins.model.Jenkins
 
 
 pipeline {
-    agent { docker { image 'localhost:5000/dtr/tensorflow/tensorflow:2.2.0-gpu' } }
-    //agent { local { image 'tensorflow/tensorflow:2.2.0-gpu' } }
+    agent { docker { image 'localhost:5000/dtr/azure-cloud' } }
     environment {
         SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
         REGISTRY_PROD = 'registryupstrideprod.azurecr.io'
-        BUILD_TAG = "upstride-python"
+        REPO = 'upstride'
     }
     stages {
         stage('setup') {
@@ -18,8 +17,8 @@ pipeline {
                 script {
                     env.SLACK_HEADER = '[INFO] \n- push on branch <'+env.GIT_BRANCH+'>\n'+'- author <'+env.GIT_COMMITTER_NAME+'>\n'+'- email <'+env.GIT_COMMITTER_EMAIL+'>'
                     env.SLACK_MESSAGE = ''
-                    sh('ls')
-                    env.BUILD_VERSION = sh("""cat version""")
+                    env.BUILD_TAG = "upstride-python"
+                    env.BUILD_VERSION = readFile("version")
                 }
                 setLogger()
                 //publish("123", "recorded", "push on branch $GIT_BRANCH")
@@ -30,6 +29,7 @@ pipeline {
             options {
                 timeout(time: 30, unit: "SECONDS")
             }
+            agent { docker { image 'localhost:5000/dtr/tensorflow/tensorflow:2.2.0-gpu' } }
             steps {
                 script {
                     shell("""python3 test.py""")
@@ -43,8 +43,8 @@ pipeline {
         stage('promote image to prod') {
             steps {
                 script {
-                    docker.withRegistry('${env.REGISTRY_PROD}','registry-prod'){
-                        shell("""docker build -f Dockerfile -t ${env.REGISTRY_PROD}/upstride:${env.BUILD_ID} .""")
+                    docker.withRegistry("https://${REGISTRY_PROD}",'registry-prod'){
+                        shell("""docker build . -f dockerfile -t ${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION} """)
                         shell("""docker push ${REGISTRY_PROD}/upstride:${BUILD_TAG}-${BUILD_VERSION}""")
                     }
                 }
@@ -93,10 +93,9 @@ def publish(String id, String status, String infos){
 def slack(String body){
     aggregate(body)
     DATA = '\'{"text":"'+env.SLACK_HEADER+'\n'+env.SLACK_MESSAGE+'"}\''
-    echo $DATA
-/*     sh """
+    sh """
     curl -X POST -H 'Content-type: application/json' --data ${DATA} --url $SLACK_WEBHOOK
-    """ */
+    """
 }
 
 def aggregate(String body){
@@ -122,6 +121,7 @@ def shell(String command){
     }
     catch (error){
         slack("[ERROR] "+error.getMessage()+"\n- logs: ${BUILD_URL}console")
+        readLogs()
         throw error
     }
 }
