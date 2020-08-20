@@ -37,6 +37,7 @@ pipeline {
                     for (int i = 0; i < tests.size(); i++) {
                         shell("""python3 ${tests[i]}""")
                     } */
+                    aggregate('[INFO] tests cleared')
                 }
             }
         }
@@ -46,6 +47,7 @@ pipeline {
                     docker.withRegistry("https://${REGISTRY_PROD}",'registry-prod'){
                         shell("""docker build . -f dockerfile -t ${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION} """)
                         shell("""docker push ${REGISTRY_PROD}/upstride:${BUILD_TAG}-${BUILD_VERSION}""")
+                        aggregate('[INFO] image promoted to prod')
                     }
                 }
             }
@@ -54,6 +56,7 @@ pipeline {
             steps {
                 script {
                     //publish('completed','OK')
+                    aggregate("[INFO] logs :${BUILD_URL}console")
                     slack("[INFO] pipeline SUCCESS")
                 }
             }
