@@ -2,3 +2,5 @@
 *.egg-info
 __pycache__
 *.pdf
+external_lib
+_upstride_ops.so
