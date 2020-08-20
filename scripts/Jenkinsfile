@@ -10,17 +10,17 @@ pipeline {
     environment {
         SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
         REGISTRY_PROD = 'registryupstrideprod.azurecr.io'
+        BUILD_TAG = "upstride-python"
     }
     stages {
         stage('setup') {
             steps {
                 script {
-                    env.SLACK_HEADER = '[INFO] \n- push on branch <'+env.GIT_BRANCH+'>\n'+'- author <'+env.CHANGE_AUTHOR_EMAIL+'>\n'
+                    env.SLACK_HEADER = '[INFO] \n- push on branch <'+env.GIT_BRANCH+'>\n'+'- author <'+env.GIT_COMMITTER_NAME+'>\n'+'- email <'+env.GIT_COMMITTER_EMAIL+'>'
                     env.SLACK_MESSAGE = ''
+                    env.BUILD_VERSION = sh('cat version')
                 }
                 setLogger()
-                //sh 'echo $CHANGE_TITLE, $TAG_NAME, $CHANGE_ID, $TAG_DATE, $CHANGE_AUTHOR_DISPLAY_NAME'
-                //throw new Exception("break")
                 //publish("123", "recorded", "push on branch $GIT_BRANCH")
                 aggregate("[INFO] Starting the pipeline")
             }
@@ -31,19 +31,21 @@ pipeline {
             }
             steps {
                 script {
-                    tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
+                    shell("""python3 test.py""")
+/*                     tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
                     for (int i = 0; i < tests.size(); i++) {
                         shell("""python3 ${tests[i]}""")
-                    }
+                    } */
                 }
             }
         }
         stage('promote image to prod') {
             steps {
                 script {
-                    docker.withRegistry('${env.REGISTRY_PROD}','registry-prod'){}
-                        def newImage = docker.build("${env.REGISTRY_PROD}/upstride:${env.BUILD_ID}")
-                        newImage.push()
+                    docker.withRegistry('${env.REGISTRY_PROD}','registry-prod'){
+                        shell("""docker build -f Dockerfile -t ${env.REGISTRY_PROD}/upstride:${env.BUILD_ID} .""")
+                        shell("""docker push ${REGISTRY_PROD}/upstride:${BUILD_TAG}-${BUILD_VERSION}""")
+                    }
                 }
             }
         }
@@ -90,9 +92,10 @@ def publish(String id, String status, String infos){
 def slack(String body){
     aggregate(body)
     DATA = '\'{"text":"'+env.SLACK_HEADER+'\n'+env.SLACK_MESSAGE+'"}\''
-    sh """
+    echo $DATA
+/*     sh """
     curl -X POST -H 'Content-type: application/json' --data ${DATA} --url $SLACK_WEBHOOK
-    """
+    """ */
 }
 
 def aggregate(String body){
