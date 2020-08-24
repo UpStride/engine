@@ -1,4 +1,6 @@
 # see code in https://math.stackexchange.com/questions/1103399/alternative-quaternion-multiplication-method
+import tensorflow as tf
+from . import custom_ops
 
 
 def multiply_by_a1(vector):
@@ -104,6 +106,23 @@ def quaternion_mult2(tf_op, inputs, kernels, f=1):
   return outputs
 
 
+def quaternion_mult_cpp(tf_op, inputs, kernels, f=1):
+  if f != 1:
+    kernels = [k * f for k in kernels]
+  if len(inputs) != 4:
+    output = [tf_op(inputs[0], kernels[i]) for i in range(4)]
+    if f != 1:
+      output = [o * (1/f) for o in output]
+    return output
+  inputs_p = custom_ops.upstride_inputs(*inputs)
+  kernels_p = custom_ops.upstride_kernels(*kernels)
+  outputs_p = [tf_op(inputs_p[i], kernels_p[i]) for i in range(8)]
+  outputs = custom_ops.upstride_outputs(*outputs_p)
+  if f != 1:
+    output = [o * (1/f) for o in output]
+  return outputs
+
+
 def quaternion_mult_naive(tf_op, inputs, kernels):
   c1 = tf_op(inputs[0], kernels[0]) - tf_op(inputs[1], kernels[1]) - tf_op(inputs[2], kernels[2]) - tf_op(inputs[3], kernels[3])
   c2 = tf_op(inputs[0], kernels[1]) + tf_op(inputs[1], kernels[0]) + tf_op(inputs[2], kernels[3]) - tf_op(inputs[3], kernels[2])
@@ -112,9 +131,32 @@ def quaternion_mult_naive(tf_op, inputs, kernels):
   return [c1, c2, c3, c4]
 
 
+def quaternion_mult_conv(tf_op, inputs, kernels, channel_axis):
+  """ Special version for the convolution. It use the group convolution instead of calling 8 times the convolution
+  """
+  if len(inputs) != 4:
+    # basic version is output = [tf_op(inputs[0], kernels[i]) for i in range(4)]
+    # but here we can concatenate the 4 kernel and do a single convolution
+    # kernel have shape (h,w,input,output)
+    kernel = tf.concat(kernels, axis=3)
+    output = tf_op(inputs[0], kernel)
+    outputs = tf.split(output, num_or_size_splits=4, axis=channel_axis)
+    return outputs
+  inputs_p = custom_ops.upstride_inputs(*inputs)
+  kernels_p = custom_ops.upstride_kernels(*kernels)
+  # instead of calling outputs_p = [tf_op(inputs_p[i], kernels_p[i]) for i in range(8)]
+  # we can use group convolution
+  kernel_p = tf.concat(kernels_p, axis=3)
+  input_p = tf.concat(inputs_p, axis=channel_axis)
+  output_p = tf_op(input_p, kernel_p)
+  outputs_p = tf.split(output_p, num_or_size_splits=8, axis=channel_axis)
+  outputs = custom_ops.upstride_outputs(*outputs_p)
+  return outputs
+
+
 multiply_by_a = multiply_by_a1
 # mult 2 is more stable than mult 1 when working with float 16
-quaternion_mult = quaternion_mult2
+quaternion_mult = quaternion_mult_cpp
 
 
 def is_quaternion_init(init_type):

@@ -386,7 +386,20 @@ class BatchNormalizationQ(Layer):
                                               trainable=False))
     self.built = True
 
+  def _get_training_value(self, training=None):
+    if training is None:
+      training = tf.keras.backend.learning_phase()
+    if isinstance(training, int):
+      training = bool(training)
+    if not self.trainable:
+      # When the layer is not trainable, it overrides the value passed from
+      # model.
+      training = False
+    return training
+
   def call(self, inputs, training=None):
+    training = self._get_training_value(training)
+
     # inputs is an array of 4 tensors
     input_shape = inputs[0].shape  # typically [BS, H, W, C]. For unittest (1,2,3,5)
     ndims = len(input_shape)  # typically 4

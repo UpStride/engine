@@ -155,7 +155,8 @@ def get_layers(layer: tf.keras.layers.Layer, conj_layer: tf.keras.layers.Layer =
       kwargs['name'] = f'{base_name}_{i}'
       layers.append(layer(**kwargs))
 
-  if conj_layer is not None:
+  # for now, never use conj layer as it is not clear if ti is better than standard ops
+  if False: # conj_layer is not None:
     kwargs['ga_dimension'] = multivector_length()
     conj_layer = conj_layer(**kwargs)
     return layers, add_bias, bias_parameters, conj_layer
