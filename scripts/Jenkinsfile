@@ -31,11 +31,12 @@ pipeline {
             agent { docker { image 'localhost:5000/dtr/upstride:py-1.1.0-tf2.3.0-gpu' } }
             steps {
                 script {
-                    shell("""python3 test.py""")
-/*                     tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
+                    shell("""pip install .""")
+                    //shell("""python3 test.py""")
+                    tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
                     for (int i = 0; i < tests.size(); i++) {
                         shell("""python3 ${tests[i]}""")
-                    } */
+                    }
                     info('tests cleared')
                 }
             }
