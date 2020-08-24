@@ -26,9 +26,9 @@ pipeline {
         }
         stage('smoke tests') {
             options {
-                timeout(time: 30, unit: "SECONDS")
+                timeout(time: 300, unit: "SECONDS")
             }
-            agent { docker { image 'localhost:5000/dtr/tensorflow/tensorflow:2.2.0-gpu' } }
+            agent { docker { image 'localhost:5000/dtr/upstride:py-1.1.0-tf2.3.0-gpu' } }
             steps {
                 script {
                     shell("""python3 test.py""")
@@ -100,11 +100,11 @@ def slack(String body){
 }
 
 def info(String body){
-    env.SLACK_MESSAGE = env.SLACK_MESSAGE+'\n [INFO]'+body.toString()
+    env.SLACK_MESSAGE = env.SLACK_MESSAGE+'\n[INFO] '+body.toString()
 }
 
 def error(String body){
-    env.SLACK_MESSAGE = env.SLACK_MESSAGE+'\n [ERROR]'+body.toString()
+    env.SLACK_MESSAGE = env.SLACK_MESSAGE+'\n[ERROR] '+body.toString()
 }
 
 def readLogs(){
@@ -120,13 +120,17 @@ def readLogs(){
 
 def shell(String command){
     try {
+/*
         def output = sh(returnStatus: true, script: "${command} >${LOGFILE} 2>&1")
         if (output != 0){throw new Exception("Pipeline failed\n- command:: "+command)}
         else { return output }
+*/
+        sh("${command}")
     }
     catch (error){
+        error('Pipeline FAILED')
         slack("[ERROR] "+error.getMessage()+"\n- logs: ${BUILD_URL}console")
-        readLogs()
+        //readLogs()
         throw error
     }
 }
