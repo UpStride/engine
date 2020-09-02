@@ -5,10 +5,12 @@ import jenkins.model.Jenkins
 
 
 pipeline {
-    agent { docker { image 'localhost:5000/dtr/azure-cloud' } }
+    agent { label 'azure-gpu' }
+    agent { docker { image 'registryupstridedev.azurecr.io/ops:azure-cloud' } }
     environment {
         SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
         REGISTRY_PROD = 'registryupstrideprod.azurecr.io'
+        REGISTRY_DEV = 'registryupstridedev.azurecr.io'
         REPO = 'upstride'
     }
     stages {
@@ -24,15 +26,34 @@ pipeline {
                 info("Starting the pipeline")
             }
         }
+        stage('build docker image') {
+            steps {
+                script {
+                    docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
+                        shell("""docker build . -f dockerfile -t ${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION} """)
+                        info('built successful')
+                    }
+                }
+            }
+        }
+        stage('promote image to dev') {
+            steps {
+                script {
+                    docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
+                        shell("""docker push ${REGISTRY_DEV}/upstride:${BUILD_TAG}-${BUILD_VERSION}""")
+                        info('image promoted to dev')
+                    }
+                }
+            }
+        }
         stage('smoke tests') {
             options {
                 timeout(time: 300, unit: "SECONDS")
             }
-            agent { docker { image 'localhost:5000/dtr/upstride:py-1.1.0-tf2.3.0-gpu' } }
+            agent { docker { image '${REGISTRY_DEV}/upstride:${BUILD_TAG}-${BUILD_VERSION}' } }
             steps {
                 script {
                     shell("""pip install .""")
-                    //shell("""python3 test.py""")
                     tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
                     for (int i = 0; i < tests.size(); i++) {
                         shell("""python3 ${tests[i]}""")
@@ -45,7 +66,7 @@ pipeline {
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_PROD}",'registry-prod'){
-                        shell("""docker build . -f dockerfile -t ${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION} """)
+                        shell("""docker tag ${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION} ${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION} """)
                         shell("""docker push ${REGISTRY_PROD}/upstride:${BUILD_TAG}-${BUILD_VERSION}""")
                         info('image promoted to prod')
                     }
