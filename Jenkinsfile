@@ -30,6 +30,7 @@ pipeline {
             }
         }
         stage('build docker image') {
+            agent { docker { image 'registryupstridedev.azurecr.io/ops:azure-cloud' } }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
@@ -40,6 +41,7 @@ pipeline {
             }
         }
         stage('promote image to dev') {
+            agent { docker { image 'registryupstridedev.azurecr.io/ops:azure-cloud' } }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
@@ -66,6 +68,7 @@ pipeline {
             }
         }
         stage('promote image to prod') {
+            agent { docker { image 'registryupstridedev.azurecr.io/ops:azure-cloud' } }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_PROD}",'registry-prod'){
