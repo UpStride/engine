@@ -6,8 +6,10 @@ import jenkins.model.Jenkins
 // hello 123
 
 pipeline {
-    agent { label 'azure-gpu' }
-    agent { docker { image 'registryupstridedev.azurecr.io/ops:azure-cloud' } }
+    agent {
+        node { label 'azure-gpu' }
+        docker { image 'registryupstridedev.azurecr.io/ops:azure-cloud' }
+    }
     environment {
         SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
         REGISTRY_PROD = 'registryupstrideprod.azurecr.io'
