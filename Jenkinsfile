@@ -3,6 +3,7 @@ import java.util.logging.SimpleFormatter
 import java.util.logging.LogManager
 import jenkins.model.Jenkins
 
+// hello 123
 
 pipeline {
     agent { label 'azure-gpu' }
