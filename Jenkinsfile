@@ -3,12 +3,9 @@ import java.util.logging.SimpleFormatter
 import java.util.logging.LogManager
 import jenkins.model.Jenkins
 
-// hello 123
-
 pipeline {
     agent {
-        node { label 'azure-gpu' }
-        docker { image 'registryupstridedev.azurecr.io/ops:azure-cloud' }
+        label 'azure-gpu'
     }
     environment {
         SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
