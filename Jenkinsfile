@@ -5,7 +5,8 @@ import jenkins.model.Jenkins
 
 pipeline {
     agent {
-        label 'azure-gpu'
+        //label 'azure-gpu'
+        label 'azure-cpu'
     }
     environment {
         SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
@@ -21,66 +22,86 @@ pipeline {
                     env.SLACK_MESSAGE = ''
                     env.BUILD_TAG = "upstride-python"
                     env.BUILD_VERSION = readFile("version")
+                    //env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
+                    env.BUILD_DEV = "upstride:12345"
+                    env.BUILD_PROD = "${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
+                    env.DOCKER_AGENT = "${REGISTRY_DEV}/ops:azure-cloud" 
+
                 }
                 setLogger()
                 info("Starting the pipeline")
             }
         }
-        stage('build docker image') {
-            agent { docker { image 'registryupstridedev.azurecr.io/ops:azure-cloud' } }
+/*         stage('build docker image') {
+            //agent { docker { image "$DOCKER_AGENT" } }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
-                        shell("""docker build . -f dockerfile -t ${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION} """)
+                        shell("""docker build . -f dockerfile -t $BUILD_DEV """)
                         info('built successful')
                     }
                 }
             }
-        }
-        stage('promote image to dev') {
-            agent { docker { image 'registryupstridedev.azurecr.io/ops:azure-cloud' } }
+        } */
+        stage('smoke tests') {
+            options {
+                timeout(time: 300, unit: "SECONDS")
+            }
+            //agent { docker { image "$BUILD_DEV" } }
+            //agent { docker { image "tensorflow/tensorflow:2.3.0-gpu" } }
+            agent { docker { image "$DOCKER_AGENT" } }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
-                        shell("""docker push ${REGISTRY_DEV}/upstride:${BUILD_TAG}-${BUILD_VERSION}""")
+                        //docker.image("${env.BUILD_DEV}").inside { c ->
+                            //shell("""pip install .""")
+                            shell("""docker build . -f dockerfile -t $BUILD_DEV """)
+                            info('built successful')
+                            //shell("""docker push $BUILD_DEV """)
+                            //info('image promoted to dev')
+                            //def build = docker.build("${env.BUILD_DEV}")
+                            docker.image(env.BUILD_DEV).inside{
+                            tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
+                            for (int i = 0; i < tests.size(); i++) {
+                                shell("""python3 ${tests[i]}""")
+                            }
+                            info('tests cleared')
+                            }
+                            }
+                        //}
+                }
+            }
+        }
+        stage('promote image to dev') {
+            //agent { docker { image "$DOCKER_AGENT" } }
+            steps {
+                script {
+                    docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
+                        shell("""docker push $BUILD_DEV """)
                         info('image promoted to dev')
                     }
                 }
             }
         }
-        stage('smoke tests') {
-            options {
-                timeout(time: 300, unit: "SECONDS")
-            }
-            agent { docker { image '${REGISTRY_DEV}/upstride:${BUILD_TAG}-${BUILD_VERSION}' } }
-            steps {
-                script {
-                    shell("""pip install .""")
-                    tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
-                    for (int i = 0; i < tests.size(); i++) {
-                        shell("""python3 ${tests[i]}""")
-                    }
-                    info('tests cleared')
-                }
-            }
-        }
+        /*
         stage('promote image to prod') {
-            agent { docker { image 'registryupstridedev.azurecr.io/ops:azure-cloud' } }
+            //agent { docker { image "$DOCKER_AGENT" } }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_PROD}",'registry-prod'){
-                        shell("""docker tag ${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION} ${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION} """)
-                        shell("""docker push ${REGISTRY_PROD}/upstride:${BUILD_TAG}-${BUILD_VERSION}""")
+                        shell("""docker tag $BUILD_DEV $BUILD_PROD """)
+                        shell("""docker push $BUILD_PROD """)
                         info('image promoted to prod')
                     }
                 }
             }
-        }
+        } */
         stage('exit') {
             steps {
                 script {
                     info("logs :${BUILD_URL}console")
-                    slack("[INFO] pipeline SUCCESS")
+                    info("pipeline SUCCESS")
+                    slack()
                 }
             }
         }
@@ -116,8 +137,8 @@ def publish(String id, String status, String infos){
     """
 }
 
-def slack(String body){
-    env.SLACK_MESSAGE = env.SLACK_MESSAGE+'\n'+body.toString()
+def slack(){
+    sh 'echo into slack :: - exiting -'
     DATA = '\'{"text":"'+env.SLACK_HEADER+env.SLACK_MESSAGE+'"}\''
     sh """
     curl -X POST -H 'Content-type: application/json' --data ${DATA} --url $SLACK_WEBHOOK
@@ -153,8 +174,13 @@ def shell(String command){
         sh("${command}")
     }
     catch (error){
+        error(error.getMessage())
+        error("- logs: ${BUILD_URL}console")
         error('Pipeline FAILED')
-        slack("[ERROR] "+error.getMessage()+"\n- logs: ${BUILD_URL}console")
+        slack()
+        sh 'echo *****'
+        sh 'echo ERROR'
+        sh 'echo *****'
         //readLogs()
         throw error
     }
