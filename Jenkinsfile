@@ -5,8 +5,8 @@ import jenkins.model.Jenkins
 
 pipeline {
     agent {
-        //label 'azure-gpu'
-        label 'azure-cpu'
+        label 'azure-gpu'
+        //label 'azure-cpu'
     }
     environment {
         SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
@@ -25,7 +25,7 @@ pipeline {
                     //env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.BUILD_DEV = "upstride:12345"
                     env.BUILD_PROD = "${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
-                    env.DOCKER_AGENT = "${REGISTRY_DEV}/ops:azure-cloud" 
+                    env.DOCKER_AGENT = "${REGISTRY_DEV}/ops:azure-cloud"
 
                 }
                 setLogger()
