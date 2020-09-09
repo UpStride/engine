@@ -54,17 +54,31 @@ class TF2Upstride(Layer):
       raise ValueError(f"unknown strategy: {strategy}")
 
   def __call__(self, x):
+    image_data_format = tf.keras.backend.image_data_format() # can be 'channels_last' or 'channels_first'
     if self.rgb_in_img:
-      red = tf.expand_dims(x[:, :, :, 0], -1)
-      green = tf.expand_dims(x[:, :, :, 1], -1)
-      blue = tf.expand_dims(x[:, :, :, 2], -1)
-      zeros = tf.zeros_like(red)
+      if image_data_format == 'channels_last':
+        red = tf.expand_dims(x[:, :, :, 0], -1)
+        green = tf.expand_dims(x[:, :, :, 1], -1)
+        blue = tf.expand_dims(x[:, :, :, 2], -1)
+        zeros = tf.zeros_like(red)
+      else:
+        red = tf.expand_dims(x[:, 0, :, :], 1)
+        green = tf.expand_dims(x[:, 1, :, :], 1)
+        blue = tf.expand_dims(x[:, 2, :, :], 1)
+        zeros = tf.zeros_like(red)
       return [zeros, red, green, blue]
     elif self.gray_in_real_rgb_in_img:
-      red = tf.expand_dims(x[:, :, :, 0], -1)
-      green = tf.expand_dims(x[:, :, :, 1], -1)
-      blue = tf.expand_dims(x[:, :, :, 2], -1)
-      grayscale = tf.image.rgb_to_grayscale(x)
+      if image_data_format == 'channels_last':
+        red = tf.expand_dims(x[:, :, :, 0], -1)
+        green = tf.expand_dims(x[:, :, :, 1], -1)
+        blue = tf.expand_dims(x[:, :, :, 2], -1)
+        grayscale = tf.image.rgb_to_grayscale(x)
+      else:
+        red = tf.expand_dims(x[:, 0, :, :], 1)
+        green = tf.expand_dims(x[:, 1, :, :], 1)
+        blue = tf.expand_dims(x[:, 2, :, :], 1)
+        x = tf.transpose(x, [0, 2, 3, 1])
+        grayscale = tf.image.rgb_to_grayscale(x)
       return [grayscale, red, green, blue]
     elif self.learn_multivector:
       r = learn_vector_component(x, 3)
@@ -72,7 +86,6 @@ class TF2Upstride(Layer):
       j = learn_vector_component(x, 3)
       k = learn_vector_component(x, 3)
       return [r, i, j, k]
-
     else:
       return [x]
 
@@ -192,30 +205,47 @@ def quaternion_standardization(input_centred, v: Dict, axis=-1):
   """
 
   # Chokesky decomposition of 4x4 symmetric matrix
+  # see paper https://arxiv.org/pdf/1712.04604.pdf appendix C for details
   w = {}
   w['rr'] = tf.sqrt(v['rr'])
-  w['ri'] = (1.0 / w['rr']) * (v['ri'])
+  wrr_inverse = 1. / w['rr']
+  w['ri'] = wrr_inverse * (v['ri'])
+  w['rj'] = wrr_inverse * (v['rj'])
+  w['rk'] = wrr_inverse * (v['rk'])
   w['ii'] = tf.sqrt((v['ii'] - (w['ri']*w['ri'])))
-  w['rj'] = (1.0 / w['rr']) * (v['rj'])
-  w['ij'] = (1.0 / w['ii']) * (v['ij'] - (w['ri']*w['rj']))
+  wii_inverse = 1. / w['ii']
+  w['ij'] = wii_inverse * (v['ij'] - (w['ri']*w['rj']))
+  w['ik'] = wii_inverse * (v['ik'] - (w['ri']*w['rk']))
   w['jj'] = tf.sqrt((v['jj'] - (w['ij']*w['ij'] + w['rj']*w['rj'])))
-  w['rk'] = (1.0 / w['rr']) * (v['rk'])
-  w['ik'] = (1.0 / w['ii']) * (v['ik'] - (w['ri']*w['rk']))
   w['jk'] = (1.0 / w['jj']) * (v['jk'] - (w['ij']*w['ik'] + w['rj']*w['rk']))
   w['kk'] = tf.sqrt((v['kk'] - (w['jk']*w['jk'] + w['ik']*w['ik'] + w['rk']*w['rk'])))
 
-  # compute the oposite
+  # compute the opposite
+  # basic version is
+  # o = {}
+  # o['rr'] = 1 / w['rr']
+  # o['ii'] = 1 / w['ii']
+  # o['jj'] = 1 / w['jj']
+  # o['kk'] = 1 / w['kk']
+  # o['ri'] = -(w['ri'] * o['rr']) / w['ii']
+  # o['rj'] = -(w['rj'] * o['rr'] + w['ij'] * o['ri']) / w['jj']
+  # o['rk'] = -(w['rk'] * o['rr'] + w['ik'] * o['ri'] + w['jk'] * o['rj'])/w['kk']
+  # o['ij'] = -(w['ij'] * o['ii']) / w['jj']
+  # o['ik'] = -(w['ik'] * o['ii'] + w['jk'] * o['ij']) / w['kk']
+  # o['jk'] = -(w['jk'] * o['jj']) / w['kk']
+
+  # with less division it gives
   o = {}
   o['rr'] = 1 / w['rr']
   o['ii'] = 1 / w['ii']
   o['jj'] = 1 / w['jj']
   o['kk'] = 1 / w['kk']
-  o['ri'] = -(w['ri'] * o['rr']) / w['ii']
-  o['rj'] = -(w['rj'] * o['rr'] + w['ij'] * o['ri']) / w['jj']
-  o['rk'] = -(w['rk'] * o['rr'] + w['ik'] * o['ri'] + w['jk'] * o['rj'])/w['kk']
-  o['ij'] = -(w['ij'] * o['ii']) / w['jj']
-  o['ik'] = -(w['ik'] * o['ii'] + w['jk'] * o['ij']) / w['kk']
-  o['jk'] = -(w['jk'] * o['jj']) / w['kk']
+  o['ri'] = -(w['ri'] * o['rr']) * o['ii']
+  o['rj'] = -(w['rj'] * o['rr'] + w['ij'] * o['ri']) * o['jj']
+  o['rk'] = -(w['rk'] * o['rr'] + w['ik'] * o['ri'] + w['jk'] * o['rj']) * o['kk']
+  o['ij'] = -(w['ij'] * o['ii']) * o['jj']
+  o['ik'] = -(w['ik'] * o['ii'] + w['jk'] * o['ij']) * o['kk']
+  o['jk'] = -(w['jk'] * o['jj']) * o['kk']
 
   w = o
 
