@@ -59,7 +59,7 @@ pipeline {
                             //shell("""docker push $BUILD_DEV """)
                             //info('image promoted to dev')
                             //def build = docker.build("${env.BUILD_DEV}")
-                            docker.image(env.BUILD_DEV).withRun("--gpus all").inside{
+                            docker.image(env.BUILD_DEV).inside("--gpus all"){
                             tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
                             for (int i = 0; i < tests.size(); i++) {
                                 shell("""python3 ${tests[i]}""")
