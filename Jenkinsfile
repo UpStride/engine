@@ -18,18 +18,17 @@ pipeline {
         stage('setup') {
             steps {
                 script {
-                    env.SLACK_HEADER = '[INFO] \n- push on branch <'+env.GIT_BRANCH+'>\n'+'- author <'+env.GIT_COMMITTER_NAME+'>\n'+'- email <'+env.GIT_COMMITTER_EMAIL+'>'
-                    env.SLACK_MESSAGE = ''
+                    header()
+                    info("Starting the pipeline")
                     env.BUILD_TAG = "upstride-python"
                     env.BUILD_VERSION = readFile("version")
                     //env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.BUILD_DEV = "upstride:12345"
                     env.BUILD_PROD = "${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.DOCKER_AGENT = "${REGISTRY_DEV}/ops:azure-cloud"
-
+                    setLogger()
                 }
-                setLogger()
-                info("Starting the pipeline")
+
             }
         }
 /*         stage('build docker image') {
@@ -60,7 +59,7 @@ pipeline {
                             //shell("""docker push $BUILD_DEV """)
                             //info('image promoted to dev')
                             //def build = docker.build("${env.BUILD_DEV}")
-                            docker.image(env.BUILD_DEV).inside{
+                            docker.image(env.BUILD_DEV).withRun("--gpus all").inside{
                             tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
                             for (int i = 0; i < tests.size(); i++) {
                                 shell("""python3 ${tests[i]}""")
@@ -135,6 +134,11 @@ def publish(String id, String status, String infos){
     sh"""
         gcloud pubsub topics publish notifications-prod --message ${message}
     """
+}
+
+def header(){
+    env.SLACK_HEADER = '[INFO] \n- push on branch <'+env.GIT_BRANCH+'>\n'+'- author <'+env.GIT_COMMITTER_NAME+'>\n'+'- email <'+env.GIT_COMMITTER_EMAIL+'>'
+    env.SLACK_MESSAGE = ''
 }
 
 def slack(){
