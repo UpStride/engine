@@ -22,7 +22,5 @@ setuptools.setup(
     ],
     # test_suite="",
     # tests_require=[''],
-    # install_requires=[
-    #     '',
-    # ],
+    install_requires=['pydot','graphviz']
 )

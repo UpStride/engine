@@ -23,7 +23,7 @@ pipeline {
                     env.BUILD_TAG = "upstride-python"
                     env.BUILD_VERSION = readFile("version")
                     //env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
-                    env.BUILD_DEV = "upstride:12345"
+                    env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}/${BUILD_TAG}:${BUILD_VERSION}"
                     env.BUILD_PROD = "${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.DOCKER_AGENT = "${REGISTRY_DEV}/ops:azure-cloud"
                     setLogger()
@@ -31,7 +31,7 @@ pipeline {
 
             }
         }
-/*         stage('build docker image') {
+         stage('build docker image') {
             //agent { docker { image "$DOCKER_AGENT" } }
             steps {
                 script {
@@ -41,14 +41,14 @@ pipeline {
                     }
                 }
             }
-        } */
+        }
         stage('smoke tests') {
             options {
                 timeout(time: 300, unit: "SECONDS")
             }
             //agent { docker { image "$BUILD_DEV" } }
             //agent { docker { image "tensorflow/tensorflow:2.3.0-gpu" } }
-            agent { docker { image "$DOCKER_AGENT" } }
+            //agent { docker { image "$DOCKER_AGENT" } }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
