@@ -23,7 +23,7 @@ pipeline {
                     env.BUILD_TAG = "upstride-python"
                     env.BUILD_VERSION = readFile("version")
                     //env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
-                    env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-1"
+                    env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-1.0"
                     env.BUILD_PROD = "${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.DOCKER_AGENT = "${REGISTRY_DEV}/ops:azure-cloud"
                     setLogger()
@@ -32,7 +32,6 @@ pipeline {
             }
         }
          stage('build docker image') {
-            //agent { docker { image "$DOCKER_AGENT" } }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
@@ -46,38 +45,28 @@ pipeline {
             options {
                 timeout(time: 300, unit: "SECONDS")
             }
-            //agent { docker { image "$BUILD_DEV" } }
-            //agent { docker { image "tensorflow/tensorflow:2.3.0-gpu" } }
-            //agent { docker { image "$DOCKER_AGENT" } }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
-                        //docker.image("${env.BUILD_DEV}").inside { c ->
-                            //shell("""pip install .""")
-                            shell("""docker build . -f dockerfile -t $BUILD_DEV """)
-                            info('built successful')
-                            //shell("""docker push $BUILD_DEV """)
-                            //info('image promoted to dev')
-                            //def build = docker.build("${env.BUILD_DEV}")
-                            docker.image(env.BUILD_DEV).inside("--gpus all"){
+                        shell("""docker build . -f dockerfile -t $BUILD_DEV """)
+                        info('built successful')
+                        docker.image(env.BUILD_DEV).inside("--gpus all"){
                             tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
                             for (int i = 0; i < tests.size(); i++) {
                                 shell("""python3 ${tests[i]}""")
-                            }
-                            info('tests cleared')
-                            }
-                            }
-                        //}
+                        }
+                        info('tests cleared')
+                        }
+                    }
                 }
             }
         }
         stage('promote image to dev') {
-            //agent { docker { image "$DOCKER_AGENT" } }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
                         shell("""docker push $BUILD_DEV """)
-                        info('image promoted to dev')
+                        info("image promoted to dev \n- image: $BUILD_DEV")
                     }
                 }
             }
@@ -175,7 +164,7 @@ def shell(String command){
         if (output != 0){throw new Exception("Pipeline failed\n- command:: "+command)}
         else { return output }
 */
-        sh("${command}")
+        return sh("${command}")
     }
     catch (error){
         error(error.getMessage())
