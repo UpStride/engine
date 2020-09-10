@@ -11,3 +11,4 @@ RUN cd /opt/upstride && \
     pip install pydot graphviz && \
     cd / && \
     rm -r /opt/upstride
+RUN sudo apt install graphviz -y
