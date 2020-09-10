@@ -8,7 +8,7 @@ COPY setup.py /opt/upstride/setup.py
 RUN cd /opt/upstride && \
     touch README.md && \
     pip install . && \
-    pip install pydot graphviz && \
     cd / && \
     rm -r /opt/upstride
-RUN sudo apt install graphviz -y
+RUN apt-get update
+RUN apt-get install graphviz -y
