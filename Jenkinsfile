@@ -23,7 +23,7 @@ pipeline {
                     env.BUILD_TAG = "upstride-python"
                     env.BUILD_VERSION = readFile("version")
                     //env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
-                    env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}/${BUILD_TAG}:${BUILD_VERSION}"
+                    env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-1"
                     env.BUILD_PROD = "${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.DOCKER_AGENT = "${REGISTRY_DEV}/ops:azure-cloud"
                     setLogger()
