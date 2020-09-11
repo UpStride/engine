@@ -13,6 +13,8 @@ pipeline {
         REGISTRY_PROD = 'registryupstrideprod.azurecr.io'
         REGISTRY_DEV = 'registryupstridedev.azurecr.io'
         REPO = 'upstride'
+        BUILD_TAG = "upstride-python"
+        BUILD_VERSION = "1.0"
     }
     stages {
         stage('setup') {
@@ -20,10 +22,8 @@ pipeline {
                 script {
                     header()
                     info("Starting the pipeline")
-                    env.BUILD_TAG = "upstride-python"
-                    env.BUILD_VERSION = readFile("version")
-                    //env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
-                    env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-1.0"
+                    //env.BUILD_VERSION = readFile("version")
+                    env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.BUILD_PROD = "${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.DOCKER_AGENT = "${REGISTRY_DEV}/ops:azure-cloud"
                     setLogger()
@@ -71,19 +71,6 @@ pipeline {
                 }
             }
         }
-        /*
-        stage('promote image to prod') {
-            //agent { docker { image "$DOCKER_AGENT" } }
-            steps {
-                script {
-                    docker.withRegistry("https://${REGISTRY_PROD}",'registry-prod'){
-                        shell("""docker tag $BUILD_DEV $BUILD_PROD """)
-                        shell("""docker push $BUILD_PROD """)
-                        info('image promoted to prod')
-                    }
-                }
-            }
-        } */
         stage('exit') {
             steps {
                 script {
