@@ -72,7 +72,7 @@ pipeline {
                 }
             }
         }
-        stage('promote image to dev') {
+        stage('promote image to staging') {
             when {  branch 'master'  }
             steps {
                 script {
