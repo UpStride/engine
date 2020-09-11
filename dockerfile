@@ -10,3 +10,5 @@ RUN cd /opt/upstride && \
     pip install . && \
     cd / && \
     rm -r /opt/upstride
+RUN apt-get update
+RUN apt-get install graphviz -y

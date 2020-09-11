@@ -3,50 +3,70 @@ import java.util.logging.SimpleFormatter
 import java.util.logging.LogManager
 import jenkins.model.Jenkins
 
-
 pipeline {
-    agent { docker { image 'localhost:5000/dtr/azure-cloud' } }
+    agent {
+        label 'azure-gpu'
+        //label 'azure-cpu'
+    }
     environment {
         SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
         REGISTRY_PROD = 'registryupstrideprod.azurecr.io'
+        REGISTRY_DEV = 'registryupstridedev.azurecr.io'
         REPO = 'upstride'
+        BUILD_TAG = "upstride-python"
+        BUILD_VERSION = "1.0"
     }
     stages {
         stage('setup') {
             steps {
                 script {
-                    env.SLACK_HEADER = '[INFO] \n- push on branch <'+env.GIT_BRANCH+'>\n'+'- author <'+env.GIT_COMMITTER_NAME+'>\n'+'- email <'+env.GIT_COMMITTER_EMAIL+'>'
-                    env.SLACK_MESSAGE = ''
-                    env.BUILD_TAG = "upstride-python"
-                    env.BUILD_VERSION = readFile("version")
+                    header()
+                    info("Starting the pipeline")
+                    //env.BUILD_VERSION = readFile("version")
+                    env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
+                    env.BUILD_PROD = "${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
+                    env.DOCKER_AGENT = "${REGISTRY_DEV}/ops:azure-cloud"
+                    setLogger()
                 }
-                setLogger()
-                info("Starting the pipeline")
+
+            }
+        }
+         stage('build docker image') {
+            steps {
+                script {
+                    docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
+                        shell("""docker build . -f dockerfile -t $BUILD_DEV """)
+                        info('built successful')
+                    }
+                }
             }
         }
         stage('smoke tests') {
             options {
                 timeout(time: 300, unit: "SECONDS")
             }
-            agent { docker { image 'localhost:5000/dtr/upstride:py-1.1.0-tf2.3.0-gpu' } }
             steps {
                 script {
-                    shell("""python3 test.py""")
-/*                     tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
-                    for (int i = 0; i < tests.size(); i++) {
-                        shell("""python3 ${tests[i]}""")
-                    } */
-                    info('tests cleared')
+                    docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
+                        shell("""docker build . -f dockerfile -t $BUILD_DEV """)
+                        info('built successful')
+                        docker.image(env.BUILD_DEV).inside("--gpus all"){
+                            tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
+                            for (int i = 0; i < tests.size(); i++) {
+                                shell("""python3 ${tests[i]}""")
+                        }
+                        info('tests cleared')
+                        }
+                    }
                 }
             }
         }
-        stage('promote image to prod') {
+        stage('promote image to dev') {
             steps {
                 script {
-                    docker.withRegistry("https://${REGISTRY_PROD}",'registry-prod'){
-                        shell("""docker build . -f dockerfile -t ${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION} """)
-                        shell("""docker push ${REGISTRY_PROD}/upstride:${BUILD_TAG}-${BUILD_VERSION}""")
-                        info('image promoted to prod')
+                    docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
+                        shell("""docker push $BUILD_DEV """)
+                        info("image promoted to dev \n- image: $BUILD_DEV")
                     }
                 }
             }
@@ -55,7 +75,8 @@ pipeline {
             steps {
                 script {
                     info("logs :${BUILD_URL}console")
-                    slack("[INFO] pipeline SUCCESS")
+                    info("pipeline SUCCESS")
+                    slack()
                 }
             }
         }
@@ -91,8 +112,13 @@ def publish(String id, String status, String infos){
     """
 }
 
-def slack(String body){
-    env.SLACK_MESSAGE = env.SLACK_MESSAGE+'\n'+body.toString()
+def header(){
+    env.SLACK_HEADER = '[INFO] \n- push on branch <'+env.GIT_BRANCH+'>\n'+'- author <'+env.GIT_COMMITTER_NAME+'>\n'+'- email <'+env.GIT_COMMITTER_EMAIL+'>'
+    env.SLACK_MESSAGE = ''
+}
+
+def slack(){
+    sh 'echo into slack :: - exiting -'
     DATA = '\'{"text":"'+env.SLACK_HEADER+env.SLACK_MESSAGE+'"}\''
     sh """
     curl -X POST -H 'Content-type: application/json' --data ${DATA} --url $SLACK_WEBHOOK
@@ -125,11 +151,16 @@ def shell(String command){
         if (output != 0){throw new Exception("Pipeline failed\n- command:: "+command)}
         else { return output }
 */
-        sh("${command}")
+        return sh("${command}")
     }
     catch (error){
+        error(error.getMessage())
+        error("- logs: ${BUILD_URL}console")
         error('Pipeline FAILED')
-        slack("[ERROR] "+error.getMessage()+"\n- logs: ${BUILD_URL}console")
+        slack()
+        sh 'echo *****'
+        sh 'echo ERROR'
+        sh 'echo *****'
         //readLogs()
         throw error
     }
