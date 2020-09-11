@@ -48,8 +48,8 @@ pipeline {
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
-                        shell("""docker build . -f dockerfile -t $BUILD_DEV """)
-                        info('built successful')
+                        //shell("""docker build . -f dockerfile -t $BUILD_DEV """)
+                        //info('built successful')
                         docker.image(env.BUILD_DEV).inside("--gpus all"){
                             tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
                             for (int i = 0; i < tests.size(); i++) {
@@ -62,11 +62,24 @@ pipeline {
             }
         }
         stage('promote image to dev') {
+            when { not { branch 'master' } }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
                         shell("""docker push $BUILD_DEV """)
                         info("image promoted to dev \n- image: $BUILD_DEV")
+                    }
+                }
+            }
+        }
+        stage('promote image to dev') {
+            when {  branch 'master'  }
+            steps {
+                script {
+                    docker.withRegistry("https://${REGISTRY_PROD}",'registry-prod'){
+                        shell("""docker tag $BUILD_DEV $BUILD_PROD """)
+                        shell("""docker push $BUILD_PROD """)
+                        info("image promoted to staging \n- image: $BUILD_PROD")
                     }
                 }
             }
