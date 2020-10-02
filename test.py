@@ -1,4 +1,7 @@
+import os
 import unittest
+import tempfile
+import shutil
 import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops import gen_math_ops
@@ -180,6 +183,20 @@ class TestConv2DQuaternion(unittest.TestCase):
     model = tf.keras.Model(inputs=[inputs], outputs=[x])
     self.assertEqual(len(model.layers), 2)
     self.assertEqual(model.count_params(), (9*4*3+4)*4)
+
+  def test_export(self):
+    generic_layers.upstride_type = 2
+    inputs = tf.keras.layers.Input((224, 224, 3))
+    x = type2_layers.TF2Upstride()(inputs)
+    x = type2_layers.Conv2D(4, (3, 3), use_bias=True)(x)
+    x = type2_layers.DepthwiseConv2D(4, (3, 3), use_bias=True)(x)
+    x = type2_layers.Upstride2TF()(x)
+    model = tf.keras.Model(inputs=[inputs], outputs=[x])
+    dest = tempfile.mkdtemp()
+    tf.saved_model.save(model, dest)
+    self.assertEqual(os.listdir(dest), ['saved_model.pb', 'variables', 'assets'])
+    shutil.rmtree(dest)
+
 
 
 if __name__ == "__main__":

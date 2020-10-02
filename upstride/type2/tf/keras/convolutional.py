@@ -13,7 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 #
-# this file comes from https://github.com/tensorflow/tensorflow/blob/v2.2.0/tensorflow/python/keras/layers/convolutional.py
+# this file comes from https://github.com/tensorflow/tensorflow/blob/v2.3.0/tensorflow/python/keras/layers/convolutional.py
 # to see the diff, do
 # curl https://raw.githubusercontent.com/tensorflow/tensorflow/v2.3.0/tensorflow/python/keras/layers/convolutional.py > /tmp/keras.py
 # meld upstride/type2/tf/keras/convolutional.py /tmp/keras.py
@@ -23,6 +23,7 @@
 
 import functools
 import six
+import tensorflow as tf
 
 from tensorflow.python.eager import context
 from tensorflow.python.framework import tensor_shape
@@ -2421,6 +2422,7 @@ class DepthwiseConv2D(Conv2D):
       return (input_shape[0], rows, cols, out_filters)
 
   def get_config(self):
+    self.kernel_initializer = tf.keras.initializers.Ones()
     config = super(DepthwiseConv2D, self).get_config()
     config.pop('filters')
     config.pop('kernel_initializer')
