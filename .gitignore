@@ -1,4 +1,3 @@
-*.png
 *.egg-info
 __pycache__
 *.pdf
