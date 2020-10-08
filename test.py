@@ -194,7 +194,9 @@ class TestConv2DQuaternion(unittest.TestCase):
     model = tf.keras.Model(inputs=[inputs], outputs=[x])
     dest = tempfile.mkdtemp()
     tf.saved_model.save(model, dest)
-    self.assertEqual(os.listdir(dest), ['saved_model.pb', 'variables', 'assets'])
+    listdir = os.listdir(dest)
+    listdir.sort()
+    self.assertEqual(listdir, ['assets', 'saved_model.pb', 'variables'])
     shutil.rmtree(dest)
 
 
