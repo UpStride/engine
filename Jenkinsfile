@@ -35,7 +35,6 @@ pipeline {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
                         sh("""docker build . -f dockerfile -t $BUILD_DEV """)
-                        info('built successful')
                     }
                 }
             }
@@ -59,8 +58,7 @@ pipeline {
                             tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
                             for (int i = 0; i < tests.size(); i++) {
                                 sh("""python3 ${tests[i]}""")
-                        }
-                        info('tests cleared')
+                            }
                         }
                     }
                 }
@@ -80,7 +78,6 @@ pipeline {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
                         sh("""docker push $BUILD_DEV """)
-                        info("image promoted to dev \n- image: $BUILD_DEV")
                     }
                 }
             }
@@ -115,7 +112,7 @@ pipeline {
     }
     post {
         always {
-            info("logs :${BUILD_URL}console")
+            info("logs :${BUILD_URL}consoleText")
             slack()
         }
         success {
@@ -157,7 +154,7 @@ def publish(String id, String status, String infos){
 }
 
 def header(){
-    env.SLACK_HEADER = "[META] \n-repo <$GIT_REPO>\n- push on branch <$GIT_BRANCH>\n- author <$GIT_COMMITTER_NAME>\n"
+    env.SLACK_HEADER = "[META] \n-repo <"+env.GIT_REPO+">\n- push on branch <"+env.GIT_BRANCH">\n- author <"+"$GIT_COMMITTER_NAME>\n"
     env.SLACK_MESSAGE = ''
 }
 
