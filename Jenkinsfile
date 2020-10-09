@@ -12,6 +12,7 @@ pipeline {
         REGISTRY_PROD = 'registryupstrideprod.azurecr.io'
         REGISTRY_DEV = 'registryupstridedev.azurecr.io'
         REPO = 'upstride'
+        GIT_REPO = 'upstride_python'
         BUILD_TAG = "py"
         BUILD_VERSION = "1.0.0"
     }
@@ -78,7 +79,7 @@ pipeline {
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
-                        shell("""docker push $BUILD_DEV """)
+                        sh("""docker push $BUILD_DEV """)
                         info("image promoted to dev \n- image: $BUILD_DEV")
                     }
                 }
@@ -156,7 +157,7 @@ def publish(String id, String status, String infos){
 }
 
 def header(){
-    env.SLACK_HEADER = '[INFO] \n- push on branch <'+env.GIT_BRANCH+'>\n'+'- author <'+env.GIT_COMMITTER_NAME+'>\n'+'- email <'+env.GIT_COMMITTER_EMAIL+'>'
+    env.SLACK_HEADER = "[META] \n-repo <$GIT_REPO>\n- push on branch <$GIT_BRANCH>\n- author <$GIT_COMMITTER_NAME>\n"
     env.SLACK_MESSAGE = ''
 }
 
@@ -184,22 +185,5 @@ def readLogs(){
     catch(e){
         def logs = "-- no logs --"
         return logs
-    }
-}
-
-def shell(String command){
-    try {
-        return sh("${command}")
-    }
-    catch (error){
-        error(error.getMessage())
-        error("- logs: ${BUILD_URL}console")
-        error('Pipeline FAILED')
-        slack()
-        sh 'echo *****'
-        sh 'echo ERROR'
-        sh 'echo *****'
-        //readLogs()
-        throw error
     }
 }
