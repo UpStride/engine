@@ -8,12 +8,12 @@ pipeline {
         label 'azure-gpu'
     }
     environment {
-        SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
+        SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
         REGISTRY_PROD = 'registryupstrideprod.azurecr.io'
         REGISTRY_DEV = 'registryupstridedev.azurecr.io'
         REPO = 'upstride'
-        BUILD_TAG = "upstride-python"
-        BUILD_VERSION = "1.0"
+        BUILD_TAG = "py"
+        BUILD_VERSION = "1.0.0"
     }
     stages {
         stage('setup') {
@@ -22,12 +22,11 @@ pipeline {
                     header()
                     info("Starting the pipeline")
                     //env.BUILD_VERSION = readFile("version")
-                    env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
+                    env.BUILD_DEV = "${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.BUILD_PROD = "${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.DOCKER_AGENT = "${REGISTRY_DEV}/ops:azure-cloud"
                     setLogger()
                 }
-
             }
         }
          stage('build docker image') {
