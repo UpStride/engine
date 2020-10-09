@@ -6,7 +6,6 @@ import jenkins.model.Jenkins
 pipeline {
     agent {
         label 'azure-gpu'
-        //label 'azure-cpu'
     }
     environment {
         SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
@@ -35,9 +34,17 @@ pipeline {
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
-                        shell("""docker build . -f dockerfile -t $BUILD_DEV """)
+                        sh("""docker build . -f dockerfile -t $BUILD_DEV """)
                         info('built successful')
                     }
+                }
+            }
+            post {
+                success {
+                    info('built successful')
+                }
+                failure {
+                    error("stage <build docker> failed")
                 }
             }
         }
@@ -48,16 +55,22 @@ pipeline {
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
-                        //shell("""docker build . -f dockerfile -t $BUILD_DEV """)
-                        //info('built successful')
                         docker.image(env.BUILD_DEV).inside("--gpus all"){
                             tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
                             for (int i = 0; i < tests.size(); i++) {
-                                shell("""python3 ${tests[i]}""")
+                                sh("""python3 ${tests[i]}""")
                         }
                         info('tests cleared')
                         }
                     }
+                }
+            }
+            post {
+                success {
+                    info('tests cleared')
+                }
+                failure {
+                    error("stage <smoke tests> failed")
                 }
             }
         }
@@ -71,27 +84,45 @@ pipeline {
                     }
                 }
             }
+            post {
+                success {
+                    info("image promoted to dev \n- image: $BUILD_PROD")
+                }
+                failure {
+                    error("stage <promote image to dev> failed")
+                }
+            }
         }
         stage('promote image to staging') {
             when {  branch 'master'  }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_PROD}",'registry-prod'){
-                        shell("""docker tag $BUILD_DEV $BUILD_PROD """)
-                        shell("""docker push $BUILD_PROD """)
-                        info("image promoted to staging \n- image: $BUILD_PROD")
+                        sh("""docker tag $BUILD_DEV $BUILD_PROD """)
+                        sh("""docker push $BUILD_PROD """)
                     }
                 }
             }
-        }
-        stage('exit') {
-            steps {
-                script {
-                    info("logs :${BUILD_URL}console")
-                    info("pipeline SUCCESS")
-                    slack()
+            post {
+                success {
+                    info("image promoted to staging \n- image: $BUILD_PROD")
+                }
+                failure {
+                    error("stage <promote image to staging> failed")
                 }
             }
+        }
+    }
+    post {
+        always {
+            info("logs :${BUILD_URL}console")
+            slack()
+        }
+        success {
+            info("pipeline **SUCCESS**")
+        }
+        failure {
+            error("pipeline **FAILURE**")
         }
     }
 }
@@ -159,11 +190,6 @@ def readLogs(){
 
 def shell(String command){
     try {
-/*
-        def output = sh(returnStatus: true, script: "${command} >${LOGFILE} 2>&1")
-        if (output != 0){throw new Exception("Pipeline failed\n- command:: "+command)}
-        else { return output }
-*/
         return sh("${command}")
     }
     catch (error){
