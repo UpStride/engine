@@ -154,7 +154,7 @@ def publish(String id, String status, String infos){
 }
 
 def header(){
-    env.SLACK_HEADER = "[META]\n-repo <"+env.GIT_REPO+">\n- push on branch <"+env.GIT_BRANCH+">\n- author <"+env.GIT_COMMITTER_NAME">\n"
+    env.SLACK_HEADER = "[META]\n-repo <"+env.GIT_REPO+">\n- push on branch <"+env.GIT_BRANCH+">\n- author <"+env.GIT_COMMITTER_NAME+">\n"
     env.SLACK_MESSAGE = ''
 }
 
