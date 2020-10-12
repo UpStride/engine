@@ -59,7 +59,7 @@ def square_vector(index: int) -> int:
 
 
 def _ga_multiply_get_index(index_1: str, index_2: str) -> Tuple[int, str]:
-  """given e_{index_1}, e_{index_2} return (s, index) such as e_{index_1} * e_{index_2} = s * e_{index}
+  """given \beta_{index_1}, \beta_{index_2} return (s, index) such as \beta_{index_1} * \beta_{index_2} = s * \beta_{index}
   """
   l1 = [int(i) for i in index_1]
   l2 = [int(i) for i in index_2]
@@ -94,17 +94,17 @@ def _ga_multiply_get_index(index_1: str, index_2: str) -> Tuple[int, str]:
 
 
 def unit_multiplier(i: int, j: int) -> Tuple[int, int]:
-  """given e_i and e_j, return (k,s) such as : e_i * e_j = s * e_k
+  """given \beta_i and \beta_j, return (k,s) such as : \beta_i * \beta_j = s * \beta_k
 
   with:
-      e_0 = 1, e_1 = i if upstride_type == 1
-      e_0 = 1, e_1 = i, e_2 = j, e_3 = k if upstride_type == 2
+      \beta_0 = 1, \beta_1 = i if upstride_type == 1
+      \beta_0 = 1, \beta_1 = i, \beta_2 = j, \beta_3 = k if upstride_type == 2
       s in {-1, 1}
 
   for instance, upstride_type == 1,
-  (0, 0) -> (0, 1) because e_0 * e_0 = 1 * 1 = 1 * e_0
-  (0, 1) -> (1, 1) because e_0 * e_1 = 1 * e_1
-  (1, 1) -> (0, -1) because e_1 * e_1 = i**2 = -1 = -1 * e_0
+  (0, 0) -> (0, 1) because \beta_0 * \beta_0 = 1 * 1 = 1 * \beta_0
+  (0, 1) -> (1, 1) because \beta_0 * \beta_1 = 1 * \beta_1
+  (1, 1) -> (0, -1) because \beta_1 * \beta_1 = i**2 = -1 = -1 * \beta_0
   """
   index1 = blade_indexes[i]
   index2 = blade_indexes[j]
