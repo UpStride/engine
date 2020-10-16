@@ -22,7 +22,7 @@ pipeline {
                 script {
                     header()
                     info("Starting the pipeline")
-                    env.BUILD_VERSION = readFile("version")
+                    env.BUILD_VERSION = readFile("version").trim()
                     env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.BUILD_PROD = "${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.DOCKER_AGENT = "${REGISTRY_DEV}/ops:azure-cloud"
@@ -111,15 +111,15 @@ pipeline {
         }
     }
     post {
-        always {
-            info("logs :${BUILD_URL}consoleText")
-            slack()
-        }
         success {
             info("pipeline **SUCCESS**")
         }
         failure {
             error("pipeline **FAILURE**")
+        }
+        always {
+            info("logs :${BUILD_URL}consoleText")
+            slack()
         }
     }
 }
