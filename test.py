@@ -1,4 +1,7 @@
+import os
 import unittest
+import tempfile
+import shutil
 import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops import gen_math_ops
@@ -6,10 +9,11 @@ from upstride import generic_layers
 from upstride.generic_layers import _ga_multiply_get_index, upstride_type, unit_multiplier, reorder
 from upstride.type2.tf.keras.utils import quaternion_mult1, quaternion_mult2, multiply_by_a1, multiply_by_a2, quaternion_mult_naive, quaternion_mult_cpp
 from upstride.type2.tf.keras.layers import TF2Upstride as QTF2Upstride
-from upstride.type2.tf.keras.layers import BatchNormalizationQ # as BatchNormalizationQ
+from upstride.type2.tf.keras.layers import BatchNormalizationQ  # as BatchNormalizationQ
 from upstride.type2.tf.keras import layers as type2_layers
 
 from upstride.type2.tf.keras.test_custom_ops import TestCustomOpPythonBackprop, TestCustomOpCpp, TestCustomOpCppBackprop
+
 
 class TestGAMultiplication(unittest.TestCase):
   def test_ga_multiply_get_index(self):
@@ -86,6 +90,32 @@ class TestQuaternionTF2Upstride(unittest.TestCase):
     self.assertEqual(o[2].shape, (1, 1, 1, 1))
     self.assertEqual(o[3].shape, (1, 1, 1, 1))
 
+    # go to channel fist and continue the testing
+    tf.keras.backend.set_image_data_format('channels_first')
+    inputs = tf.convert_to_tensor([[[[1]], [[3]], [[4]]]])
+    self.assertEqual(inputs.shape, (1, 3, 1, 1))
+
+    o = QTF2Upstride()(inputs)
+    self.assertEqual(type(o), list)
+    self.assertEqual(o[0].shape, (1, 3, 1, 1))
+
+    o = QTF2Upstride("joint")(inputs)
+    self.assertEqual(type(o), list)
+    self.assertEqual(o[0].shape, (1, 1, 1, 1))
+    self.assertEqual(o[1].shape, (1, 1, 1, 1))
+    self.assertEqual(o[2].shape, (1, 1, 1, 1))
+    self.assertEqual(o[3].shape, (1, 1, 1, 1))
+
+    o = QTF2Upstride("grayscale")(inputs)
+    self.assertEqual(type(o), list)
+    self.assertEqual(o[0].shape, (1, 1, 1, 1))
+    self.assertEqual(o[1].shape, (1, 1, 1, 1))
+    self.assertEqual(o[2].shape, (1, 1, 1, 1))
+    self.assertEqual(o[3].shape, (1, 1, 1, 1))
+
+    
+    tf.keras.backend.set_image_data_format('channels_last')
+
 
 class TestQuaternionMult(unittest.TestCase):
   def test_multiply_by_a1(self):
@@ -140,7 +170,8 @@ class TestQuaternionBN(unittest.TestCase):
     bn_layer = BatchNormalizationQ()
     outputs = bn_layer(inputs, training=False)
     self.assertEqual(len(outputs), 4)
-    self.assertTrue(np.array_equal(outputs[0], np.zeros((1,2,3,5))))
+    self.assertTrue(np.array_equal(outputs[0], np.zeros((1, 2, 3, 5))))
+
 
 class TestConv2DQuaternion(unittest.TestCase):
   def test_conv2d(self):
@@ -152,6 +183,23 @@ class TestConv2DQuaternion(unittest.TestCase):
     model = tf.keras.Model(inputs=[inputs], outputs=[x])
     self.assertEqual(len(model.layers), 2)
     self.assertEqual(model.count_params(), (9*4*3+4)*4)
+
+  def test_export(self):
+    generic_layers.upstride_type = 2
+    inputs = tf.keras.layers.Input((224, 224, 3))
+    x = type2_layers.TF2Upstride()(inputs)
+    x = type2_layers.Conv2D(4, (3, 3), use_bias=True)(x)
+    x = type2_layers.DepthwiseConv2D(4, (3, 3), use_bias=True)(x)
+    x = type2_layers.Upstride2TF()(x)
+    model = tf.keras.Model(inputs=[inputs], outputs=[x])
+    dest = tempfile.mkdtemp()
+    tf.saved_model.save(model, dest)
+    listdir = os.listdir(dest)
+    listdir.sort()
+    self.assertEqual(listdir, ['assets', 'saved_model.pb', 'variables'])
+    shutil.rmtree(dest)
+
+
 
 if __name__ == "__main__":
   unittest.main()
