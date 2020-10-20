@@ -45,10 +45,8 @@ class TestActivationCos(unittest.TestCase):
     ## TF computed gradient
     dy_da, dy_db = get_tf_grad([a,b], cos_fn)
 
-    print(":::::::::::",dy_da, dy_db)
-
-    self.assertTrue(np.array_equal(dy_da,target_da) and np.array_equal(dy_db ,target_db))
-    self.assertTrue(np.array_equal(dy_da,target_a) and np.array_equal(dy_db,target_b))
+    self.assertTrue(np.array_equal(dy_da,target_da) and np.array_equal(dy_db ,target_db) \
+    and np.array_equal(dy_da,target_a) and np.array_equal(dy_db,target_b))
 
   def test_backward_90deg(self):
     a, b = np.ones([2,3,4])*(pi/2), np.zeros([2,3,4])
@@ -60,8 +58,54 @@ class TestActivationCos(unittest.TestCase):
     ## TF computed gradient
     dy_da, dy_db = get_tf_grad([a,b], cos_fn)
 
-    self.assertTrue(np.array_equal(dy_da.numpy(),target_da) and np.array_equal(dy_db.numpy() ,target_db))
-    self.assertTrue(np.array_equal(dy_da.numpy(),target_a) and np.array_equal(dy_db.numpy() ,target_b))
+    self.assertTrue(np.array_equal(dy_da,target_da) and np.array_equal(dy_db ,target_db) \
+    and np.array_equal(dy_da,target_a) and np.array_equal(dy_db ,target_b))
+
+
+class TestActivationPow2(unittest.TestCase):
+
+  def test_forward_scalar(self):
+    a, b = 0.0, 0.0
+    target_a, target_b = 0.0, 0.0
+    out = pow2_fn([a,b])
+    self.assertTrue(np.array_equal(out[0].numpy(),target_a) and np.array_equal(out[1].numpy(),target_b))
+
+  def test_forward_zeros(self):
+    a, b = np.zeros([2,3,4]), np.zeros([2,3,4])
+    target_a, target_b = np.zeros([2,3,4]), np.zeros([2,3,4])
+    out = pow2_fn([a,b])
+    self.assertTrue(np.array_equal(out[0].numpy(),target_a) and np.array_equal(out[1].numpy(),target_b))
+
+  def test_forward_ones(self):
+    a, b = np.ones([2,3,4]), np.ones([2,3,4])
+    target_a, target_b = np.zeros([2,3,4]), 2*np.ones([2,3,4])
+    out = pow2_fn([a,b])
+    self.assertTrue(np.array_equal(out[0].numpy(),target_a) and np.array_equal(out[1].numpy(),target_b))
+
+  def test_backward_zeros(self):
+    a, b = np.zeros([2,3,4]), np.zeros([2,3,4])
+    target_a, target_b = np.zeros([2,3,4]), np.zeros([2,3,4])
+    
+    ## Manual gradients
+    target_da, target_db = pow2_fn_grad([a,b])
+
+    ## TF computed gradient
+    dy_da, dy_db = get_tf_grad([a,b], pow2_fn)
+
+    self.assertTrue(np.array_equal(dy_da, target_da) and np.array_equal(dy_db ,target_db))
+    self.assertTrue(np.array_equal(dy_da, target_a) and np.array_equal(dy_db ,target_b))
+
+  def test_backward_ones(self):
+    a, b = np.ones([2,3,4]), np.ones([2,3,4])
+    target_a, target_b = 4*np.ones([2,3,4]), np.zeros([2,3,4])
+    ## Manual gradients
+    target_da, target_db = pow2_fn_grad([a,b])
+
+    ## TF computed gradient
+    dy_da, dy_db = get_tf_grad([a,b], pow2_fn)
+
+    self.assertTrue(np.array_equal(dy_da, target_da) and np.array_equal(dy_db ,target_db))
+    self.assertTrue(np.array_equal(dy_da, target_a) and np.array_equal(dy_db ,target_b))
 
 """   
 class TestActivationPow2(unittest.TestCase):
