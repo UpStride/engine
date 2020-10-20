@@ -4,11 +4,11 @@ from tensorflow.python.keras.utils import tf_utils
 from tensorflow.python.keras import activations
 from tensorflow.keras.layers import Layer
 from tensorflow.keras import initializers
-from .... import generic_layers
-from ....generic_layers import *
+#from .... import generic_layers
+#from ....generic_layers import *
 from tensorflow.python.keras import backend
 
-from tensorflow.math import sin, cos, sinh, cosh, power, multiply, scalar_mul
+from tensorflow.math import sin, cos, sinh, cosh, pow, multiply, scalar_mul
 #from numpy import sin, cos, sinh, cosh, power, multiply
 
 
