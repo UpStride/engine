@@ -56,8 +56,8 @@ from tensorflow.math import sin, cos, sinh, cosh, power, multiply, scalar_mul
     return dict(list(base_config.items()) + list(config.items()))'''
 
 
-def cos_fn(x):
-  a, b = x[0], x[1]
+def cos_fn(z):
+  a, b = z[0], z[1]
 
   Re_F = multiply(cos(a),cosh(b))
   Re_F += a
@@ -65,51 +65,38 @@ def cos_fn(x):
   Im_F = multiply(-sin(a),sinh(b))
   Im_F += b
 
-  y = [Re_F, Im_F]
+  return [Re_F, Im_F]
 
-@tf.custom_gradient
-def cos_fn_with_grad(x):
-  y = cos_fn(x)
+def cos_fn_grad(z):
+  """
+  Backward pass (gradient) of the activation function: F(z)=cos(z)+1, with z=a+ib
+  """
 
-  def grad(dy):
-      """
-      Backward pass (gradient) of the activation function: F(z)=cos(z)+1, with z=a+ib
-      """
+  a, b = z[0], z[1]
+  gradF_a = -sin(a)*cosh(b)+1-cos(a)*sinh(b)
+  gradF_b = cos(a)*sinh(b)-sin(a)*cosh(b)+1
 
-      a, b = dy[0], dy[1]
-      gradF_a = -sin(a)*cosh(b)+1-cos(a)*sinh(b)
-      gradF_b = cos(a)*sinh(b)-sin(a)*cosh(b)+1
-
-      return [gradF_a, gradF_b]
-
-  return y, grad
+  return [gradF_a, gradF_b]
 
 
 def pow2_fn(x):
-  a, b = input[0], input[1]
+  a, b = x[0], x[1]
 
   Re_F = pow(a,2)-pow(b,2)
   Im_F = scalar_mul(2,multiply(a,b))
   
   return [Re_F, Im_F]
-
-@tf.custom_gradient
-def pow2_fn_with_grad(x):
-  """"""
-  y = pow2_fn(x)
   
-  def grad(dy):
-    """
-    Backward pass (gradient) of the activation function: F(z)=z^2, with z=a+ib
-    """
+def pow2_fn_grad(z):
+  """
+  Backward pass (gradient) of the activation function: F(z)=z^2, with z=a+ib
+  """
 
-    a, b = z[0], z[1]
-    gradF_a = 2*a+2*b
-    gradF_b = 2*a-2*b
+  a, b = z[0], z[1]
+  gradF_a = 2*a+2*b
+  gradF_b = 2*a-2*b
 
-    return [gradF_a, gradF_b]
-
-  return y, grad
+  return [gradF_a, gradF_b]
 
 
 class ActivationCos(Layer):
@@ -122,26 +109,26 @@ class ActivationCos(Layer):
     super(ActivationCos, self).__init__()
     self.precomp_grad = precomp_grad
 
-  def build(self):
-    pass
+  #def build(self):
+  #  pass
 
   def call(self, input):
     if self.precomp_grad:
-      cos_fn_with_grad(input)
+      return cos_fn_with_grad(input)
     else:
-      cos_fn(input)
+      return cos_fn(input)
 
 
 ##TODO: add the learnable parameter and initialize it properly in TF
 
-def ActivationPow2(Layer):
+class ActivationPow2(Layer):
   """
   Activation function for complex numbers z=a+ib
   Forward pass of the activation function: F(z)=z^2
   We can rewrite F(z) as F(a+ib)=[a^2-b^2]+i[2ab]
   """
 
-  def __init__(self, alpha=1.0, trainable=Falsem , precomp_grad=False, **kargs):
+  def __init__(self, alpha=1.0, trainable=False, precomp_grad=False, **kargs):
     super(ActivationPow2, self).__init__(**kargs)
     self.alpha = alpha
     self.trainable = trainable
@@ -158,6 +145,6 @@ def ActivationPow2(Layer):
 
   def call(self, input):
     if self.precomp_grad:
-      pow2_fn_with_grad(input)
+      return pow2_fn_with_grad(input)
     else:
-      pow2_fn(input)
+      return pow2_fn(input)
