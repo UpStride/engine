@@ -9,6 +9,7 @@ from .convolutional import Conv2D, DepthwiseConv2D
 from .dense import Dense
 from tensorflow.python.keras import backend
 from tensorflow.python.keras.utils import conv_utils
+import numpy as np
 
 generic_layers.upstride_type = 2
 generic_layers.blade_indexes = ["", "12", "23", "13"]
@@ -90,20 +91,63 @@ class TF2Upstride(Layer):
       return [x]
 
 
+def determine_norm_order(norm_strategy):
+  """
+    split the norm order from `norm_strategy` string. `norm_strategy` should be like: norm_1, norm_2, norm_inf etc.
+  """
+  norm_order = norm_strategy.split('_')[-1]
+  if norm_order =='inf':
+    return np.inf
+  else:
+    try:
+      norm_order = float(norm_order)
+      if norm_order > 0:
+        return  norm_order
+      else:
+        raise ValueError
+    except ValueError:
+        raise ValueError(f"norm order must be inf or real positive number (>0), but  given{ norm_order}")
+  
+
 class Upstride2TF(Layer):
   """convert multivector back to real values.
   """
 
   def __init__(self, strategy='default'):
     self.concat = False
-    if strategy == "concat":
+    self.max_pool = False
+    self.avg_pool = False
+    self.norm_pool = False
+    self.take_first = False
+    self.norm_order = None
+
+    if strategy == "take_first" or strategy=='default':
+      self.take_first = True
+    elif strategy == "concat":
       self.concat = True
+    elif strategy == "max_pool":
+      self.max_pool = True
+    elif strategy == "avg_pool":
+      self.avg_pool = True
+    elif strategy.startswith("norm"):
+      self.norm_order = determine_norm_order(strategy)
+    else:
+      raise ValueError(f"unknown UP2TF strategy: {strategy}")
 
   def __call__(self, x):
-    if self.concat:
+    if self.take_first:
+      return x[0]
+    elif self.concat:
       return tf.concat(x, -1)
     else:
-      return x[0]
+      axis = -1
+      stacked_tensors = tf.stack(x, axis=axis)
+      if self.max_pool:
+        return tf.math.reduce_max(stacked_tensors,  axis=axis)
+      elif self.avg_pool:
+        return tf.math.reduce_mean(stacked_tensors,  axis=axis)
+      elif self.norm_order:
+        return tf.norm(stacked_tensors, axis=axis, ord=self.norm_order)
 
 
 class MaxNormPooling2D(Layer):
