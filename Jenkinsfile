@@ -6,15 +6,15 @@ import jenkins.model.Jenkins
 pipeline {
     agent {
         label 'azure-gpu'
-        //label 'azure-cpu'
     }
     environment {
-        SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
+        SLACK_WEBHOOK = 'https://hooks.slack.com/services/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'
         REGISTRY_PROD = 'registryupstrideprod.azurecr.io'
         REGISTRY_DEV = 'registryupstridedev.azurecr.io'
         REPO = 'upstride'
-        BUILD_TAG = "upstride-python"
-        BUILD_VERSION = "1.0"
+        GIT_REPO = 'upstride_python'
+        BUILD_TAG = "py"
+        BUILD_VERSION = "1.0.0"
     }
     stages {
         stage('setup') {
@@ -22,22 +22,28 @@ pipeline {
                 script {
                     header()
                     info("Starting the pipeline")
-                    //env.BUILD_VERSION = readFile("version")
+                    env.BUILD_VERSION = readFile("version").trim()
                     env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.BUILD_PROD = "${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.DOCKER_AGENT = "${REGISTRY_DEV}/ops:azure-cloud"
                     setLogger()
                 }
-
             }
         }
          stage('build docker image') {
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
-                        shell("""docker build . -f dockerfile -t $BUILD_DEV """)
-                        info('built successful')
+                        sh("""docker build . -f dockerfile -t $BUILD_DEV """)
                     }
+                }
+            }
+            post {
+                success {
+                    info('built successful')
+                }
+                failure {
+                    error("stage <build docker> failed")
                 }
             }
         }
@@ -48,37 +54,72 @@ pipeline {
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
-                        shell("""docker build . -f dockerfile -t $BUILD_DEV """)
-                        info('built successful')
                         docker.image(env.BUILD_DEV).inside("--gpus all"){
                             tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
                             for (int i = 0; i < tests.size(); i++) {
-                                shell("""python3 ${tests[i]}""")
-                        }
-                        info('tests cleared')
+                                sh("""python3 ${tests[i]}""")
+                            }
                         }
                     }
+                }
+            }
+            post {
+                success {
+                    info('tests cleared')
+                }
+                failure {
+                    error("stage <smoke tests> failed")
                 }
             }
         }
         stage('promote image to dev') {
+            when { not { branch 'master' } }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
-                        shell("""docker push $BUILD_DEV """)
-                        info("image promoted to dev \n- image: $BUILD_DEV")
+                        sh("""docker push $BUILD_DEV """)
                     }
                 }
             }
-        }
-        stage('exit') {
-            steps {
-                script {
-                    info("logs :${BUILD_URL}console")
-                    info("pipeline SUCCESS")
-                    slack()
+            post {
+                success {
+                    info("image promoted to dev \n- image: $BUILD_PROD")
+                }
+                failure {
+                    error("stage <promote image to dev> failed")
                 }
             }
+        }
+        stage('promote image to staging') {
+            when {  branch 'master'  }
+            steps {
+                script {
+                    docker.withRegistry("https://${REGISTRY_PROD}",'registry-prod'){
+                        sh("""docker tag $BUILD_DEV $BUILD_PROD """)
+                        sh("""docker push $BUILD_PROD """)
+                    }
+                }
+            }
+            post {
+                success {
+                    info("image promoted to staging \n- image: $BUILD_PROD")
+                }
+                failure {
+                    error("stage <promote image to staging> failed")
+                }
+            }
+        }
+    }
+    post {
+        success {
+            info("pipeline **SUCCESS**")
+        }
+        failure {
+            error("pipeline **FAILURE**")
+        }
+        always {
+            info("logs :${BUILD_URL}consoleText")
+            slack()
         }
     }
 }
@@ -113,7 +154,7 @@ def publish(String id, String status, String infos){
 }
 
 def header(){
-    env.SLACK_HEADER = '[INFO] \n- push on branch <'+env.GIT_BRANCH+'>\n'+'- author <'+env.GIT_COMMITTER_NAME+'>\n'+'- email <'+env.GIT_COMMITTER_EMAIL+'>'
+    env.SLACK_HEADER = "[META]\n-repo <"+env.GIT_REPO+">\n- push on branch <"+env.GIT_BRANCH+">\n- author <"+env.GIT_COMMITTER_NAME+">"
     env.SLACK_MESSAGE = ''
 }
 
@@ -141,27 +182,5 @@ def readLogs(){
     catch(e){
         def logs = "-- no logs --"
         return logs
-    }
-}
-
-def shell(String command){
-    try {
-/*
-        def output = sh(returnStatus: true, script: "${command} >${LOGFILE} 2>&1")
-        if (output != 0){throw new Exception("Pipeline failed\n- command:: "+command)}
-        else { return output }
-*/
-        return sh("${command}")
-    }
-    catch (error){
-        error(error.getMessage())
-        error("- logs: ${BUILD_URL}console")
-        error('Pipeline FAILED')
-        slack()
-        sh 'echo *****'
-        sh 'echo ERROR'
-        sh 'echo *****'
-        //readLogs()
-        throw error
     }
 }
