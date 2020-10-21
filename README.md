@@ -6,10 +6,8 @@ date: \today
 
 \newpage
 # Introduction
-This project implements Geometric Algebra (GA) in TensorFlow using Keras high-level API. It is compatible with latest release of tf 1 ($>=1.13$) and tf $2$.
-
-This document explains how to implement Geometric Algebra using TensorFlow. Its goal is to provide all the mathematical explanations and algorithm details to understand 
-how the code is written. 
+This project implements Geometric Algebra (GA) in TensorFlow using Keras high-level API. It is compatible with the latest release of tf 1 ($>=1.13$) and tf $2$.
+The goal of this document is to provide all the mathematical explanations and algorithm details to understand the code.
 
 # Linear layer
 
@@ -21,18 +19,18 @@ This section describes how to implement *any* linear layer in TensorFlow, for in
   - DepthwiseConv2D
   - DepthwiseConv2DTranspose
 
-The idea is to implement a very generic version of linear layer, valid for any GA and any linear operation. Then all the specific implementations will use this generic implementation.
+The idea is to implement a very generic version of a linear layer, valid for any GA and any linear operation. Then all the specific implementations will use this generic implementation.
 
-But first, let's dig deeper into the mathematics to understand how linear layer works.
+But first, let's dig deeper into the mathematics to understand how this generic linear layer works.
 
 ## On $\mathbb{R}$
 For now, lets take a look at linear layers on $\mathbb{R}$. Let:
 
-  - $a$ the input vector of shape $n$
-  - $b$ the output vector of shape $m$
-  - $M$ the linear transformation with $n$ row and $m$ column
+  - $x$ the row input vector of shape $n$
+  - $y$ the row output vector of shape $m$
+  - $W$ the linear transformation with $n$ row and $m$ column
   
-Then computing this layer means to compute the product : $b = aM$, and in term of Deep Learning, this leads to this simple topology:
+Then computing this layer means to compute the product : $y = aW$, and in term of Deep Learning, this leads to this simple topology:
 
 ![real multiplication](./doc/model_tf.png "real multiplication"){width=40%}
 
@@ -40,53 +38,54 @@ Then computing this layer means to compute the product : $b = aM$, and in term o
 ## On $\mathbb{C}$
 Now, if we work on complex number, then 
 
-  - $a = a_R + ia_C$
-  - $b = b_R + ib_C$
-  - $M = M_R + iM_C$
+  - $x = x_R + ix_C$
+  - $y = y_R + iy_C$
+  - $W = W_R + iW_C$
   
-Then computing this layer means to compute the product : $b = aM$, or to compute the two products:
+Then computing this layer means to compute the product : $y = aW$, or to compute the two products:
 
-  - $b_R = a_RM_R - a_CM_C$
-  - $b_C = a_CM_R + a_RM_C$
+  - $y_R = x_RW_R - x_CW_C$
+  - $y_C = x_CW_R + x_RW_C$
 
 and in term of Deep learning, this leads to this topology:
 
-![complex multiplication](./doc/complex_mult.svg "complex multiplication"){width=100%}
+![complex multiplication](./doc/complex_mult.png "complex multiplication"){width=100%}
 
 ## On any geometical algebra
-Now, lets work with generic geometrical algebra, defined by a set of blades $(e_i)_{i\in[0, n]}$ that can be scalars, vectors, bi-vectors or multi-vectors. We can then write our 3 elements $a$, $b$
-and $M$ as:
+Now, lets work with generic geometrical algebra, defined by a set of blades $\{\beta_i\}_{i\in[0, n]}$. A blade is a generalization of the concept of scalars and vectors to include multi-vectors. Specifically, a k-blade is any object that can be expressed as the exterior product (or wedge product) of k vectors, and is of grade k. For example, the complex number $x = x_R + ix_C$ can be expressed in terms of blades as $x = x_R\beta_0 + x_C\beta_1$. 
 
-  - $a = \sum_{i=0}^{n}a_ie_i$
-  - $b = \sum_{i=0}^{n}b_ie_i$
-  - $M = \sum_{i=0}^{n}M_ie_i$
+In general, we can then write our 3 elements $x$, $y$ and $W$ as:
+
+  - $x = \sum_{i=0}^{n}x_i\beta_i$
+  - $y = \sum_{i=0}^{n}y_i\beta_i$
+  - $W = \sum_{i=0}^{n}W_i\beta_i$
 
 Then
 
-$$b = \sum_{i=0}^{n}\sum_{j=0}^{n}a_jM_ie_ie_j$$
+$$y = \sum_{i=0}^{n}\sum_{j=0}^{n}x_iW_j\beta_i\beta_j$$
 
-the product $e_ie_j$ is defined by the structure of the GA, but in orthogonal cases, it gives : $e_ie_j = se_k$ with $k\in[0,n]$ and $s\in\{-1, 0, 1\}$
+the product $\beta_i\beta_j$ is defined by the structure of the GA and can be expressed as: $\beta_i\beta_j = s\beta_k$ with $k\in[0,n]$ and $s\in\{-1, 0, 1\}$. 
+Note that the set of blades $\{\beta_i\}_{i\in[0, n]}$ does not correspond necessarily to an orthonormal set $\{e_i\}_{i\in[0, n]}$. For example, given the orthonormal set $\{e_1, e_2, e_3\}$ in the space $\mathbb{R}^3$, a valid basis for a GA on the same space is $\{1, e_1, e_2, e_3\, e_1 \wedge e_2, e_2 \wedge e_3, e_3 \wedge e_1, e_1 \wedge e_2 \wedge e_3 \}$. We can express this basis in terms of blades as $\{\beta_i\}_{i\in[0, 7]}$, where $\beta_0$ is a 0-blade, $\beta_1, \beta_2, \beta_3$ are 1-blades, $\beta_4, \beta_5, \beta_6$ are 2-blades and $\beta_7$ is a 3-blade.
 
-This formula allows us to implement all linear layer for all geometrical algebra at the same time.
+
 
 ## Python implementation
 
-No more mathematics. Now we can code!
+No more mathematics, let's code!
 
-so first, we need this function that compute the product of two blades: $e_ie_j = se_k$. It means we need to have a function that take $(i, j)$ as input and returns $(k, s)$:
+First, we need the function that computes the product of two blades: $\beta_i\beta_j = s\beta_k$, i.e. a function that take $(i, j)$ as input and returns $(k, s)$:
 
 ```python
 # in generic_layers.py
 def unit_multiplier(i: int, j: int) -> Tuple[int, int]:
-    """given e_i and e_j, return (k,s) such as : e_i * e_j = s * e_k
+    """given \beta_i and \beta_j, return (k,s) such as : 
+       \beta_i * \beta_j = s * \beta_k
     """
 ```
 
-Now we need to implement the generic multiplication. In the formula, we saw that inside the double sum, it performs an operation on $\mathbb{R}$, so
-we can use the TensorFlow operation to implement our own. And even better, we don't need to know which TensorFlow operation will be used, so we can implement the formula once and then call it by specifying the TensorFlow operation to use.
-
-So we defined a class `GenericLinear` that will implement this formula. We will be able to inherit from this class to easily define all our linear layers in a very simple way.
-For instance, the definition of a Dense layer take only 3 lines of code: 
+Now, we need to implement the generic multiplication. To compute $x_jW_i$, we can use directly the native Tensorflow operations. Even better: we do not need to know a priori which linear TensorFlow operation will be used and we can pass this information as an argument. 
+So, we define a class `GenericLinear` that implements this formula. We can inherit from this class to define all our linear layers in a very simple way.
+For instance, the definition of a Dense layer take only three lines of code: 
 
 ```python
 class Dense(GenericLinear):
@@ -94,34 +93,31 @@ class Dense(GenericLinear):
         super().__init__(tf.keras.layers.Dense, *argv, **kwargs)
 ```
 
-the `__init__` method of the Dense layer takes exactly the same arguments as the Keras Dense layer, but 
-the `__init__` method of the `GenericLinear` class take one more argument: the Keras class to call (`tf.keras.layers.Dense` here)
+the `__init__` method of the Dense layer takes exactly the same arguments as the Keras Dense layer, but the `__init__` method of the `GenericLinear` class take one more argument: the Keras class to call (`tf.keras.layers.Dense` here)
 
-the `GenericLinear` class initialize the Keras layer once for every dimension of our GA, and then, when called, 2 `for` loops compute all the products between
-all the blade to compute the output.
+The `GenericLinear` class initializes the Keras layer once for every dimension of our GA, and computes all the blade products (and the output) using two `for` loops.
 
 ### The bias problem
 
-In deep learning, we often add a bias term after a linear layer. In Keras, this bias is handle by the linear layer, which is a problem here.
+In deep learning, we often add a bias term after a linear operation. In Keras, this bias is handle by the linear layer itself, which is a problem here.
 
-Indeed, let's have a look at $\mathbb{C}$. If the bias is in the linear layer then the operation we do are:
+Indeed, let's have a look at $\mathbb{C}$. If the bias is in the TensorFlow layer:
 
 
-$$o_R = a_R M_R  - a_C M_C + b_R - b_C$$
-$$o_C = a_C M_R  + a_R M_C + b_R + b_C$$
+$$y_R = x_R W_R  - x_C W_C + b_R - b_C$$
+$$y_C = x_C W_R  + x_R W_C + b_R + b_C$$
 
-with $(o_R, o_C)$ the output, $(M_R, M_C)$ the linear operation, $(a_R, a_C)$ the input and $(b_R, b_C)$ the bias.
+with $(y_R, y_C)$ the output, $(W_R, W_C)$ the linear operation, $(x_R, x_C)$ the input and $(b_R, b_C)$ the bias.
 
-From the mathematical formula, we see that we have 2 issues: 
-
-- the operations are not optimized (we perform 2 more operations than needed)
+This formulation has two issues:
+- the operations are not optimized (we perform two more operations than needed)
 - if we only work with one component of the multivector ($o_R$, this happen at the end of the neural network) then we have two variables ($b_R$ and $b_C$) and one constraint. This kind of situation can hurt the performances.
 
-One solution to prevent this to detect when the user ask for a bias and handle it by hand. The algorithm will be :
+One solution to prevent this is to detect when the user asks for a bias and handle it by hand. The algorithm will be :
 
-- the user send the parameters to create a linear layer with a bias
+- the user sends the parameters to create a linear layer with a bias
 - we save the bias parameters and do not forward these to Keras
-- Keras create the linear layer without the bias
+- Keras creates the linear layer without the bias
 - we perform the GA multiplication
 - we add at the end the bias with the user's parameters
 
@@ -155,7 +151,7 @@ if add_bias:
 
 # Non-linear layers
 
-non linear layers are for instance :
+Examples of non-linear layers are, for instance :
 
   - MaxPooling2D
   - GlobalAveragePooling2D
@@ -167,8 +163,7 @@ non linear layers are for instance :
   - Add
   - Concatenate
 
-The idea here is again to define a class `GenericNonLinear` that we will be able to inherit to define most of our non-linear layer
-the same way we did for  our linear layer. For instance, we want to be able to define an activation function in 3 lines of code:
+The idea here is again to define a class `GenericNonLinear` that all the non-linear layer inherit. For instance, we want to be able to define an activation function in three lines of code:
 
 ```python
 class Activation(GenericNonLinear):
@@ -178,55 +173,50 @@ class Activation(GenericNonLinear):
 
 For most of the non-linear layer, the equation is simply:
 
-$$o = \sum_{i=0}^{n}f_i(a_i)e_i$$
+$$y = \sum_{i=0}^{n}f_i(x_i)\beta_i$$
 
 with
 
-  - $o$ the output
-  - $a$ the input
-  - $e_i$ the blades
+  - $y$ the output
+  - $x$ the input
+  - $\beta_i$ the blades
   - $f_i$ the non-linear function on $\mathbb{R}$ (for instance $f(x) = max(0, x)$)
 
-the `GenericNonLinear` class initialize the Keras layer once for every dimension of our GA, and when called, compute the output with a simple loop.
+The `GenericNonLinear` class initializes the Keras layer once for every dimension of our GA, and when called, computes the output with a simple loop.
 
-## Non-linear with many inputs
+## Non-linear layers with multiple inputs
 
-most of the non-linear layers have only one input, but some can have several (Add and Concatenate).
-The implementation is the same, we just need to reorder the inputs before computation. 
-Indeed, these Keras layers takes a list of Tensor as input $[T_1, T_2]$.
+Most of the non-linear layers have only one input, but some can have several (Add and Concatenate).
+The implementation is the same, we just need to reorder the inputs before the computation. 
+Indeed, these Keras layers take a list of Tensor as input $[T_1, T_2]$.
 
-When working on GA, or input is a list of list of Tensor. The length of the second list 
-is the number of component in the GA, so if working with quaternion, the input will be
+When working on GA, our input is a list of list of Tensor. The length of the second list 
+is the number of components in the GA. For example, when working with quaternion, the input will be
 $[[T_{11},T_{12},T_{13},T_{14}], [T_{21},T_{22},T_{23},T_{24}]]$
 
-If we reorder the list this way: $[[T_{11},T_{21}], [T_{12},T_{22}], [T_{13},T_{23}], [T_{14},T_{24}]]$
-, the rest of the implementation stays valid
+If we reorder the list this way: $[[T_{11},T_{21}], [T_{12},T_{22}], [T_{13},T_{23}], [T_{14},T_{24}]]$, the rest of the implementation stays valid.
 
 ## Exception
 
 ### Dropout
-When performing dropout, there are several possible strategies: we can cancel weights on the several components of the multivector in a non-correlated way
-or a correlated way. The current implementation can be both:
+When performing dropout, there are several possible strategies: we can cancel weights on the several components of the multivector in a non-correlated or in a correlated way. The current implementation allows for both options:
 
   - the non-correlated way is the default strategy
-  - correlated way can be achieved if the user define a random seed when creating the layer. All the Keras layers will have the same seed and so the
-  same behavior,as they are called the same number of time.
+  - the correlated way can be achieved if the user defines a random seed when creating the layer. All the Keras layers will have the same seed and therefore the same behavior, as they are called the same number of times.
 
 ### BatchNormalization
 
-The current implementation works on the several component of the multivector in a non-correlated way. Maybe in the future we could do something clever ?
+The current implementation works on the several components of the multivector in a non-correlated way. Maybe in the future we could do something clever ?
 
 
 # Compatibility with the C++ engine
 
-the C++ engine uses 2 layers to convert data between TensorFlow and Upstride : `TF2Upstride` and `Upstride2TF`
-these 2 operations are not useful with the python version but kept for compatibility.
+the C++ engine uses two layers to convert data between TensorFlow and Upstride : `TF2Upstride` and `Upstride2TF`. These two operations are not useful with the python version, but kept for compatibility.
 
-Also the C++ engine doesn't define all the layers : some of the non linear for instance don't
-need to be implemented. But we need them for the python version.
+Also, the C++ engine does not define all the layers. For instance, some of the non-linear layers are not implemented.
 
 One fix for now is to link the upstride version with the Keras version at runtime, so it is transparent to the user.
-This is implemented in the `imagenet_baseline` repository
+This is implemented in the `imagenet_baseline` repository, as:
 
 ```python
 import upstride.type3.tf.keras.layers as up_layers
@@ -238,10 +228,10 @@ for l in layers_to_register:
         setattr(up_layers, l, getattr(tf.keras.layers, l))
 ```
 
-so if a layer is not implemented in the C++ engine, this runtime patch will allow the user to call the Keras version without having to take care of this.
+So, if a layer is not implemented in the C++ engine, this runtime patch will call the Keras version without compromising the user experience.
 
 # Future improvement
-This are some idea of things we could do in the future that wasn't done in v0.1
+These are some ideas that were not implemented in v0.1:
 
   - better gradient computation
   - optimize specific implementation (for instance quaternion)
@@ -251,10 +241,10 @@ This are some idea of things we could do in the future that wasn't done in v0.1
 # Improvements from v0.1.1 to v0.1.2
 
 ## Generic Multiplication
-To improve the backpropagation efficiency, a solution is to merge the several gradients before it computation.
-TensorFlow provide a way to do it using the TimeDistribute Layer. The idea is to merge the several calls to an operation into one to enable some optimizations. Figure 3 shows the naive version of linear layer
+To improve the backpropagation efficiency, a solution is to merge the several gradients before the computation.
+TensorFlow provide a way to do this using the TimeDistribute Layer. The idea is to merge the several calls to an operation into one to enable some optimizations. Figure 3 shows the naive version of linear layer
 
-![complex multiplication](./doc/complex_mult.svg "complex multiplication"){width=100%}
+![complex multiplication](./doc/complex_mult.png "complex multiplication"){width=100%}
 
 And figure 4 shows the optimized version
 
@@ -262,55 +252,56 @@ And figure 4 shows the optimized version
 
 ## Quaternion multiplication
 
-Given 2 quaternions $(a_1 + a_2i + a_3j + a_4k)$ and $(b_1 + b_2i + b_3j + b_4k)$, the naive way to compute the product $c$ is :
+Given two quaternions $u= u_1 +  u_2i +  u_3j +  u_4k$ and $v= v_1 +  v_2i +  v_3j +  v_4k$, the naive way to compute the product $c$ is :
 
 $$
 \begin{cases} 
-  c_1 = & a_1b_1 - a_2b_2 - a_3b_3 - a_4b_4 \\ 
-  c_2 = & a_1b_2 + a_2b_1 + a_3b_4 - a_4b_3 \\ 
-  c_3 = & a_1b_3 + a_3b_1 + a_4b_2 - a_2b_4 \\ 
-  c_4 = & a_1b_4 + a_4b_1 + a_2b_3 - a_3b_2 \\ 
+  c_1 = &  u_1 v_1 -  u_2 v_2 -  u_3 v_3 -  u_4 v_4 \\ 
+  c_2 = &  u_1 v_2 +  u_2 v_1 +  u_3 v_4 -  u_4 v_3 \\ 
+  c_3 = &  u_1 v_3 +  u_3 v_1 +  u_4 v_2 -  u_2 v_4 \\ 
+  c_4 = &  u_1 v_4 +  u_4 v_1 +  u_2 v_3 -  u_3 v_2 \\ 
 \end{cases}
 $$
 
-So 16 multiplications and 12 additions.
+This computation includes 16 multiplications and 12 additions. 
+Due to the isomorphism between $\mathbb{M} \circ \mathbb{G}$ and $\mathbb{G} \circ \mathbb{M}$, this corresponds to 16 calls to the TensorFlow linear layer of choice.
 
-In term of tensorflow operations, because of the isomorphism between $\mathbb{M} \circ \mathbb{G}$ and $\mathbb{G} \circ \mathbb{M}$, it means for implementing a linear layer on $\mathbb{H}$, it takes 16 calls to the linear layer on $\mathbb{R}$.
+However, there are two more efficient ways of implementing the quaternion multiplication.
 
-However, a quaternion multiplication can also be implemented this way: 
+### Method 1
 
-$$\begin{pmatrix} n_0 & n_1 &n_2 &n_3 \end{pmatrix}= \begin{pmatrix} a_0 & a_1 &a_2 &a_3 \end{pmatrix}A $$ 
-$$\begin{pmatrix} p_0 & p_1 &p_2 &p_3 \end{pmatrix}= \begin{pmatrix} b_0 & b_1 &b_2 &b_3 \end{pmatrix}A $$ 
-
-$$\begin{pmatrix}−c_0 & c_1 & c_2 & c_3\end{pmatrix}=0.25\begin{pmatrix}n_0p_0 & n_1p_1 & n_2p_2 & n_3p_3\end{pmatrix}A−2\begin{pmatrix}a_0b_0 & a_3b_2 & a_2b_1 & a_1b_3\end{pmatrix}$$
+$$\begin{pmatrix}−c_0 & c_1 & c_2 & c_3\end{pmatrix}=0.25\begin{pmatrix}n_0p_0 & n_1p_1 & n_2p_2 & n_3p_3\end{pmatrix}A−2\begin{pmatrix} u_0 v_0 &  u_3 v_2 &  u_1 v_3 &  u_2 v_1\end{pmatrix}$$
 
 with 
 
 $$ A = \begin{pmatrix} 1 & 1& 1& 1 \\ 1 & -1 &1&-1\\1&1&-1&-1\\1&-1&-1&1 \end{pmatrix}$$
+$$\begin{pmatrix} n_0 & n_1 &n_2 &n_3 \end{pmatrix}= \begin{pmatrix}  u_0 &  u_1 & u_2 & u_3 \end{pmatrix}A $$ 
+$$\begin{pmatrix} p_0 & p_1 &p_2 &p_3 \end{pmatrix}= \begin{pmatrix}  v_0 &  v_1 & v_2 & v_3 \end{pmatrix}A $$ 
 
-We will call this method 1. 40 additions and 8 multiplications are needed, so for implementing a linear layer, 8 calls to the linear layer on $\mathbb{R}$ are needed, which is way better.
+This formulation requires 40 additions and 8 multiplications (the terms $n_ip_i$ and $u_iv_j$). This corresponds to 8 calls to the TensorFlow linear layer of choice.
+For an intuition on the derivation of this formulation, please check this file: https://drive.google.com/file/d/1p8jlvhQqytYeqiMxPlKk6PKJtWeJf-9S/view?usp=sharing
 
-Another method is to compute :
+### Method 2
 
 $$
 \begin{cases} 
-  A_1 = & (a_4 + a_2)(b_2 + b_3) \\
-  A_3 = & (a_1 - a_3)(b_1 + b_4) \\
-  A_4 = & (a_1 + a_3)(b_1 - b_4) \\
+  A_1 = & ( u_4 +  u_2)( v_2 +  v_3) \\
+  A_3 = & ( u_1 -  u_3)( v_1 +  v_4) \\
+  A_4 = & ( u_1 +  u_3)( v_1 -  v_4) \\
   A_2 = & A_1 + A_3 + A_4 \\
-  A_5 = & 0.5(A_2 + (a_4-a_2)(b_2-b_3)) \\
-  c_1 = & A_5 - A_1 + (a_4 - a_3)(b_3 - b_4) \\
-  c_2 = & A_5 - A_2 + (a_2 + a_1)(b_2 + b_1) \\
-  c_3 = & A_5 - A_3 + (a_1 - a_2)(b_3 + b_4) \\
-  c_4 = & A_5 - A_4 + (a_4 + a_3)(b_1 - b_2) \\
+  A_5 = & 0.5(A_2 + ( u_4- u_2)( v_2- v_3)) \\
+  c_1 = & A_5 - A_1 + ( u_4 -  u_3)( v_3 -  v_4) \\
+  c_2 = & A_5 - A_2 + ( u_2 +  u_1)( v_2 +  v_1) \\
+  c_3 = & A_5 - A_3 + ( u_1 -  u_2)( v_3 +  v_4) \\
+  c_4 = & A_5 - A_4 + ( u_4 +  u_3)( v_1 -  v_2) \\
 \end{cases}
 $$
 
-This method takes also 8 calls to the linear layer on $\mathbb{R}$ to implement the layer on $\mathbb{H}$.
+Analogously, this method takes 8 calls to the TensorFlow linear layer corresponding to the multiplications of the form $( u_i -  u_j)( v_k -  v_l)$.
 
-After implementing these methods, we found that they work very well when working with float 32, but not in float 16 for alexnet models.
+### Comparison implementations
 
-After checking the errors of the differents layers when working in float 16, we found that the second implementation is more stable then the first one.
+While both Method 1 and Method 2 work well with float32, Method 2 is more stable with float16.
 
 This can be checked using the following code:
 
@@ -334,13 +325,12 @@ for j in range(1, 100):
   print()
 ```
 
-Here we perform 3 convolutions with the 3 ways to multiply the quaternion and we plot the result for different multiplicative values for the kernels
-If seems the second algorithm is more stable than the first one, and more interesting, depending of the value of j, it is sometime better than the
-naive version.
-
-So now, the engine use by default quaternion_mult2 with j=1. Investigating the behavior of $j$ can be an interesting project for the future
+Here we perform three convolutions with the three ways to multiply the quaternion and we plot the result for different multiplicative values for the kernels.
 
 ![error](./doc/error.png "error"){width=60%}
+
+Method 2 appears to be more stable than Method 1 and is therefore used by default in the engine. 
+It is worth noting that $j$ in the code snippet is a scalar that multiplies and divides the kernel values to improve the stability of the computation. Interestingly, depending of the value of $j$, Method 2 can be better than the naive formulation. Investigating the behavior of $j$ can be an interesting project for the future
 
 \newpage
 # Improvements from v0.1.2 to v1.0
@@ -350,7 +340,7 @@ v1.0 is the first well tested version of the python engine, with many speed and 
 The new features are:
 
 - a quaternion version of batch normalization following the idea of https://arxiv.org/pdf/1712.04604.pdf
-- a depthwise implementation using the optimized quaternion multiplication. How there are 3 optimized linear layer : Conv2D, Dense and DepthwiseConv2D
+- a depthwise implementation using the optimized quaternion multiplication. Now there are three optimized linear layer : Conv2D, Dense and DepthwiseConv2D
 - MaxNormPooling2D version for quaternion
 - improved TF2Upstride for quaternion, with several initializations strategies
 - new kernel initialization: `up2_init_he`
@@ -368,45 +358,32 @@ $MaxNormPooling2D(f) = \operatorname*{arg\,max}_{f_i} (||f_i||), i = 1, . . . , 
 Here, $d$ is the number of quaternions, from them one quaternion is chosen.
 
 ## TF2Upstride
-Conversion from TF datatype to UpStride datatype can be done in several ways. In this version of the engine, 
-two of them are added. Following two can be passed as a parameter to TF2Upstride layer:
+Conversion from TF datatype to UpStride datatype can be done in several ways. This version of the engine includes two new ways of doing this.
 
 ### rgbinimg
-To create Quaternion multi-vector, real part is initialized with zeros and thee imaginary parts of 
-$i, j, k$ has been initialized with $r, g, b$ channels of rgb image respectively.
+To create Quaternion multi-vector, the real part is initialized with zeros and thee imaginary parts of $i, j, k$ has been initialized with the $r, g, b$ channels of the input color image.
 
 ### learn_multivector
-Each component of quaternions can be learned using a small real valued network. This learning module taken from 
-this paper (https://arxiv.org/pdf/1712.04604.pdf) which has the following structure of real valued neural network.
+Each component of quaternions can be learned using a small real valued network. This learning module, taken from this paper (https://arxiv.org/pdf/1712.04604.pdf), has the following structure of real valued neural network:
 
 ```
     BN --> ReLU --> Conv --> BN --> ReLU --> Conv
 ```
 
 ## Upstride2TF
-Conversion from UpStride datatype to real datatype is necessary to calculate the loss. This can be done in several ways. 
-In this version we added the `concat` option.
-
-### concat
-It concatenates all the hyper-complex components to make the real (TF) datatype
+Conversion from UpStride datatype to real datatype is necessary to calculate the loss. This can be done in several ways. In this version, we add the `concat` option that concatenates all the hyper-complex components to generate the real TensorFlow datatype.
 
 ## QInitializer
-Proper weight initialization is very important for the convergence of the model. To train a deeper model
-it is essential to make weight initialization in such a way that reduces the risk of exploding or
-vanishing gradient problem. Moreover, a hyper-complex model has interactions between components thus we can exploit that interaction
-during the initialization. This initialization strategy is described in (https://arxiv.org/pdf/1806.04418.pdf).
-`up2_init_he` and `up2_init_glorot` can be passed as parameter to initialize weights similar to the the idea of
-`he` and `glorot` initializations respectively.
+Proper weight initialization is very important for the convergence of the model. To train a deeper model, it is essential to perform weight initialization in such a way that reduces the risk of exploding or vanishing gradient. Moreover, a hyper-complex model has interactions between components thus we can exploit that interaction that should be taken into account during the initialization. This initialization strategy is described in (https://arxiv.org/pdf/1806.04418.pdf). `up2_init_he` and `up2_init_glorot` can be passed as parameter to initialize weights similar to the the idea of `he` and `glorot` initializations respectively.
 
-# TODO in future Version 
+# TODO in future version 
 
 ## TF2Upstride
-- One option could be added where rgb will be in real and other imaginary parts will be learnt from the 
-rgb using real networks
-- For learning the components some complex real networks can be explored
+- One option could be added where rgb will be in real and other imaginary parts will be learnt using real networks
+- Exploring more elaborated network architectures to learn the different components
 
 ## Upstride2TF
-- Norm of hyper-complex components should be explored
+- Exploit the norm of hyper-complex components
 - Different pooling strategy can be explored in the component axis
 
 ## RInitializer for Quaternion

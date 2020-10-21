@@ -119,7 +119,7 @@ def quaternion_mult_cpp(tf_op, inputs, kernels, f=1):
   outputs_p = [tf_op(inputs_p[i], kernels_p[i]) for i in range(8)]
   outputs = custom_ops.upstride_outputs(*outputs_p)
   if f != 1:
-    output = [o * (1/f) for o in output]
+    outputs = [o * (1/f) for o in outputs]
   return outputs
 
 
