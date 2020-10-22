@@ -266,7 +266,7 @@ class TestQuaternionUpstride2TF(unittest.TestCase):
     self.assertEqual(np.mean(input_stack, -1).tolist(), output.numpy().tolist())
 
 
-  def  test_p_norm(self):
+  def test_p_norm(self):
     inputs = [tf.convert_to_tensor([[[[1., 3., 4.]]]]), tf.convert_to_tensor([[[[2., 1., 6.]]]])]
 
     output = QUpstride2TF("norm_1")(inputs)
@@ -285,6 +285,35 @@ class TestQuaternionUpstride2TF(unittest.TestCase):
 
     # check norm-inf
     self.assertEqual(np.linalg.norm(input_stack, ord=np.inf, axis=-1).tolist(), QUpstride2TF("norm_inf")(inputs).numpy().tolist())
+
+  def test_attention(self):
+    inputs = [tf.convert_to_tensor([[1., 2., 3.]]), tf.convert_to_tensor([[1., 2., 3.]])]
+
+    ## Check for normal attention
+    output = QUpstride2TF("attention")(inputs)
+    # check the inputs list and out tensor type
+    self.assertNotEqual(type(inputs), type(output))
+    # check the 1st tensor of inputs list and out tensor type
+    self.assertEqual(type(inputs[0]), type(output))
+    # check values
+    self.assertEqual(inputs[0].numpy().tolist(), output.numpy().tolist())
+
+    ## Check for gated attention
+    gated_output = QUpstride2TF("gated_attention")(inputs)
+    # check the inputs list and out tensor type
+    self.assertNotEqual(type(inputs), type(gated_output))
+    # check the 1st tensor of inputs list and out tensor type
+    self.assertEqual(type(inputs[0]), type(gated_output))
+    # check values
+    self.assertEqual(inputs[0].numpy().tolist(), gated_output.numpy().tolist())
+
+    # check rank of input tensors with rank 1
+    inputs1 = [tf.convert_to_tensor([1., 2., 3.]), tf.convert_to_tensor([1., 2., 3.])]
+    self.assertRaises(TypeError, QUpstride2TF("attention"), inputs1)
+
+    # check rank of input tensors with rank 5
+    inputs2 = [tf.convert_to_tensor([[[[[1., 2., 3.]]]]]), tf.convert_to_tensor([[[[[1., 2., 3.]]]]])]
+    self.assertRaises(TypeError, QUpstride2TF("attention"), inputs2)
 
 if __name__ == "__main__":
   unittest.main()
