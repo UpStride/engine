@@ -55,11 +55,11 @@ from tensorflow.math import sin, cos, sinh, cosh, pow, multiply, scalar_mul
 
 def cos_fn(z):
   a, b = z[0], z[1]
-  Re_F = multiply(cos(a),cosh(b))
-  Re_F += a
-  Im_F = multiply(-sin(a),sinh(b))
-  Im_F += b
-  return [Re_F, Im_F]
+  real = multiply(cos(a),cosh(b))
+  real += a
+  imag = multiply(-sin(a),sinh(b))
+  imag += b
+  return [real, imag]
 
 def cos_fn_grad(z):
   """
@@ -75,12 +75,12 @@ def pow2_fn(x, alpha=1.0):
   a, b = x[0], x[1]
   alpha = np.float(alpha)
 
-  Re_F = pow(a,2) - pow(b,2)
-  Re_F = scalar_mul( alpha, Re_F )
-  Im_F = scalar_mul( 2.0, multiply(a,b) )
-  Im_F = scalar_mul( alpha, Im_F )
+  real = pow(a,2) - pow(b,2)
+  real = scalar_mul( alpha, real )
+  imag = scalar_mul( 2.0, multiply(a,b) )
+  imag = scalar_mul( alpha, imag )
   
-  return [Re_F, Im_F]
+  return [real, imag]
   
 def pow2_fn_grad(z, alpha=1.0):
   """

@@ -3,7 +3,7 @@ import random
 import tensorflow as tf
 import numpy as np
 from math import pi
-from activations import cos_fn, cos_fn_grad, pow2_fn, pow2_fn_grad
+from .activations import cos_fn, cos_fn_grad, pow2_fn, pow2_fn_grad
 
 def get_tf_grad(z, fn, *args):
   a, b = tf.constant(z[0]), tf.constant(z[1])
