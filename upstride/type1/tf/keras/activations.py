@@ -5,12 +5,8 @@ from tensorflow.python.keras.utils import tf_utils
 from tensorflow.python.keras import activations
 from tensorflow.keras.layers import Layer
 from tensorflow.keras import initializers
-#from .... import generic_layers
-#from ....generic_layers import *
 from tensorflow.python.keras import backend as K
-
 from tensorflow.math import sin, cos, sinh, cosh, pow, multiply, scalar_mul
-#from numpy import sin, cos, sinh, cosh, power, multiply
 
 
 '''class Activation(Layer):
@@ -137,40 +133,3 @@ class ActivationPow2(Layer):
 
   def call(self, input):
     return pow2_fn(input, self.alpha_factor)
-
-
-'''
-from keras import backend as K
-
-def swish(x, beta=1.0):
-    return x * K.sigmoid(beta * x
-
-class Swish(Layer):
-
-    def __init__(self, beta=1.0, trainable=False, **kwargs):
-        super(Swish, self).__init__(**kwargs)
-        self.supports_masking = True
-        self.beta = beta
-        self.trainable = trainable
-
-    def build(self, input_shape):
-        self.beta_factor = K.variable(self.beta,
-                                      dtype=K.floatx(),
-                                      name='beta_factor')
-        if self.trainable:
-            self._trainable_weights.append(self.beta_factor)
-
-        super(Swish, self).build(input_shape)
-
-    def call(self, inputs, mask=None):
-        return swish(inputs, self.beta_factor)
-
-    def get_config(self):
-        config = {'beta': self.get_weights()[0] if self.trainable else self.beta,
-                  'trainable': self.trainable}
-        base_config = super(Swish, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
-
-    def compute_output_shape(self, input_shape):
-        return input_shape
-'''

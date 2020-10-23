@@ -113,8 +113,7 @@ class TestActivationPow2(unittest.TestCase):
 
     for _ in range(10):
 
-      #alpha = np.int(random.uniform(0.5,5.0))
-      alpha = 0.5
+      alpha = random.uniform(0.5,5.0)
 
       ## Manual gradients
       target_da, target_db = pow2_fn_grad([a,b], alpha)
