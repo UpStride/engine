@@ -5,12 +5,12 @@ import numpy as np
 from math import pi
 from activations import cos_fn, cos_fn_grad, pow2_fn, pow2_fn_grad
 
-def get_tf_grad(z, fn, **kwargs):
+def get_tf_grad(z, fn, *args):
   a, b = tf.constant(z[0]), tf.constant(z[1])
   with tf.GradientTape(persistent=True) as g:
     g.watch(a)
     g.watch(b)
-    y = fn([a,b],*kwargs)
+    y = fn([a,b],*args)
     dy_da, dy_db = g.gradient(y, a), g.gradient(y, b)
 
   return [dy_da, dy_db]
@@ -113,16 +113,16 @@ class TestActivationPow2(unittest.TestCase):
 
     for _ in range(10):
 
-      alpha = random.uniform(0.5,5.0)
+      #alpha = np.int(random.uniform(0.5,5.0))
+      alpha = 0.5
 
       ## Manual gradients
-      target_da, target_db = pow2_fn_grad([a,b], alpha=alpha)
+      target_da, target_db = pow2_fn_grad([a,b], alpha)
 
       ## TF computed gradient
-      dy_da, dy_db = get_tf_grad([a,b], pow2_fn, alpha=alpha)
+      dy_da, dy_db = get_tf_grad([a,b], pow2_fn, alpha)
 
       self.assertTrue(np.array_equal(dy_da, target_da) and np.array_equal(dy_db ,target_db))
-      self.assertTrue(np.array_equal(dy_da, target_a) and np.array_equal(dy_db ,target_b))
 
 if __name__ == '__main__':
     unittest.main()

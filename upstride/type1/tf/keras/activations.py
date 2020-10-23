@@ -1,12 +1,13 @@
 import tensorflow as tf
+import numpy as np
 from tensorflow.python.keras.engine import base_layer_utils
 from tensorflow.python.keras.utils import tf_utils
 from tensorflow.python.keras import activations
 from tensorflow.keras.layers import Layer
 from tensorflow.keras import initializers
-from .... import generic_layers
-from ....generic_layers import *
-from tensorflow.python.keras import backend
+#from .... import generic_layers
+#from ....generic_layers import *
+from tensorflow.python.keras import backend as K
 
 from tensorflow.math import sin, cos, sinh, cosh, pow, multiply, scalar_mul
 #from numpy import sin, cos, sinh, cosh, power, multiply
@@ -76,9 +77,12 @@ def cos_fn_grad(z):
 
 def pow2_fn(x, alpha=1.0):
   a, b = x[0], x[1]
+  alpha = np.float(alpha)
 
-  Re_F = alpha*( pow(a,2)-pow(b,2) )
-  Im_F = alpha*2*multiply(a,b)
+  Re_F = pow(a,2) - pow(b,2)
+  Re_F = scalar_mul( alpha, Re_F )
+  Im_F = scalar_mul( 2.0, multiply(a,b) )
+  Im_F = scalar_mul( alpha, Im_F )
   
   return [Re_F, Im_F]
   
@@ -102,7 +106,6 @@ class ActivationCos(Layer):
   """
   def __init__(self):
     super(ActivationCos, self).__init__()
-    self.precomp_grad = precomp_grad
 
   #def build(self):
   #  pass
@@ -119,17 +122,18 @@ class ActivationPow2(Layer):
   """
 
   def __init__(self, alpha=1.0, trainable=False):
-    super(ActivationPow2, self).__init__(**kargs)
+    super(ActivationPow2, self).__init__()
     self.alpha = alpha
     self.trainable = trainable
-    self.precomp_grad = precomp_grad
 
-  def build(self):
+  def build(self, input_shape):
     self.alpha_factor = K.variable(self.alpha,
                                   dtype=K.floatx(),
                                   name='alpha_factor')
     if self.trainable:
         self._trainable_weights.append(self.alpha_factor)
+
+    super(ActivationPow2, self).build(input_shape)
 
   def call(self, input):
     return pow2_fn(input, self.alpha_factor)
