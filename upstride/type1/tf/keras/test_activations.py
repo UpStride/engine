@@ -122,6 +122,3 @@ class TestActivationPow2(unittest.TestCase):
       dy_da, dy_db = get_tf_grad([a,b], pow2_fn, alpha)
 
       self.assertTrue(np.array_equal(dy_da, target_da) and np.array_equal(dy_db ,target_db))
-
-if __name__ == '__main__':
-    unittest.main()

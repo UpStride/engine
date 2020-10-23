@@ -9,50 +9,6 @@ from tensorflow.python.keras import backend as K
 from tensorflow.math import sin, cos, sinh, cosh, pow, multiply, scalar_mul
 
 
-'''class Activation(Layer):
-  """Applies an activation function to an output.
-
-  Arguments:
-    activation: Activation function, such as `tf.nn.relu`, or string name of
-      built-in activation function, such as "relu".
-
-  Usage:
-
-  >>> layer = tf.keras.layers.Activation('relu')
-  >>> output = layer([-3.0, -1.0, 0.0, 2.0])
-  >>> list(output.numpy())
-  [0.0, 0.0, 0.0, 2.0]
-  >>> layer = tf.keras.layers.Activation(tf.nn.relu)
-  >>> output = layer([-3.0, -1.0, 0.0, 2.0])
-  >>> list(output.numpy())
-  [0.0, 0.0, 0.0, 2.0]
-
-  Input shape:
-    Arbitrary. Use the keyword argument `input_shape`
-    (tuple of integers, does not include the batch axis)
-    when using this layer as the first layer in a model.
-
-  Output shape:
-    Same shape as input.
-  """
-
-  def __init__(self, activation, **kwargs):
-    super(Activation, self).__init__(**kwargs)
-    self.supports_masking = True
-    self.activation = activations.get(activation)
-
-  def call(self, inputs):
-    return self.activation(inputs)
-
-  def compute_output_shape(self, input_shape):
-    return input_shape
-
-  def get_config(self):
-    config = {'activation': activations.serialize(self.activation)}
-    base_config = super(Activation, self).get_config()
-    return dict(list(base_config.items()) + list(config.items()))'''
-
-
 def cos_fn(z):
   a, b = z[0], z[1]
   real = multiply(cos(a),cosh(b))
