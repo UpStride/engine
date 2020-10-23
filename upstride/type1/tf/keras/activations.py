@@ -4,8 +4,8 @@ from tensorflow.python.keras.utils import tf_utils
 from tensorflow.python.keras import activations
 from tensorflow.keras.layers import Layer
 from tensorflow.keras import initializers
-#from .... import generic_layers
-#from ....generic_layers import *
+from .... import generic_layers
+from ....generic_layers import *
 from tensorflow.python.keras import backend
 
 from tensorflow.math import sin, cos, sinh, cosh, pow, multiply, scalar_mul
@@ -58,43 +58,38 @@ from tensorflow.math import sin, cos, sinh, cosh, pow, multiply, scalar_mul
 
 def cos_fn(z):
   a, b = z[0], z[1]
-
   Re_F = multiply(cos(a),cosh(b))
   Re_F += a
-
   Im_F = multiply(-sin(a),sinh(b))
   Im_F += b
-
   return [Re_F, Im_F]
 
 def cos_fn_grad(z):
   """
   Backward pass (gradient) of the activation function: F(z)=cos(z)+1, with z=a+ib
   """
-
   a, b = z[0], z[1]
   gradF_a = -sin(a)*cosh(b)+1-cos(a)*sinh(b)
   gradF_b = cos(a)*sinh(b)-sin(a)*cosh(b)+1
-
   return [gradF_a, gradF_b]
 
 
-def pow2_fn(x):
+def pow2_fn(x, alpha=1.0):
   a, b = x[0], x[1]
 
-  Re_F = pow(a,2)-pow(b,2)
-  Im_F = scalar_mul(2,multiply(a,b))
+  Re_F = alpha*( pow(a,2)-pow(b,2) )
+  Im_F = alpha*2*multiply(a,b)
   
   return [Re_F, Im_F]
   
-def pow2_fn_grad(z):
+def pow2_fn_grad(z, alpha=1.0):
   """
   Backward pass (gradient) of the activation function: F(z)=z^2, with z=a+ib
   """
 
   a, b = z[0], z[1]
-  gradF_a = 2*a+2*b
-  gradF_b = 2*a-2*b
+  gradF_a = alpha*(2*a+2*b)
+  gradF_b = alpha*(2*a-2*b)
 
   return [gradF_a, gradF_b]
 
@@ -105,7 +100,7 @@ class ActivationCos(Layer):
   Forward pass of the activation function: F(z)=cos(z)+1
   We can rewrite F(z) as F(a+ib)=[cos(a)cosh(b)+a]+i[-sin(a)sinh(b)+b]
   """
-  def __init__(self, precomp_grad=False):
+  def __init__(self):
     super(ActivationCos, self).__init__()
     self.precomp_grad = precomp_grad
 
@@ -113,13 +108,8 @@ class ActivationCos(Layer):
   #  pass
 
   def call(self, input):
-    if self.precomp_grad:
-      return cos_fn_with_grad(input)
-    else:
-      return cos_fn(input)
+    return cos_fn(input)
 
-
-##TODO: add the learnable parameter and initialize it properly in TF
 
 class ActivationPow2(Layer):
   """
@@ -128,23 +118,55 @@ class ActivationPow2(Layer):
   We can rewrite F(z) as F(a+ib)=[a^2-b^2]+i[2ab]
   """
 
-  def __init__(self, alpha=1.0, trainable=False, precomp_grad=False, **kargs):
+  def __init__(self, alpha=1.0, trainable=False):
     super(ActivationPow2, self).__init__(**kargs)
     self.alpha = alpha
     self.trainable = trainable
     self.precomp_grad = precomp_grad
 
-  def build(self, input_shape):
+  def build(self):
     self.alpha_factor = K.variable(self.alpha,
                                   dtype=K.floatx(),
                                   name='alpha_factor')
     if self.trainable:
         self._trainable_weights.append(self.alpha_factor)
 
-    super(ActivationPow2, self).build(input_shape) 
-
   def call(self, input):
-    if self.precomp_grad:
-      return pow2_fn_with_grad(input)
-    else:
-      return pow2_fn(input)
+    return pow2_fn(input, self.alpha_factor)
+
+
+'''
+from keras import backend as K
+
+def swish(x, beta=1.0):
+    return x * K.sigmoid(beta * x
+
+class Swish(Layer):
+
+    def __init__(self, beta=1.0, trainable=False, **kwargs):
+        super(Swish, self).__init__(**kwargs)
+        self.supports_masking = True
+        self.beta = beta
+        self.trainable = trainable
+
+    def build(self, input_shape):
+        self.beta_factor = K.variable(self.beta,
+                                      dtype=K.floatx(),
+                                      name='beta_factor')
+        if self.trainable:
+            self._trainable_weights.append(self.beta_factor)
+
+        super(Swish, self).build(input_shape)
+
+    def call(self, inputs, mask=None):
+        return swish(inputs, self.beta_factor)
+
+    def get_config(self):
+        config = {'beta': self.get_weights()[0] if self.trainable else self.beta,
+                  'trainable': self.trainable}
+        base_config = super(Swish, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+'''

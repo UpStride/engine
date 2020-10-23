@@ -106,37 +106,3 @@ class TestActivationPow2(unittest.TestCase):
 
     self.assertTrue(np.array_equal(dy_da, target_da) and np.array_equal(dy_db ,target_db))
     self.assertTrue(np.array_equal(dy_da, target_a) and np.array_equal(dy_db ,target_b))
-
-"""   
-class TestActivationPow2(unittest.TestCase):
-
-  def test_forward_scalar(self):
-    a, b = 0, 0
-    target_a, target_b = 0, 0
-    out = activation_pow2([a,b])
-    self.assertTrue(np.array_equal(out[0],target_a) and np.array_equal(out[1],target_b))
-
-  def test_forward_zeros(self):
-    a, b = np.zeros([2,3,4]), np.zeros([2,3,4])
-    target_a, target_b = np.zeros([2,3,4]), np.zeros([2,3,4])
-    out = activation_pow2([a,b])
-    self.assertTrue(np.array_equal(out[0],target_a) and np.array_equal(out[1],target_b))
-
-  def test_forward_ones(self):
-    a, b = np.ones([2,3,4]), np.ones([2,3,4])
-    target_a, target_b = np.zeros([2,3,4]), 2*np.ones([2,3,4])
-    out = activation_pow2([a,b])
-    self.assertTrue(np.array_equal(out[0],target_a) and np.array_equal(out[1],target_b))
-
-  def test_backward_zeros(self):
-    a, b = np.zeros([2,3,4]), np.zeros([2,3,4])
-    target_a, target_b = np.zeros([2,3,4]), np.zeros([2,3,4])
-    out = grad_activation_pow2([a,b])
-    self.assertTrue(np.array_equal(out[0],target_a) and np.array_equal(out[1],target_b))
-
-  def test_backward_ones(self):
-    a, b = np.ones([2,3,4]), np.ones([2,3,4])
-    target_a, target_b = 4*np.ones([2,3,4]), np.zeros([2,3,4])
-    out = grad_activation_pow2([a,b])
-    self.assertTrue(np.array_equal(out[0],target_a) and np.array_equal(out[1],target_b)) 
-"""
