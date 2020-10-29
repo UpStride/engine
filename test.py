@@ -15,7 +15,7 @@ from upstride.type2.tf.keras.layers import BatchNormalizationQ  # as BatchNormal
 from upstride.type2.tf.keras import layers as type2_layers
 
 from upstride.type2.tf.keras.test_custom_ops import TestCustomOpPythonBackprop, TestCustomOpCpp, TestCustomOpCppBackprop
-
+from upstride.type1.tf.keras.test_activations import TestActivationCos, TestActivationPow2
 
 class TestGAMultiplication(unittest.TestCase):
   def test_ga_multiply_get_index(self):
