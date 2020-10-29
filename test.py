@@ -9,6 +9,8 @@ from upstride import generic_layers
 from upstride.generic_layers import _ga_multiply_get_index, upstride_type, unit_multiplier, reorder
 from upstride.type2.tf.keras.utils import quaternion_mult1, quaternion_mult2, multiply_by_a1, multiply_by_a2, quaternion_mult_naive, quaternion_mult_cpp
 from upstride.type2.tf.keras.layers import TF2Upstride as QTF2Upstride
+from upstride.type2.tf.keras.layers import Upstride2TF as QUpstride2TF
+from upstride.type2.tf.keras.layers import determine_norm_order
 from upstride.type2.tf.keras.layers import BatchNormalizationQ  # as BatchNormalizationQ
 from upstride.type2.tf.keras import layers as type2_layers
 
@@ -179,7 +181,7 @@ class TestConv2DQuaternion(unittest.TestCase):
     inputs = tf.keras.layers.Input((224, 224, 3))
     x = type2_layers.TF2Upstride()(inputs)
     x = type2_layers.Conv2D(4, (3, 3), use_bias=True)(x)
-    x = type2_layers.Upstride2TF()(x)
+    x = type2_layers.Upstride2TF("take_first")(x)
     model = tf.keras.Model(inputs=[inputs], outputs=[x])
     self.assertEqual(len(model.layers), 2)
     self.assertEqual(model.count_params(), (9*4*3+4)*4)
@@ -190,7 +192,7 @@ class TestConv2DQuaternion(unittest.TestCase):
     x = type2_layers.TF2Upstride()(inputs)
     x = type2_layers.Conv2D(4, (3, 3), use_bias=True)(x)
     x = type2_layers.DepthwiseConv2D(4, (3, 3), use_bias=True)(x)
-    x = type2_layers.Upstride2TF()(x)
+    x = type2_layers.Upstride2TF("take_first")(x)
     model = tf.keras.Model(inputs=[inputs], outputs=[x])
     dest = tempfile.mkdtemp()
     tf.saved_model.save(model, dest)
@@ -199,7 +201,119 @@ class TestConv2DQuaternion(unittest.TestCase):
     self.assertEqual(listdir, ['assets', 'saved_model.pb', 'variables'])
     shutil.rmtree(dest)
 
+class TestQuaternionUpstride2TF(unittest.TestCase):
+  def  test_determine_norm_order(self):
+    
+    self.assertEqual(np.inf, determine_norm_order('norm_inf'))
+    self.assertEqual(1, determine_norm_order('norm_1'))
+    self.assertEqual(2, determine_norm_order('norm_2'))
 
+    self.assertRaises(ValueError, determine_norm_order, 'norm_abc')
+    self.assertRaises(ValueError, determine_norm_order, 'norm_-1')
+
+  def  test_take_first(self):
+    inputs = [tf.convert_to_tensor([[[[1, 3, 4]]]]), tf.convert_to_tensor([[[[1, 3, 4]]]])]
+
+    output = QUpstride2TF("take_first")(inputs)
+
+    # check the inputs list and out tensor type
+    self.assertNotEqual(type(inputs), type(output))
+    # check the 1st tensor of inputs list and out tensor type
+    self.assertEqual(type(inputs[0]), type(output))
+    # check the 1st tensor of inputs list and output tensor
+    self.assertEqual(inputs[0].numpy().tolist(), output.numpy().tolist())
+
+  def  test_concat(self):
+    inputs = [tf.convert_to_tensor([[[[1, 3, 4]]]]), tf.convert_to_tensor([[[[1, 3, 4]]]])]
+
+    output = QUpstride2TF("concat")(inputs)
+
+    # check the inputs list and out tensor type
+    self.assertNotEqual(type(inputs), type(output))
+    # check the 1st tensor of inputs list and out tensor type
+    self.assertEqual(type(inputs[0]), type(output))
+    # check the concatenation of input tensors list and output tensor
+    self.assertEqual(np.concatenate([inp.numpy() for inp in  inputs],  -1).tolist(), output.numpy().tolist())
+     # check the size of concatenation dimension
+    self.assertEqual(inputs[0].numpy().shape[-1]*len(inputs), output.numpy().shape[-1])
+
+  def  test_max_pool(self):
+    inputs = [tf.convert_to_tensor([[[[1, 3, 4]]]]), tf.convert_to_tensor([[[[2, 1, 6]]]])]
+
+    output = QUpstride2TF("max_pool")(inputs)
+
+    # check the inputs list and out tensor type
+    self.assertNotEqual(type(inputs), type(output))
+    # check the 1st tensor of inputs list and out tensor type
+    self.assertEqual(type(inputs[0]), type(output))
+
+    # check the elements after max pooling
+    input_stack =  np.stack([inp.numpy() for inp in  inputs],  -1)
+    self.assertEqual(np.max(input_stack, -1).tolist(), output.numpy().tolist())
+
+  def  test_avg_pool(self):
+    inputs = [tf.convert_to_tensor([[[[1., 3., 4.]]]]), tf.convert_to_tensor([[[[2., 1., 6.]]]])]
+
+    output = QUpstride2TF("avg_pool")(inputs)
+
+    # check the inputs list and out tensor type
+    self.assertNotEqual(type(inputs), type(output))
+    # check the 1st tensor of inputs list and out tensor type
+    self.assertEqual(type(inputs[0]), type(output))
+
+    # check the elements after average pooling
+    input_stack =  np.stack([inp.numpy() for inp in  inputs],  -1)
+    self.assertEqual(np.mean(input_stack, -1).tolist(), output.numpy().tolist())
+
+
+  def test_p_norm(self):
+    inputs = [tf.convert_to_tensor([[[[1., 3., 4.]]]]), tf.convert_to_tensor([[[[2., 1., 6.]]]])]
+
+    output = QUpstride2TF("norm_1")(inputs)
+
+    # check the inputs list and out tensor type
+    self.assertNotEqual(type(inputs), type(output))
+    # check the 1st tensor of inputs list and out tensor type
+    self.assertEqual(type(inputs[0]), type(output))
+
+    # check the elements after average pooling
+    input_stack =  np.stack([inp.numpy() for inp in  inputs],  -1)
+    self.assertEqual(np.linalg.norm(input_stack, ord=1, axis=-1).tolist(), output.numpy().tolist())
+
+    # check norm-2
+    self.assertEqual(np.linalg.norm(input_stack, ord=2, axis=-1).tolist(), QUpstride2TF("norm_2")(inputs).numpy().tolist())
+
+    # check norm-inf
+    self.assertEqual(np.linalg.norm(input_stack, ord=np.inf, axis=-1).tolist(), QUpstride2TF("norm_inf")(inputs).numpy().tolist())
+
+  def test_attention(self):
+    inputs = [tf.convert_to_tensor([[1., 2., 3.]]), tf.convert_to_tensor([[1., 2., 3.]])]
+
+    ## Check for normal attention
+    output = QUpstride2TF("attention")(inputs)
+    # check the inputs list and out tensor type
+    self.assertNotEqual(type(inputs), type(output))
+    # check the 1st tensor of inputs list and out tensor type
+    self.assertEqual(type(inputs[0]), type(output))
+    # check values
+    self.assertEqual(inputs[0].numpy().tolist(), output.numpy().tolist())
+
+    ## Check for gated attention
+    gated_output = QUpstride2TF("gated_attention")(inputs)
+    # check the inputs list and out tensor type
+    self.assertNotEqual(type(inputs), type(gated_output))
+    # check the 1st tensor of inputs list and out tensor type
+    self.assertEqual(type(inputs[0]), type(gated_output))
+    # check values
+    self.assertEqual(inputs[0].numpy().tolist(), gated_output.numpy().tolist())
+
+    # check rank of input tensors with rank 1
+    inputs1 = [tf.convert_to_tensor([1., 2., 3.]), tf.convert_to_tensor([1., 2., 3.])]
+    self.assertRaises(TypeError, QUpstride2TF("attention"), inputs1)
+
+    # check rank of input tensors with rank 5
+    inputs2 = [tf.convert_to_tensor([[[[[1., 2., 3.]]]]]), tf.convert_to_tensor([[[[[1., 2., 3.]]]]])]
+    self.assertRaises(TypeError, QUpstride2TF("attention"), inputs2)
 
 if __name__ == "__main__":
   unittest.main()

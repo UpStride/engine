@@ -9,6 +9,7 @@ from .convolutional import Conv2D, DepthwiseConv2D
 from .dense import Dense
 from tensorflow.python.keras import backend
 from tensorflow.python.keras.utils import conv_utils
+import numpy as np
 
 generic_layers.upstride_type = 2
 generic_layers.blade_indexes = ["", "12", "23", "13"]
@@ -90,20 +91,140 @@ class TF2Upstride(Layer):
       return [x]
 
 
+def determine_norm_order(norm_strategy):
+  """
+    split the norm order from `norm_strategy` string. `norm_strategy` should be like: norm_1, norm_2, norm_inf etc.
+  """
+  norm_order = norm_strategy.split('_')[-1]
+  if norm_order =='inf':
+    return np.inf
+  else:
+    try:
+      norm_order = float(norm_order)
+      if norm_order > 0:
+        return  norm_order
+      else:
+        raise ValueError
+    except ValueError:
+        raise ValueError(f"norm order must be inf or real positive number (>0), but  given{ norm_order}")
+
+class Attention(Layer):
+  """ Normal Attention and Gated Attention which can map complex non-linear relations 
+       (introduced in this paper https://arxiv.org/pdf/1802.04712.pdf) is 
+       extended for aggregating components 
+  """
+  def __init__(self, hidden_size=64, final_size=1, is_gated_attention=False):
+    super(Attention, self).__init__()
+    self.initial_proj = tf.keras.layers.Dense(hidden_size, use_bias=False)
+    self.final_linear = tf.keras.layers.Dense(final_size, use_bias=False)
+
+    self.is_gated_attention = is_gated_attention
+    if is_gated_attention:
+      self.gated_proj = tf.keras.layers.Dense(hidden_size, use_bias=False)
+
+  def call(self, tensor_list):
+    """
+      Args:
+        tensor_list: list of tensor with shape [batch_size, channels] / [batch_size, height, width, channels] / [batch_size, sequence, channels]
+      Returns:
+        Attention scores with shape [batch_size, final_size, len(tensor_list)]
+    """
+    if type(tensor_list) is not list: 
+      raise TypeError(f"tensor_list must be a list of tensors but given {type(tensor_list)}")
+
+    tensor_rank = len(tensor_list[0].get_shape()) 
+    if not 2 <= tensor_rank <=4 : 
+      raise TypeError(f"tensor rank must be 2, 3 or 4, but provied {tensor_rank}")
+
+    # Attention will be applied using fully connected layer, so if a tensor is provied of rank 3 or 4 than 
+    # their dimension will be reduced using average pooling
+    reduced_tensor_list = []
+    reduction_layer = None
+    if tensor_rank == 3:
+      reduction_layer = tf.keras.layers.GlobalAveragePooling1D()
+    elif tensor_rank == 4:
+      reduction_layer = tf.keras.layers.GlobalAveragePooling2D()
+    
+    # Apply reduction layer if required
+    if reduction_layer:
+      for tensor in tensor_list:
+        reduced_tensor_list.append(reduction_layer(tensor))
+
+    scores = []
+    for i in range(len(tensor_list)):
+      if not reduced_tensor_list:
+        tensor = tensor_list[i]
+      else:
+        tensor = reduced_tensor_list[i]
+      proj = tf.keras.activations.tanh(self.initial_proj(tensor))
+      if self.is_gated_attention:
+        proj *= tf.keras.activations.sigmoid(self.gated_proj(tensor))
+      scores.append(self.final_linear(proj))
+
+    # stack the component from the list and normalize across that  dimension using softmax
+    scores = tf.stack(scores, axis=-1)
+    scores = tf.keras.activations.softmax(scores, axis=-1)
+
+    if tensor_rank == 3:
+      # Expand sequential dimension
+      scores = tf.expand_dims(scores, axis=1)
+    elif tensor_rank == 4:
+      # Expand spatial (height, width) dimension
+      scores = tf.expand_dims(tf.expand_dims(scores, axis=1), axis=1) 
+
+    # stacking components across last dimensiona and apply weighted sum using attentionj scores
+    aggregated_tensor = tf.math.reduce_sum(tf.stack(tensor_list, axis=-1) * scores,  axis=-1)
+
+    return aggregated_tensor
+
 class Upstride2TF(Layer):
   """convert multivector back to real values.
   """
 
   def __init__(self, strategy='default'):
     self.concat = False
-    if strategy == "concat":
+    self.max_pool = False
+    self.avg_pool = False
+    self.norm_pool = False
+    self.take_first = False
+    self.attention = False
+    self.gated_attention = False
+    self.norm_order = None
+
+    if strategy == "take_first" or strategy=='default':
+      self.take_first = True
+    elif strategy == "concat":
       self.concat = True
+    elif strategy == "max_pool":
+      self.max_pool = True
+    elif strategy == "avg_pool":
+      self.avg_pool = True
+    elif strategy == "attention":
+      self.attention = True
+    elif strategy == "gated_attention":
+      self.gated_attention = True
+    elif strategy.startswith("norm"):
+      self.norm_order = determine_norm_order(strategy)
+    else:
+      raise ValueError(f"unknown UP2TF strategy: {strategy}")
 
   def __call__(self, x):
-    if self.concat:
-      return tf.concat(x, -1)
-    else:
+    if self.take_first:
       return x[0]
+    elif self.concat:
+      return tf.concat(x, -1)
+    elif self.attention or self.gated_attention:
+      dim = x[0].get_shape()[-1]
+      return Attention(hidden_size=64, final_size=dim, is_gated_attention=self.gated_attention)(x)
+    else:
+      axis = -1
+      stacked_tensors = tf.stack(x, axis=axis)
+      if self.max_pool:
+        return tf.math.reduce_max(stacked_tensors,  axis=axis)
+      elif self.avg_pool:
+        return tf.math.reduce_mean(stacked_tensors,  axis=axis)
+      elif self.norm_order:
+        return tf.norm(stacked_tensors, axis=axis, ord=self.norm_order)
 
 
 class MaxNormPooling2D(Layer):
