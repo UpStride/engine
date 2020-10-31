@@ -6,6 +6,7 @@ from typing import List, Tuple
 import tensorflow as tf
 
 from .convolutional import Conv2D as Conv2DConj
+from .initializers import InitializersFactory
 
 # Definition of the GA, setup when upstride.type{1/2/3}.calling tf.keras.layers
 upstride_type = 3
@@ -145,15 +146,40 @@ def get_layers(layer: tf.keras.layers.Layer, conj_layer: tf.keras.layers.Layer =
     for param in ["bias_initializer", "bias_regularizer", "bias_constraint"]:
       bias_parameters[param] = kwargs[param]
 
-  # special case for the name of the layer : if defined, then we need to change it to create different operations
-  if 'name' not in kwargs or kwargs['name'] is None:
-    layers = [layer(**kwargs) for _ in range(multivector_length())]
-  else:
-    layers = []
-    base_name = kwargs['name']
+
+
+  # deal with hyper-complex initialization
+  list_kwargs = [kwargs for _ in range(multivector_length())]
+
+  init_factory = InitializersFactory()
+  kernel_arg_name = ""
+  if ("kernel_initializer" in kwargs) and init_factory.is_custom_init(kwargs["kernel_initializer"]):
+    kernel_arg_name = "kernel_initializer"
+  elif ("depthwise_initializer" in kwargs) and init_factory.is_custom_init(kwargs["depthwise_initializer"]):
+    kernel_arg_name = "depthwise_initializer"
+
+  if kernel_arg_name:
+    kernel_initializer = kwargs[kernel_arg_name]
+
+    custom_init = init_factory.get_initializer(kernel_initializer, upstride_type)
+    init_parameters = {}
+
+    for arg in list(inspect.signature(custom_init.__init__).parameters):
+      if arg in ['self', 'kwargs','blade_idx']: # we are gonna set <blade_idx> later
+        continue
+      elif arg in kwargs:
+        init_parameters[arg] = kwargs[arg]
+
     for i in range(multivector_length()):
-      kwargs['name'] = f'{base_name}_{i}'
-      layers.append(layer(**kwargs))
+      list_kwargs[i][kernel_arg_name] = custom_init(blade_idx=i, **init_parameters)
+      # special case for the name of the layer : if defined, then we need to change it to create different operations
+      if 'name' in kwargs and kwargs['name'] is not None:
+        base_name = kwargs['name']
+        list_kwargs[i]['name'] = f'{base_name}_{i}'
+
+  layers = [layer(**list_kwargs[i]) for i in range(multivector_length())]
+
+  
 
   # for now, never use conj layer as it is not clear if ti is better than standard ops
   if False: # conj_layer is not None:
@@ -496,6 +522,11 @@ class TF2Upstride:
   """for compatibility with the c++ version. convert a tensor to a list of length one of tensor
   the list will have the good size after the first operation
   """
+
+  def __init__(self, strategy='default'):
+    # for now strategy is useless
+    if strategy != 'default':
+      raise NotImplementedError("")
 
   def __call__(self, x):
     return [x]

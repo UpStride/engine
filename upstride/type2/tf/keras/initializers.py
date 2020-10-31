@@ -9,6 +9,8 @@ import numpy as np
 import tensorflow as tf
 from numpy.random import RandomState
 
+init_aliases_dict = {}
+
 
 def _compute_fans(shape, data_format='channels_last'):
   """Computes the number of input and output units for a weight shape.
