@@ -8,7 +8,7 @@ class TestUpstride(unittest.TestCase):
     inputs = tf.keras.layers.Input(shape=(224, 224, 3))
     x = layers.TF2Upstride()(inputs)
     self.assertEqual(len(x), 1)
-    x = layers.Conv2D(6, (3, 3)m name='test-names')(x)
+    x = layers.Conv2D(6, (3, 3), name='test-names')(x)
     self.assertEqual(len(x), 8)
     x = layers.Activation('relu')(x)
     x = layers.Conv2D(6, (3, 3))(x)

@@ -3,7 +3,7 @@ import codecs
 
 setuptools.setup(
     name="upstride",
-    version="1.1.1",
+    version="1.2.0",
     author="UpStride S.A.S",
     author_email="hello@upstride.io",
     description="",
