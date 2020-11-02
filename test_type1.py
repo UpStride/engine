@@ -9,7 +9,7 @@ class TestUpstride(unittest.TestCase):
     inputs = tf.keras.layers.Input(shape=(224, 224, 3))
     x = layers.TF2Upstride()(inputs)
     self.assertEqual(len(x), 1)
-    x = layers.Conv2D(8, (3, 3))(x)
+    x = layers.Conv2D(8, (3, 3), name='test-names')(x)
     self.assertEqual(len(x), 2)
     x = layers.Activation('relu')(x)
     x = layers.DepthwiseConv2D(8, (3, 3), kernel_initializer='complex_glorot')(x)

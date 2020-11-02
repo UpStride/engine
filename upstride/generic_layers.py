@@ -148,9 +148,17 @@ def get_layers(layer: tf.keras.layers.Layer, conj_layer: tf.keras.layers.Layer =
 
 
 
-  # deal with hyper-complex initialization
-  list_kwargs = [kwargs for _ in range(multivector_length())]
+  # create a list of kargs to deal with the difference in settings between the blades
+  list_kwargs = [kwargs.copy() for _ in range(multivector_length())]
 
+  # managing the naming of the nodes in the computational graph
+  # special case for the name of the layer : if defined, then we need to change it to create different operations
+  if 'name' in kwargs and kwargs['name'] is not None:
+    base_name = kwargs['name']
+    for i in range(multivector_length()):
+      list_kwargs[i]['name'] = f'{base_name}_{i}'
+
+  # hyper-complex initialization
   init_factory = InitializersFactory()
   kernel_arg_name = ""
   if ("kernel_initializer" in kwargs) and init_factory.is_custom_init(kwargs["kernel_initializer"]):
@@ -172,14 +180,9 @@ def get_layers(layer: tf.keras.layers.Layer, conj_layer: tf.keras.layers.Layer =
 
     for i in range(multivector_length()):
       list_kwargs[i][kernel_arg_name] = custom_init(blade_idx=i, **init_parameters)
-      # special case for the name of the layer : if defined, then we need to change it to create different operations
-      if 'name' in kwargs and kwargs['name'] is not None:
-        base_name = kwargs['name']
-        list_kwargs[i]['name'] = f'{base_name}_{i}'
 
   layers = [layer(**list_kwargs[i]) for i in range(multivector_length())]
 
-  
 
   # for now, never use conj layer as it is not clear if ti is better than standard ops
   if False: # conj_layer is not None:
@@ -522,10 +525,8 @@ class TF2Upstride:
   """for compatibility with the c++ version. convert a tensor to a list of length one of tensor
   the list will have the good size after the first operation
   """
-
-  def __init__(self, strategy='default'):
-    # for now strategy is useless
-    if strategy != 'default':
+  def __init__(self, strategy=''):
+    if strategy != '':
       raise NotImplementedError("")
 
   def __call__(self, x):
