@@ -375,6 +375,28 @@ def reorder(inputs):
   return new_inputs
 
 
+def learn_vector_component(x, channels=3):
+  """
+  Learning module taken from this paper (https://arxiv.org/pdf/1712.04604.pdf)
+  BN --> ReLU --> Conv --> BN --> ReLU --> Conv
+
+  Args:
+    x (tensor): Input to the network.
+    channels (int): number of filters
+
+  Returns:
+    tensor: output of the network. Learned component of the multi-vector.
+  """
+  x = tf.keras.layers.BatchNormalization()(x)
+  x = tf.keras.layers.Activation('relu')(x)
+  x = tf.keras.layers.Conv2D(channels, (3, 3), padding='same')(x)
+  x = tf.keras.layers.BatchNormalization()(x)
+  x = tf.keras.layers.Activation('relu')(x)
+  x = tf.keras.layers.Conv2D(channels, (3, 3), padding='same')(x)
+
+  return x
+
+
 class GenericNonLinear:
   def __init__(self, layer, *argv, **kwargs):
     self.layers, self.add_bias, self.bias_parameters, _ = get_layers(layer, None, *argv, **kwargs)
@@ -522,14 +544,23 @@ class Dropout(GenericNonLinear):
 
 
 class TF2Upstride:
-  """for compatibility with the c++ version. convert a tensor to a list of length one of tensor
-  the list will have the good size after the first operation
   """
+  assume this function is called at the begining of the network.
+  """
+
   def __init__(self, strategy=''):
-    if strategy != '':
-      raise NotImplementedError("")
+    self.learn_multivector = False
+    if strategy == 'learned':
+      self.learn_multivector = True
+    elif strategy != '':
+      raise ValueError(f"unknown strategy: {strategy}")
 
   def __call__(self, x):
+    if self.learn_multivector:
+      output = []
+      for blade in range(multivector_length()):
+        output.append( learn_vector_component(x, 3) )
+      return output
     return [x]
 
 
