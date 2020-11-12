@@ -12,6 +12,7 @@ class TestUpstride(unittest.TestCase):
     x = layers.Conv2D(8, (3, 3), name='test-names')(x)
     self.assertEqual(len(x), 2)
     x = layers.Activation('relu')(x)
+    x = layers.BatchNormalizationC()(x)
     x = layers.DepthwiseConv2D(8, (3, 3), kernel_initializer='complex_glorot')(x)
     x = layers.Activation('relu')(x)
     x = layers.Conv2D(16, (3, 3), kernel_initializer='complex_glorot')(x)
