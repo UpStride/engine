@@ -5,6 +5,7 @@ from tensorflow.keras.layers import Layer
 from tensorflow.keras import initializers
 from .... import generic_layers
 from ....generic_layers import *
+from ....generic_layers import TF2Upstride as GenericTF2UP
 from .convolutional import Conv2D, DepthwiseConv2D
 from .dense import Dense
 from tensorflow.python.keras import backend
@@ -18,41 +19,18 @@ generic_layers.geometrical_def = (3, 0, 0)
 # If you wish to overwrite some layers, please implements them here
 
 
-def learn_vector_component(x, channels=3):
-  """
-  Learning module taken from this paper (https://arxiv.org/pdf/1712.04604.pdf)
-  BN --> ReLU --> Conv --> BN --> ReLU --> Conv
-
-  :param x: input x
-  :param channels: number of channels
-  :return: leaned  multi - vector (could have multiple channels)
-  """
-  x = tf.keras.layers.BatchNormalization()(x)
-  x = tf.keras.layers.Activation('relu')(x)
-  x = tf.keras.layers.Conv2D(channels, (3, 3), padding='same')(x)
-  x = tf.keras.layers.BatchNormalization()(x)
-  x = tf.keras.layers.Activation('relu')(x)
-  x = tf.keras.layers.Conv2D(channels, (3, 3), padding='same')(x)
-
-  return x
-
-
-class TF2Upstride(Layer):
+class TF2Upstride(GenericTF2UP):
   """assume this function is called at the begining of the network. Put colors to imaginary parts and grayscale in real
   """
 
   def __init__(self, strategy=''):
     self.rgb_in_img = False
     self.gray_in_real_rgb_in_img = False
-    self.learn_multivector = False
     if strategy == "joint":
       self.rgb_in_img = True
     elif strategy == 'grayscale':
       self.gray_in_real_rgb_in_img = True
-    elif strategy == 'learned':
-      self.learn_multivector = True
-    elif strategy != '':
-      raise ValueError(f"unknown strategy: {strategy}")
+    super().__init__()
 
   def __call__(self, x):
     image_data_format = tf.keras.backend.image_data_format() # can be 'channels_last' or 'channels_first'
@@ -68,7 +46,7 @@ class TF2Upstride(Layer):
         blue = tf.expand_dims(x[:, 2, :, :], 1)
         zeros = tf.zeros_like(red)
       return [zeros, red, green, blue]
-    elif self.gray_in_real_rgb_in_img:
+    if self.gray_in_real_rgb_in_img:
       if image_data_format == 'channels_last':
         red = tf.expand_dims(x[:, :, :, 0], -1)
         green = tf.expand_dims(x[:, :, :, 1], -1)
@@ -81,14 +59,7 @@ class TF2Upstride(Layer):
         x = tf.transpose(x, [0, 2, 3, 1])
         grayscale = tf.image.rgb_to_grayscale(x)
       return [grayscale, red, green, blue]
-    elif self.learn_multivector:
-      r = learn_vector_component(x, 3)
-      i = learn_vector_component(x, 3)
-      j = learn_vector_component(x, 3)
-      k = learn_vector_component(x, 3)
-      return [r, i, j, k]
-    else:
-      return [x]
+    return super().__call__(x)
 
 
 def determine_norm_order(norm_strategy):
