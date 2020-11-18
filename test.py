@@ -11,9 +11,8 @@ from upstride.type2.tf.keras.utils import quaternion_mult1, quaternion_mult2, mu
 from upstride.type2.tf.keras.layers import TF2Upstride as QTF2Upstride
 from upstride.type2.tf.keras.layers import Upstride2TF as QUpstride2TF
 from upstride.type2.tf.keras.layers import determine_norm_order
-from upstride.type2.tf.keras.layers import BatchNormalizationQ  # as BatchNormalizationQ
 from upstride.type2.tf.keras import layers as type2_layers
-
+from upstride.test_batchnorm import TestQuaternionBN, TestComplexBN
 from upstride.type2.tf.keras.test_custom_ops import TestCustomOpPythonBackprop, TestCustomOpCpp, TestCustomOpCppBackprop
 from upstride.type1.tf.keras.test_activations import TestActivationCos, TestActivationPow2
 
@@ -160,19 +159,6 @@ class TestQuaternionMult(unittest.TestCase):
     self.assertEqual(convert_to_list(quaternion_mult_cpp(op,  [0., 2., 2., 0.], [0., 2., 0., 0.])), [-4., 0., 0., -4.])
     self.assertEqual(convert_to_list(quaternion_mult_cpp(op,  [1., 2., 0., 3.], [0., 2., 2., 0.])), [-4., -4., 8., 4.])
     self.assertEqual(convert_to_list(quaternion_mult_cpp(op,  [1., 2., 3., 4.], [5., 6., 7., 8.])), [-60., 12., 30., 24.])
-
-
-class TestQuaternionBN(unittest.TestCase):
-  def test_init(self):
-    generic_layers.change_upstride_type(2, ["", "12", "13", "23"], (3, 0, 0))
-    inputs = tf.convert_to_tensor([[[[1., 3, 4, 5, 6], [1, 3, 4, 5, 6], [1, 3, 4, 5, 6]],
-                                    [[1, 3, 4, 5, 6], [1, 3, 4, 5, 6], [1, 3, 4, 5, 6]]]])
-    self.assertEqual(inputs.shape, (1, 2, 3, 5))
-    inputs = [inputs for _ in range(4)]
-    bn_layer = BatchNormalizationQ()
-    outputs = bn_layer(inputs, training=False)
-    self.assertEqual(len(outputs), 4)
-    self.assertTrue(np.array_equal(outputs[0], np.zeros((1, 2, 3, 5))))
 
 
 class TestConv2DQuaternion(unittest.TestCase):
