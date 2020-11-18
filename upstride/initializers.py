@@ -250,5 +250,4 @@ class HInitializer(Initializer):
         magnitude * u_j*np.sin(phase),
         magnitude * u_k*np.sin(phase)
     ]
-    print("magnitude", np.mean(magnitude**2))
     return self.outputs[0]

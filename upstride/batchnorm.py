@@ -129,9 +129,7 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
       training = False
     return training
 
-  def call(self, inputs, training=None):
-    training = self._get_training_value(training)
-    # inputs is an array of 'multivector_length' tensors
+  def compute_mean_var(self, inputs):
     input_shape = inputs[0].shape  # typically [BS, H, W, C]
     ndims = len(input_shape)  # typically 4
     reduction_axes = [i for i in range(ndims) if i != self.axis]  # [0, 1, 2]
@@ -154,6 +152,13 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
         v[postfix] = tf.reduce_mean(input_centred[p1] * input_centred[p2], axis=reduction_axes)
         if p1 == p2:
           v[postfix] += self.epsilon
+
+    return input_centred, mu, v, broadcast_mu_shape
+
+  def call(self, inputs, training=None):
+    # inputs is an array of 'multivector_length' tensors
+    training = self._get_training_value(training)
+    input_centred, mu, v, broadcast_mu_shape = self.compute_mean_var(inputs)
 
     input_bn = self.bn(input_centred, v)
     training_value = tf_utils.constant_value(training)
