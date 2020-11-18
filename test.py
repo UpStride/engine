@@ -15,6 +15,7 @@ from upstride.type2.tf.keras import layers as type2_layers
 from upstride.test_batchnorm import TestQuaternionBN, TestComplexBN
 from upstride.type2.tf.keras.test_custom_ops import TestCustomOpPythonBackprop, TestCustomOpCpp, TestCustomOpCppBackprop
 from upstride.type1.tf.keras.test_activations import TestActivationCos, TestActivationPow2
+from upstride.test_initializers import TestCInitializer, TestHInitializer, TestIndependentFilter
 
 class TestGAMultiplication(unittest.TestCase):
   def test_ga_multiply_get_index(self):

@@ -25,6 +25,15 @@ class TestQuaternionBN(unittest.TestCase):
     """
     pass
 
+  def test_not_scaled(self):
+    pass
+
+  def test_not_center(self):
+    pass
+
+  def test_not_center_nor_scaled(self):
+    pass
+
 
 class TestComplexBN(unittest.TestCase):
   def test_init(self):
@@ -43,6 +52,15 @@ class TestComplexBN(unittest.TestCase):
     Call a compute_sqrt_inv to compute the inverse of the square root of M, I
     multiply M by I**2 to check that this gives Id
     """
+    pass
+
+  def test_not_scaled(self):
+    pass
+
+  def test_not_center(self):
+    pass
+
+  def test_not_center_nor_scaled(self):
     pass
 
 
