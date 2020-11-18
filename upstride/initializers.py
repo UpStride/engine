@@ -27,8 +27,6 @@ for He distribution, Var(W) = 2/n_in, solving the equation gives sigma = 1/sqrt(
 
 """
 
-from upstride.type1.tf.keras.initializers import init_aliases_dict as init_type1
-from upstride.type2.tf.keras.initializers import init_aliases_dict as init_type2
 import math
 import numpy as np
 import tensorflow as tf
@@ -37,7 +35,29 @@ from tensorflow.keras.initializers import Initializer
 
 class InitializersFactory():
   def __init__(self):
-    self.init_types = {1: init_type1, 2: init_type2}
+    self.init_type0 = {
+        'glorot_ind': IndependentFilter(),
+        'he_ind': IndependentFilter(criterion='he'),
+        'deptwise_glorot_ind': IndependentFilter(depthwise=True),
+        'deptwise_he_ind': IndependentFilter(criterion='he', depthwise=True),
+    }
+    self.init_type1 = {
+        'glorot_ind': IndependentFilter(complex=True),
+        'he_ind': IndependentFilter(criterion='he', complex=True),
+        'deptwise_glorot_ind': IndependentFilter(depthwise=True, complex=True),
+        'deptwise_he_ind': IndependentFilter(criterion='he', depthwise=True, complex=True),
+        'glorot': CInitializer(),
+        'he': CInitializer(criterion='he'),
+        'deptwise_glorot': CInitializer(depthwise=True),
+        'deptwise_he': CInitializer(criterion='he', depthwise=True)
+    }
+    self.init_type2 = {
+        'glorot': HInitializer(),
+        'he': HInitializer(criterion='he'),
+        'deptwise_glorot': HInitializer(depthwise=True),
+        'deptwise_he': HInitializer(criterion='he', depthwise=True)
+    }
+    self.init_types = {0: self.init_type0, 1: self.init_type1, 2: self.init_type2}
 
   def is_custom_init(self, name):
     for k in list(self.init_types.keys()):
@@ -76,7 +96,6 @@ class IndependentFilter(Initializer):
     self.criterion = criterion
     self.depthwise = depthwise
     self.complex = complex
-    self.complex_part = None  # will be computed the first time object is called
 
   def scale_filters(self, desired_var: float, independent_filters):
     """scale the independent filters to get the desired variance
@@ -124,8 +143,6 @@ class IndependentFilter(Initializer):
           For depthwise 2D convolution, shape = (kernel_x, kernel_y, n_channels, 1)
         dtype (type, optional): data type of the tensor
     """
-    if self.complex_part is not None:
-      return self.complex_part
     if len(shape) == 2:  # then dense layer
       num_rows, num_cols = shape[0], shape[1]
     else:  # then Conv{1/2/3}D
@@ -155,7 +172,7 @@ class IndependentFilter(Initializer):
     # Note that for shape == 2, this operation is identity
     weights = self.reshape_weights(shape, scaled_filters[0])
     if len(scaled_filters) == 2:
-      self.complex_part = self.reshape_weights(shape, scaled_filters[1])
+      weights = np.concatenate([weights, self.reshape_weights(shape, scaled_filters[1])], axis=-1)
     return weights
 
 
@@ -197,15 +214,13 @@ class CInitializer(Initializer):
           For depthwise 2D convolution, shape = (kernel_x, kernel_y, n_channels, 1)
         dtype (type, optional): data type of the tensor
     """
-    if self.complex_part is not None:
-      return self.complex_part
     n_in, n_out = get_input_output_unit(self.depthwise, shape)
     desired_var = criterion_to_var[self.criterion](n_in, n_out)
     sigma = np.sqrt(desired_var/2)
     magnitude = np.random.rayleigh(scale=sigma, size=shape)
     phase = np.random.uniform(low=-np.pi, high=np.pi, size=shape)
-    self.complex_part = magnitude * np.sin(phase)
-    return magnitude * np.cos(phase)
+    # Complex ops are a bit special : return concatenation of real and img along last axis
+    return np.concatenate([magnitude * np.cos(phase), magnitude * np.sin(phase)], axis=-1)
 
 
 class HInitializer(Initializer):

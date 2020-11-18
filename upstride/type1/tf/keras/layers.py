@@ -3,6 +3,7 @@ from .... import generic_layers
 from ....generic_layers import *
 from .activations import *
 from ....batchnorm import BatchNormalizationC
+from ....initializers import InitializersFactory
 
 generic_layers.upstride_type = 1
 generic_layers.blade_indexes = ["", "12"]
@@ -13,6 +14,10 @@ generic_layers.geometrical_def = (2, 0, 0)
 
 class Conv2D(tf.keras.Model):
   def __init__(self, *argv, **kwargs):
+    # change default value for initializer
+    if len(argv) < 10 and 'kernel_initializer' not in kwargs:
+      kwargs['kernel_initializer'] = InitializersFactory().get_initializer('he', 1)
+
     kwargs = convert_all_args_to_kwargs(tf.keras.layers.Conv2D.__init__, argv, kwargs)
     kwargs, self.add_bias, bias_parameters = remove_bias_from_kwargs(kwargs)
     # TODO this need to be cleaned, have a look at TF code to see how they do

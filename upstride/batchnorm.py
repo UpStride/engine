@@ -230,8 +230,8 @@ class BatchNormalizationQ(GenericBatchNormalization):
     w['jk'] = (1.0 / w['jj']) * (v['jk'] - (w['ij']*w['ik'] + w['rj']*w['rk']))
     w['kk'] = tf.sqrt((v['kk'] - (w['jk']*w['jk'] + w['ik']*w['ik'] + w['rk']*w['rk'])))
 
-    # compute the opposite
-    # basic version is
+    # # compute the opposite
+    # # basic version is
     # o = {}
     # o['rr'] = 1 / w['rr']
     # o['ii'] = 1 / w['ii']

@@ -30,22 +30,23 @@ class TestQuaternionBN(unittest.TestCase):
     _, _, v, _ = bn_layer.compute_mean_var(inputs)
     w = bn_layer.compute_sqrt_inv(v)
 
-    for i in range(5):
+    for i in range(1):
       v_matrix = np.array([[v['rr'][i], v['ri'][i], v['rj'][i], v['rk'][i]],
                            [v['ri'][i], v['ii'][i], v['ij'][i], v['ik'][i]],
                            [v['rj'][i], v['ij'][i], v['jj'][i], v['jk'][i]],
                            [v['rk'][i], v['ik'][i], v['jk'][i], v['kk'][i]]])
-                           
-      w_matrix = np.array([[w['rr'][i], w['ri'][i], w['rj'][i], w['rk'][i]],
-                           [w['ri'][i], w['ii'][i], w['ij'][i], w['ik'][i]],
-                           [w['rj'][i], w['ij'][i], w['jj'][i], w['jk'][i]],
+
+      w_matrix = np.array([[w['rr'][i],          0, 0, 0],
+                           [w['ri'][i], w['ii'][i], 0, 0],
+                           [w['rj'][i], w['ij'][i], w['jj'][i], 0],
                            [w['rk'][i], w['ik'][i], w['jk'][i], w['kk'][i]]])
-      should_be_id = np.dot(np.dot(w_matrix, w_matrix), v_matrix)
-      print(should_be_id)
-      # self.assertAlmostEqual(should_be_id[0][0], 1, 6)
-      # self.assertAlmostEqual(should_be_id[1][1], 1, 6)
-      # self.assertAlmostEqual(should_be_id[1][0], 0, 6)
-      # self.assertAlmostEqual(should_be_id[0][1], 0, 6)
+      should_be_id = np.dot(np.dot(w_matrix.T, w_matrix), v_matrix)
+      for i in range(4):
+        for j in range(4):
+          if i == j:
+            self.assertAlmostEqual(should_be_id[i][j], 1, 5)
+          else:
+            self.assertAlmostEqual(should_be_id[i][j], 0, 5)
 
 
 class TestComplexBN(unittest.TestCase):
@@ -80,7 +81,3 @@ class TestComplexBN(unittest.TestCase):
       self.assertAlmostEqual(should_be_id[1][1], 1, 6)
       self.assertAlmostEqual(should_be_id[1][0], 0, 6)
       self.assertAlmostEqual(should_be_id[0][1], 0, 6)
-
-
-if __name__ == "__main__":
-  unittest.main()

@@ -8,8 +8,9 @@ class TestCInitializer(unittest.TestCase):
   def test_init(self):
     np.random.seed(50)
     init = CInitializer()
-    kernel_r = init((200, 100))
-    kernel_i = init((200, 100))
+    kernel = init((200, 100))
+    kernel_r = kernel[:, :100]
+    kernel_i = kernel[:, 100:]
 
     # for complex, Var(W) = E[|W|**2] (because E[W]**2=0)
     self.assertAlmostEqual(np.mean(kernel_r ** 2 + kernel_i ** 2), 2/300, 4)
@@ -109,17 +110,11 @@ class TestIndependentFilter(unittest.TestCase):
 
     # fist call for real part
     kernel = init((20, 10))
-    print(np.mean(kernel))
-    print(np.var(kernel))
-    self.assertAlmostEqual(np.var(kernel), 2/(20 + 10))
-
-    # check that the imaginary part is defined
-    self.assertTrue(init.complex_part is not None)
-    cp = init.complex_part
-
-    # get the complex part
-    kernel = init((20, 10))
-    self.assertTrue(np.array_equal(kernel, cp))
-    print(np.mean(kernel))
-    print(np.var(kernel))
-    self.assertAlmostEqual(np.var(kernel), 2/(20 + 10))
+    kernel_r = kernel[:, :10]
+    kernel_i = kernel[:, 10:]
+    print(np.mean(kernel_r))
+    print(np.var(kernel_r))
+    self.assertAlmostEqual(np.var(kernel_r), 2/(20 + 10))
+    print(np.mean(kernel_i))
+    print(np.var(kernel_i))
+    self.assertAlmostEqual(np.var(kernel_i), 2/(20 + 10))
