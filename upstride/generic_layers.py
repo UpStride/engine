@@ -113,6 +113,30 @@ def unit_multiplier(i: int, j: int) -> Tuple[int, int]:
   return blade_index_to_position(index), s
 
 
+def convert_all_args_to_kwargs(function, argv, kwargs):
+  # convert all arguments from argv to kwargs
+  parameters = inspect.getfullargspec(function).args
+  for i, arg in enumerate(argv):
+    kwargs[parameters[i + 1]] = arg  # + 1 because the first element of parameters is 'self'
+  # add all default parameters to kwargs
+  for key, value in inspect.signature(function).parameters.items():
+    if key in ['self', 'kwargs']:
+      continue
+    if key not in kwargs:
+      kwargs[key] = value.default
+  return kwargs # not really needed because kwargs is a pointer
+
+def remove_bias_from_kwargs(kwargs):
+  add_bias = False
+  if "use_bias" in kwargs:
+    add_bias = kwargs["use_bias"]
+    kwargs["use_bias"] = False
+  bias_parameters = {}
+  if add_bias:
+    for param in ["bias_initializer", "bias_regularizer", "bias_constraint"]:
+      bias_parameters[param] = kwargs[param]
+  return kwargs, add_bias, bias_parameters
+
 def get_layers(layer: tf.keras.layers.Layer, conj_layer: tf.keras.layers.Layer = None, *argv, **kwargs) -> Tuple[List[tf.keras.layers.Layer], bool, dict]:
   """instantiate layer several times to match the number needed by the GA definition
 
@@ -125,28 +149,8 @@ def get_layers(layer: tf.keras.layers.Layer, conj_layer: tf.keras.layers.Layer =
   Returns:
       List[tf.keras.layers.Layer]: the list of keras layers
   """
-  # convert all arguments from argv to kwargs
-  parameters = inspect.getfullargspec(layer.__init__).args
-  for i, arg in enumerate(argv):
-    kwargs[parameters[i + 1]] = arg  # + 1 because the first element of parameters is 'self'
-  # add all default parameters to kwargs
-  for key, value in inspect.signature(layer.__init__).parameters.items():
-    if key in ['self', 'kwargs']:
-      continue
-    if key not in kwargs:
-      kwargs[key] = value.default
-
-  # If we define some bias, we don't want to put it in the linear layer but after, as a non-linear layer
-  add_bias = False
-  if "use_bias" in kwargs:
-    add_bias = kwargs["use_bias"]
-    kwargs["use_bias"] = False
-  bias_parameters = {}
-  if add_bias:
-    for param in ["bias_initializer", "bias_regularizer", "bias_constraint"]:
-      bias_parameters[param] = kwargs[param]
-
-
+  kwargs = convert_all_args_to_kwargs(layer.__init__, argv, kwargs)
+  kwargs, add_bias, bias_parameters = remove_bias_from_kwargs(kwargs)
 
   # create a list of kargs to deal with the difference in settings between the blades
   list_kwargs = [kwargs.copy() for _ in range(multivector_length())]
@@ -173,7 +177,7 @@ def get_layers(layer: tf.keras.layers.Layer, conj_layer: tf.keras.layers.Layer =
     init_parameters = {}
 
     for arg in list(inspect.signature(custom_init.__init__).parameters):
-      if arg in ['self', 'kwargs','blade_idx']: # we are gonna set <blade_idx> later
+      if arg in ['self', 'kwargs', 'blade_idx']:  # we are gonna set <blade_idx> later
         continue
       elif arg in kwargs:
         init_parameters[arg] = kwargs[arg]
@@ -183,9 +187,8 @@ def get_layers(layer: tf.keras.layers.Layer, conj_layer: tf.keras.layers.Layer =
 
   layers = [layer(**list_kwargs[i]) for i in range(multivector_length())]
 
-
   # for now, never use conj layer as it is not clear if ti is better than standard ops
-  if False: # conj_layer is not None:
+  if False:  # conj_layer is not None:
     kwargs['ga_dimension'] = multivector_length()
     conj_layer = conj_layer(**kwargs)
     return layers, add_bias, bias_parameters, conj_layer
@@ -557,9 +560,9 @@ class TF2Upstride:
 
   def __call__(self, x):
     if self.learn_multivector:
-      output = []
-      for blade in range(multivector_length()):
-        output.append( learn_vector_component(x, 3) )
+      output = [x]
+      for blade in range(1, multivector_length()):
+        output.append(learn_vector_component(x, 3))
       return output
     return [x]
 
