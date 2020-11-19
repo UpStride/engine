@@ -176,7 +176,7 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
 
     def normalize_inference():
       inference_centred = [inputs[i] - tf.reshape(self.moving_mean[i], broadcast_mu_shape) for i in range(self.multivector_length)]
-      return self.bn(inference_centred, self.moving_V, self.beta, self.gamma, axis=self.axis)
+      return self.bn(inference_centred, v)
 
     # Pick the normalized form corresponding to the training phase.
     return tf.keras.backend.in_train_phase(input_bn, normalize_inference, training=training)
