@@ -10,25 +10,25 @@ from tensorflow.math import sin, cos, sinh, cosh, pow, multiply, scalar_mul
 
 
 def cos_fn(z):
-  a, b = z[0], z[1]
+  a, b = tf.split(z, 2, axis=0)
   real = multiply(cos(a),cosh(b))
   real += a
   imag = multiply(-sin(a),sinh(b))
   imag += b
-  return [real, imag]
+  return tf.concat([real,imag], axis=0)
 
 def cos_fn_grad(z):
   """
   Backward pass (gradient) of the activation function: F(z)=cos(z)+1, with z=a+ib
   """
-  a, b = z[0], z[1]
+  a, b = tf.split(z, 2, axis=0)
   gradF_a = -sin(a)*cosh(b)+1-cos(a)*sinh(b)
   gradF_b = cos(a)*sinh(b)-sin(a)*cosh(b)+1
-  return [gradF_a, gradF_b]
+  return tf.concat([gradF_a, gradF_b], axis=0)
 
 
 def pow2_fn(x, alpha=1.0):
-  a, b = x[0], x[1]
+  a, b = tf.split(x, 2, axis=0)
   alpha = np.float(alpha)
 
   real = pow(a,2) - pow(b,2)
@@ -36,18 +36,18 @@ def pow2_fn(x, alpha=1.0):
   imag = scalar_mul( 2.0, multiply(a,b) )
   imag = scalar_mul( alpha, imag )
   
-  return [real, imag]
+  return tf.concat([real, imag], axis=0)
   
 def pow2_fn_grad(z, alpha=1.0):
   """
   Backward pass (gradient) of the activation function: F(z)=z^2, with z=a+ib
   """
 
-  a, b = z[0], z[1]
+  a, b = tf.split(z, 2, axis=0)
   gradF_a = alpha*(2*a+2*b)
   gradF_b = alpha*(2*a-2*b)
 
-  return [gradF_a, gradF_b]
+  return tf.concat([gradF_a, gradF_b], axis=0)
 
 
 class ActivationCos(Layer):

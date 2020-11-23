@@ -390,3 +390,13 @@ Proper weight initialization is very important for the convergence of the model.
 - Scaled down version of the real initializer needs to be explored as well. Before QInitializer
 we just used the default TF initializer without scaling down their variances to match for quaternion.
 This needs to be done to explore the effectiveness of QInitializer.
+
+
+# Improvements for v2
+Big refractor of the code to match the data structure define in Phoenix project :
+- Now only support channel first
+- Images have shape [Batch_size * N_dim, C, H, W]
+- Conv kernels have shape [N_dim, O, I, H, W]
+- Depthwise conv kernels have shape [N_dim, depth_mul * I, 1, H, W]
+- Dense layer kernels have shape [N_dim, I, O]
+- QInitializer is now HInitializer

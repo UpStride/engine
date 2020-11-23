@@ -86,6 +86,23 @@ def get_input_output_unit(depthwise, shape):
     n_in, n_out = np.prod(shape[:-2]), shape[-1]
   return n_in, n_out
 
+# This is the version compatible with the cpp engine, but not yet with python
+# def get_input_output_unit(depthwise, shape):
+#   """
+#   Dense layers have shape (N_dim, C_in, C_out)
+#   Conv layers have shape (N_dim, O, I, H, W)
+#   Depthwise conv layers have shape (N_dim, depth_mul * I, 1, H, W)
+#   """
+#   if len(shape) == 3:
+#     # Then dense layer
+#     n_in, n_out = shape[1], shape[2]
+#   elif not depthwise:
+#     # Then conv
+#     n_in, n_out = np.prod(shape[2:]), shape[1]
+#   else:
+#     # then depthwise conv
+#     n_in, n_out = np.prod(shape[2:]), shape[1]
+#   return n_in, n_out
 
 class IndependentFilter(Initializer):
   def __init__(self, criterion='glorot', depthwise=False, complex=False):
@@ -144,7 +161,8 @@ class IndependentFilter(Initializer):
         dtype (type, optional): data type of the tensor
     """
     shape = list(shape)
-    shape[-1] = int(shape[-1] / 2)
+    if complex:
+      shape[-1] = int(shape[-1] / 2) # divide per 2 to get shape in term of complex number
     if len(shape) == 2:  # then dense layer
       num_rows, num_cols = shape[0], shape[1]
     else:  # then Conv{1/2/3}D
@@ -217,7 +235,7 @@ class CInitializer(Initializer):
         dtype (type, optional): data type of the tensor
     """
     shape = list(shape) 
-    shape[-1] = int(shape[-1] / 2)
+    shape[-1] = int(shape[-1] / 2) # because complex
     n_in, n_out = get_input_output_unit(self.depthwise, shape)
     desired_var = criterion_to_var[self.criterion](n_in, n_out)
     sigma = np.sqrt(desired_var/2)
@@ -232,14 +250,10 @@ class HInitializer(Initializer):
     assert criterion in ['glorot', 'he'], f"Invalid criterion {criterion}"
     self.criterion = criterion
     self.depthwise = depthwise
-    self.complex_part = None
-    self.outputs = None
-    self.output_id = 0
 
   def __call__(self, shape, dtype=None):
-    if self.outputs is not None:
-      self.output_id += 1
-      return self.outputs[self.output_id]
+    shape = list(shape) 
+    shape[-1] = int(shape[-1] / 4) # because quaternion
     n_in, n_out = get_input_output_unit(self.depthwise, shape)
     desired_var = criterion_to_var[self.criterion](n_in, n_out)
     sigma = math.sqrt(desired_var/4)
@@ -263,10 +277,10 @@ class HInitializer(Initializer):
     u_j = j / mag
     u_k = k / mag
 
-    self.outputs = [
+    outputs = [
         magnitude * np.cos(phase),
         magnitude * u_i*np.sin(phase),
         magnitude * u_j*np.sin(phase),
         magnitude * u_k*np.sin(phase)
     ]
-    return self.outputs[0]
+    return np.concatenate(outputs, axis=-1)

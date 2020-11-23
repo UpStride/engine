@@ -1,9 +1,12 @@
 import setuptools
 import codecs
 
+with open('version') as f:
+  version = f.readline()
+
 setuptools.setup(
     name="upstride",
-    version="1.2.0",
+    version=version,
     author="UpStride S.A.S",
     author_email="hello@upstride.io",
     description="",

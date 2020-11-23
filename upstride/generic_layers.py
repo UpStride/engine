@@ -5,10 +5,10 @@ import inspect
 from typing import List, Tuple
 import tensorflow as tf
 
-from .convolutional import Conv2D as Conv2DConj
+# from .convolutional import Conv2D as Conv2DConj for now conjugate is not used
 from .initializers import InitializersFactory
 
-# Definition of the GA, setup when upstride.type{1/2/3}.calling tf.keras.layers
+# Definition of the GA, setup when calling upstride.type{1/2/3}.tf.keras.layers
 upstride_type = 3
 blade_indexes = ["", "1", "2", "3", "12", "13", "23", "123"]
 geometrical_def = (3, 0, 0)
@@ -16,7 +16,10 @@ geometrical_def = (3, 0, 0)
 conjugate = False
 
 
-def change_upstride_type(type, new_blade_indexes,  new_geometrical_def):
+def change_upstride_type(type: int, new_blade_indexes: List[str],  new_geometrical_def: Tuple[int, int, int]):
+  """ Called in upstride.type{1/2/3}.tf.keras.layers to setup the algebra. In a near future we should stop using 
+  global variables for this
+  """
   global upstride_type, blade_indexes, geometrical_def
   upstride_type = type
   blade_indexes = new_blade_indexes
@@ -49,7 +52,9 @@ def blade_index_to_position(index: str) -> int:
 def square_vector(index: int) -> int:
   @functools.lru_cache(maxsize=1)
   def get_list():
-    """return a list that map the indice to the sqare
+    """return a list that map the indice to the square
+    For instance, for geometrical_def = (2, 3, 1) this function will return
+    [1, 1, -1, -1, -1, 0]
     """
     l = [0]
     possible_squares = [1, -1, 0]
@@ -114,7 +119,10 @@ def unit_multiplier(i: int, j: int) -> Tuple[int, int]:
 
 
 def convert_all_args_to_kwargs(function, argv, kwargs):
-  # convert all arguments from argv to kwargs
+  """ This function use the information in the signature of the function
+  to convert all elements of argv to kwargs.
+  Then it also add in kwargs the default parameters of the function
+  """
   parameters = inspect.getfullargspec(function).args
   for i, arg in enumerate(argv):
     kwargs[parameters[i + 1]] = arg  # + 1 because the first element of parameters is 'self'
@@ -124,7 +132,8 @@ def convert_all_args_to_kwargs(function, argv, kwargs):
       continue
     if key not in kwargs:
       kwargs[key] = value.default
-  return kwargs # not really needed because kwargs is a pointer
+  return kwargs
+
 
 def remove_bias_from_kwargs(kwargs):
   add_bias = False
@@ -136,6 +145,7 @@ def remove_bias_from_kwargs(kwargs):
     for param in ["bias_initializer", "bias_regularizer", "bias_constraint"]:
       bias_parameters[param] = kwargs[param]
   return kwargs, add_bias, bias_parameters
+
 
 def get_layers(layer: tf.keras.layers.Layer, conj_layer: tf.keras.layers.Layer = None, *argv, **kwargs) -> Tuple[List[tf.keras.layers.Layer], bool, dict]:
   """instantiate layer several times to match the number needed by the GA definition
@@ -152,88 +162,31 @@ def get_layers(layer: tf.keras.layers.Layer, conj_layer: tf.keras.layers.Layer =
   kwargs = convert_all_args_to_kwargs(layer.__init__, argv, kwargs)
   kwargs, add_bias, bias_parameters = remove_bias_from_kwargs(kwargs)
 
-  # create a list of kargs to deal with the difference in settings between the blades
-  list_kwargs = [kwargs.copy() for _ in range(multivector_length())]
-
-  # managing the naming of the nodes in the computational graph
-  # special case for the name of the layer : if defined, then we need to change it to create different operations
-  if 'name' in kwargs and kwargs['name'] is not None:
-    base_name = kwargs['name']
-    for i in range(multivector_length()):
-      list_kwargs[i]['name'] = f'{base_name}_{i}'
-
   # hyper-complex initialization
   init_factory = InitializersFactory()
-  kernel_arg_name = ""
-  if ("kernel_initializer" in kwargs) and init_factory.is_custom_init(kwargs["kernel_initializer"]):
-    kernel_arg_name = "kernel_initializer"
-  elif ("depthwise_initializer" in kwargs) and init_factory.is_custom_init(kwargs["depthwise_initializer"]):
-    kernel_arg_name = "depthwise_initializer"
+  # kernel_arg_name = ""
 
-  if kernel_arg_name:
-    kernel_initializer = kwargs[kernel_arg_name]
+  for possible_name in ["kernel_initializer", "depthwise_initializer"]:
+    if (possible_name in kwargs) and init_factory.is_custom_init(kwargs[possible_name]):
+      custom_init = init_factory.get_initializer(kwargs[possible_name], upstride_type)
+      kwargs[possible_name] = custom_init
 
-    custom_init = init_factory.get_initializer(kernel_initializer, upstride_type)
-    init_parameters = {}
-
-    for arg in list(inspect.signature(custom_init.__init__).parameters):
-      if arg in ['self', 'kwargs', 'blade_idx']:  # we are gonna set <blade_idx> later
-        continue
-      elif arg in kwargs:
-        init_parameters[arg] = kwargs[arg]
-
-    for i in range(multivector_length()):
-      list_kwargs[i][kernel_arg_name] = custom_init(blade_idx=i, **init_parameters)
-
-  layers = [layer(**list_kwargs[i]) for i in range(multivector_length())]
-
-  # for now, never use conj layer as it is not clear if ti is better than standard ops
-  if False:  # conj_layer is not None:
-    kwargs['ga_dimension'] = multivector_length()
-    conj_layer = conj_layer(**kwargs)
-    return layers, add_bias, bias_parameters, conj_layer
-  else:
-    return layers, add_bias, bias_parameters, None
+  return layer(**kwargs), add_bias, bias_parameters
 
 
-def dagger_sign() -> List[int]:
-  """ return a array s such as for a vecor v of the GA, dagger{v} = s*v
-  dagger is defined by dagger{v} * v = 1
-  """
-  s = []
-  for i in blade_indexes:
-    if len(i) in [0, 1]:
-      s.append(1)
-    else:
-      s.append(-1)
-  return s
+def geometric_multiplication(layer_output, inverse=False, bias=None):
+  # first, let's split the output of the layer
+  layer_outputs = tf.split(layer_output, multivector_length(), axis=0)
+  # here layer_outputs is a list of output of multiplication of one blade per all kernel blade
+  if bias is not None:
+    layer_outputs[0] = bias(layer_outputs[0]) # add the bias on one of these output
+  cross_product_matrix = []
+  for i in range(multivector_length()):
+    cross_product_matrix.append(tf.split(layer_outputs[i], multivector_length(), axis=1))
 
-
-def compute_all_cross_product(layers, inputs, convert_to_tf):
-  layers_outputs = []
-  if not convert_to_tf:
-    # if there is no chance to convert back to tf, we can use time-distribute layer to speed up and save memory
-    tdlayers = [tf.keras.layers.TimeDistributed(layer) for layer in layers]
-    reshaped_inputs = [tf.keras.layers.Reshape([1] + e.shape[1:])(e) for e in inputs]
-    inputs = tf.keras.layers.Concatenate(axis=1)(reshaped_inputs)
-    td_outputs = [tdlater(inputs) for tdlater in tdlayers]
-
-    # print(td_outputs[0].shape)
-
-    for i in range(multivector_length()):
-      layers_outputs.append([])
-      for j in range(multivector_length()):
-        layers_outputs[i].append(td_outputs[i][:, j, :])
-  if convert_to_tf:
-    # if there is a chance to convert back to tf, keep the simple way so tf will be able to prune ops
-    for i in range(multivector_length()):
-      layers_outputs.append([])
-      for j in range(multivector_length()):
-        layers_outputs[i].append(layers[i](inputs[j]))
-  return layers_outputs
-
-
-def geometric_multiplication(cross_product_matrix, inverse=False):
+  # cross_product_matrix is a matrix such as
+  # cross_product_matrix[i][j] is the result of the multiplication of the
+  # i input by the j kernel
   output = [None] * multivector_length()
   for i in range(multivector_length()):
     for j in range(multivector_length()):
@@ -253,7 +206,7 @@ def geometric_multiplication(cross_product_matrix, inverse=False):
           output[k] = -cross_product_matrix[i][j]
         else:
           output[k] -= cross_product_matrix[i][j]
-  return output
+  return tf.keras.layers.Concatenate(axis=0)(output)
 
 
 class BiasLayer(tf.keras.layers.Layer):
@@ -290,16 +243,13 @@ class BiasLayer(tf.keras.layers.Layer):
 
   def build(self, input_shape):
     input_shape = tf.TensorShape(input_shape)
-    last_dim = tf.compat.dimension_value(input_shape[-1])
 
-    if last_dim is None:
-      raise ValueError('The last dimension of the inputs to `BiasLayer` '
-                       'should be defined. Found `None`.')
+    broadcast_beta_shape = [1] * len(input_shape)
+    broadcast_beta_shape[1] = input_shape[1]
 
-    self.input_spec = tf.keras.layers.InputSpec(min_ndim=2, axes={-1: last_dim})
     self.bias = self.add_weight(
         name='bias',
-        shape=[input_shape[-1]],
+        shape=broadcast_beta_shape,
         initializer=self.bias_initializer,
         regularizer=self.bias_regularizer,
         constraint=self.bias_constraint,
@@ -309,136 +259,75 @@ class BiasLayer(tf.keras.layers.Layer):
     self.built = True
 
   def call(self, inputs):
-    return tf.nn.bias_add(inputs, self.bias)
+    return tf.add(inputs, self.bias)
 
   def compute_output_shape(self, input_shape):
     return input_shape
 
   def get_config(self):
     config = {
-        'bias_initializer':
-            tf.keras.initializers.serialize(self.bias_initializer),
+        'bias_initializer': tf.keras.initializers.serialize(self.bias_initializer),
     }
     base_config = super(BiasLayer, self).get_config()
     return dict(list(base_config.items()) + list(config.items()))
 
 
-class GenericLinear:
-  def __init__(self, layer, *argv, upstride2tf=False, conj_layer=None, **kwargs):
+class GenericLinear(tf.keras.Model):
+  def __init__(self, layer, *argv, conj_layer=None, **kwargs):
+    super().__init__()
     # if the layer can run conjugaison, then self.conj_layer is an instance of the conj layer, else none
-    self.layers, self.add_bias, self.bias_parameters, self.conj_layer = get_layers(layer, conj_layer, *argv, **kwargs)
-    self.convert_to_tf = upstride2tf
-
-  def __call__(self, inputs):
-    if not conjugate or self.conj_layer is None:
-      if len(inputs) == 1:
-        # real input
-        x = inputs[0]
-        output = [self.layers[i](x) for i in range(multivector_length())]
-      else:
-        # R^{multivector_length()} input
-        layers_outputs = compute_all_cross_product(self.layers, inputs, self.convert_to_tf and not conjugate)
-        output = geometric_multiplication(layers_outputs)
-    else:
-      outputs = self.conj_layer(inputs)
-      print(outputs)
-      # now outputs is
-      # - a list of 3 dimension if inputs is a Tensor with outputs[i][j][0] = conv2D(pointwise_mult(w_i, w_j), x)
-      # - a list of 3 dimension if inputs is a list with outputs[i][j][k] = conv2D(pointwise_mult(w_i, w_j), x_k)
-
-      # now sum the results
-      output = [None] * multivector_length()
-      d = dagger_sign()
-      for i in range(multivector_length()):
-        for j in range(multivector_length()):
-          for k in range(len(outputs[0][0])):
-            t, s1 = unit_multiplier(i, k)
-            t, s2 = unit_multiplier(t, j)
-            if output[t] is None:
-              print(d)
-              print(outputs[i][j][k])
-              output[t] = s1*s2*d[i] * outputs[i][j][k]
-            else:
-              output[t] += s1*s2*d[i] * outputs[i][j][k]
-
+    self.layer, self.add_bias, self.bias_parameters = get_layers(layer, conj_layer, *argv, **kwargs)
+    self.bias = None
     if self.add_bias:
-      for i in range(multivector_length()):
-        output[i] = BiasLayer(self.bias_parameters['bias_initializer'], self.bias_parameters['bias_regularizer'], self.bias_parameters['bias_constraint'])(output[i])
-    return output
+      self.bias = BiasLayer(self.bias_parameters['bias_initializer'], self.bias_parameters['bias_regularizer'], self.bias_parameters['bias_constraint'])
+
+  def call(self, input_tensor, training=False):
+    x = self.layer(input_tensor)
+    x = geometric_multiplication(x, bias=self.bias)
+    return x
 
 
-def reorder(inputs):
-  # need to permute the 2 dimensions of the list
-  # for instance, if layer is Add on quaternion, inputs = [[a,b,c,d], [e,f,g,h]]
-  # need to transform to [[a,e],[b,f],[c,g],[d,h]]
-  new_inputs = [[] for _ in range(len(inputs[1]))]
-  for el in inputs:
-    for i, e in enumerate(el):
-      new_inputs[i].append(e)
-  return new_inputs
-
-
-def learn_vector_component(x, channels=3):
-  """
-  Learning module taken from this paper (https://arxiv.org/pdf/1712.04604.pdf)
-  BN --> ReLU --> Conv --> BN --> ReLU --> Conv
-
-  Args:
-    x (tensor): Input to the network.
-    channels (int): number of filters
-
-  Returns:
-    tensor: output of the network. Learned component of the multi-vector.
-  """
-  x = tf.keras.layers.BatchNormalization()(x)
-  x = tf.keras.layers.Activation('relu')(x)
-  x = tf.keras.layers.Conv2D(channels, (1, 1), padding='same',use_bias=False)(x) # for now keeping 1x1 and bias False as per DCN
-  x = tf.keras.layers.BatchNormalization()(x)
-  x = tf.keras.layers.Activation('relu')(x)
-  x = tf.keras.layers.Conv2D(channels, (1, 1), padding='same',use_bias=False)(x) # for now keeping 1x1 and bias False as per DCN
-
-  return x
-
-
-class GenericNonLinear:
+class GenericNonLinear(tf.keras.Model):
   def __init__(self, layer, *argv, **kwargs):
-    self.layers, self.add_bias, self.bias_parameters, _ = get_layers(layer, None, *argv, **kwargs)
-    self.list_as_input = False  # some layers like Add or Contatenates takes a list of tensor as input
+    super().__init__()
+    self.layer, self.add_bias, self.bias_parameters = get_layers(layer, None, *argv, **kwargs)
 
-  def __call__(self, inputs):
-    if self.list_as_input:
-      inputs = reorder(inputs)
-
-    if len(inputs) == 1:
-      output = [self.layers[i](inputs[0]) for i in range(multivector_length())]
-    else:
-      output = [self.layers[i](inputs[i]) for i in range(multivector_length())]
-    return output
+  def __call__(self, input_tensor, training=False):
+    x = self.layer(input_tensor)
+    return x
 
 
 class Conv2D(GenericLinear):
   def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.Conv2D, *argv, conj_layer=Conv2DConj, **kwargs)
+    kwargs = convert_all_args_to_kwargs(tf.keras.layers.Conv2D.__init__, argv, kwargs)
+    kwargs['filters'] *= multivector_length()
+    super().__init__(tf.keras.layers.Conv2D, **kwargs)
 
 
 class Dense(GenericLinear):
   def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.Dense, *argv, **kwargs)
+    kwargs = convert_all_args_to_kwargs(tf.keras.layers.Dense.__init__, argv, kwargs)
+    kwargs['units'] *= multivector_length()
+    super().__init__(tf.keras.layers.Dense, **kwargs)
 
 
 class Conv2DTranspose(GenericLinear):
   def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.Conv2DTranspose, *argv, **kwargs)
+    kwargs = convert_all_args_to_kwargs(tf.keras.layers.Conv2DTranspose.__init__, argv, kwargs)
+    kwargs['filters'] *= multivector_length()
+    super().__init__(tf.keras.layers.Conv2DTranspose, **kwargs)
 
 
-class UpSampling2D(GenericLinear):
+class UpSampling2D(GenericNonLinear):
   def __init__(self, *argv, **kwargs):
     super().__init__(tf.keras.layers.UpSampling2D, *argv, **kwargs)
 
 
 class DepthwiseConv2D(GenericLinear):
   def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.DepthwiseConv2D, *argv, **kwargs)
+    kwargs = convert_all_args_to_kwargs(tf.keras.layers.DepthwiseConv2D.__init__, argv, kwargs)
+    kwargs['depth_multiplier'] *= multivector_length()
+    super().__init__(tf.keras.layers.DepthwiseConv2D, **kwargs)
 
 
 class DepthwiseConv2DTranspose(GenericLinear):
@@ -448,7 +337,9 @@ class DepthwiseConv2DTranspose(GenericLinear):
 
 class SeparableConv2D(GenericLinear):
   def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.SeparableConv2D, *argv, **kwargs)
+    kwargs = convert_all_args_to_kwargs(tf.keras.layers.SeparableConv2D.__init__, argv, kwargs)
+    kwargs['filters'] *= multivector_length()
+    super().__init__(tf.keras.layers.SeparableConv2D, **kwargs)
 
 
 class MaxPooling2D(GenericNonLinear):
@@ -547,34 +438,78 @@ class Dropout(GenericNonLinear):
 
 
 class TF2Upstride:
-  """
-  assume this function is called at the begining of the network.
+  """ assume this function should be call to transform TF tensors to Upstride Tensors
+  an upstride tensor has the same shape than a TF tensor, but the imaginary part is stack among BS
+
+  For specific types, if you want to add new strategies, then inherit this class, and add strategies inside
+  the self.strategies dic
   """
 
-  def __init__(self, strategy=''):
-    self.learn_multivector = False
-    if strategy == 'learned':
-      self.learn_multivector = True
-    elif strategy != '':
-      raise ValueError(f"unknown strategy: {strategy}")
+  def __init__(self, strategy='learned', **args):
+    # This dictionary map the strategy name to the function to call
+    self.strategies = {
+        'learned': self.learned_strategy,
+        'basic': self.basic
+    }
+    self.strategy_name = strategy
+    self.args = args
 
   def __call__(self, x):
-    if self.learn_multivector:
-      output = [x]
-      for blade in range(1, multivector_length()):
-        output.append(learn_vector_component(x, 3))
-      return output
-    return [x]
+    if self.strategy_name not in self.strategies:
+      raise ValueError(f"unknown strategy: {self.strategy_name}")
+    return self.strategies[self.strategy_name](x)
+
+  def learned_strategy(self, x):
+    """
+    Learning module taken from this paper (https://arxiv.org/pdf/1712.04604.pdf)
+    BN --> ReLU --> Conv --> BN --> ReLU --> Conv
+
+    Args:
+      x (tensor): Input to the network.
+      channels (int): number of filters
+
+    Returns:
+      tensor: output of the network. Learned component of the multi-vector.
+    """
+
+    channels = self.args.get('channels', 3)
+    kernel_size = self.args.get('kernel_size', 3)
+    use_bias = self.args.get('use_bias', False)
+    input = x
+    outputs = [x]
+    for _ in range(1, multivector_length()):
+      x = tf.keras.layers.BatchNormalization(axis=1)(input)
+      x = tf.keras.layers.Activation('relu')(x)
+      x = tf.keras.layers.Conv2D(channels, (kernel_size, kernel_size), padding='same', use_bias=use_bias)(x)
+      x = tf.keras.layers.BatchNormalization(axis=1)(x)
+      x = tf.keras.layers.Activation('relu')(x)
+      x = tf.keras.layers.Conv2D(channels, (kernel_size, kernel_size), padding='same', use_bias=use_bias)(x)
+      outputs.append(x)
+
+    return tf.keras.layers.Concatenate(axis=0)(outputs)
+
+  def basic(self, x):
+    outputs = [x]
+    for _ in range(1, multivector_length()):
+      outputs.append(tf.zeros_like(x))
+    return tf.keras.layers.Concatenate(axis=0)(outputs)
 
 
 class Upstride2TF:
   """convert multivector back to real values. 
   """
 
-  def __init__(self, strategy='default'):
-    # for now strategy is useless
-    if strategy != 'default':
-      raise NotImplementedError("")
+  def __init__(self, strategy='basic'):
+    self.strategies = {
+        'basic': self.basic
+    }
+    self.strategy_name = strategy
 
   def __call__(self, x):
-    return x[0]
+    if self.strategy_name not in self.strategies:
+      raise ValueError(f"unknown strategy: {self.strategy_name}")
+    return self.strategies[self.strategy_name](x)
+
+  def basic(self, x):
+    output = tf.split(x, multivector_length(), axis=0)
+    return output[0]

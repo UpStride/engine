@@ -156,7 +156,7 @@ def quaternion_mult_conv(tf_op, inputs, kernels, channel_axis):
 
 multiply_by_a = multiply_by_a1
 # mult 2 is more stable than mult 1 when working with float 16
-quaternion_mult = quaternion_mult_cpp
+quaternion_mult = quaternion_mult2
 
 
 def is_quaternion_init(init_type):

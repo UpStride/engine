@@ -18,7 +18,7 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
   """
 
   def __init__(self,
-               axis=-1,
+               axis=1,
                momentum=0.99,
                epsilon=1e-3,
                center=True,
@@ -80,11 +80,11 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
     self.moving_mean_initializer = tf.keras.initializers.get(moving_mean_initializer)
 
   def build(self, input_shape):
-    ndim = len(input_shape[0])  # usually 4
+    ndim = len(input_shape)  # usually 4
     # update self.axis
     if self.axis < 0:
       self.axis = ndim + self.axis  # usually 3 if channel last
-    param_shape = input_shape[0][self.axis]
+    param_shape = input_shape[self.axis]
     if param_shape is None:
       raise ValueError(f'Axis {self.axis} of input tensor should have a defined dimension '
                        f'but the layer received an input with shape {input_shape}.')
@@ -108,12 +108,12 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
     for p1 in range(self.multivector_length):
       postfix = self.dim_names[p1]
       if self.center:
-        self.beta[postfix] = self.add_weight(shape=(input_shape[0][self.axis],),
+        self.beta[postfix] = self.add_weight(shape=(input_shape[self.axis],),
                                              name=f'beta{[postfix]}',
                                              initializer=self.beta_initializer,
                                              regularizer=self.beta_regularizer,
                                              constraint=self.beta_constraint)
-      self.moving_mean.append(self.add_weight(shape=(input_shape[0][self.axis],),
+      self.moving_mean.append(self.add_weight(shape=(input_shape[self.axis],),
                                               initializer=self.moving_mean_initializer,
                                               name=f'moving_mean{[postfix]}',
                                               trainable=False))
@@ -157,13 +157,14 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
 
   def call(self, inputs, training=None):
     # inputs is an array of 'multivector_length' tensors
+    inputs = tf.split(inputs, self.multivector_length, axis=0)
     training = self._get_training_value(training)
     input_centred, mu, v, broadcast_mu_shape = self.compute_mean_var(inputs)
 
     input_bn = self.bn(input_centred, v)
     training_value = tf_utils.constant_value(training)
     if training_value == False:  # not the same as "not training_value" because of possible none
-      return input_bn
+      return tf.concat(input_bn, axis=0)
 
     update_list = []
     for i in range(self.multivector_length):
@@ -179,7 +180,56 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
       return self.bn(inference_centred, v)
 
     # Pick the normalized form corresponding to the training phase.
-    return tf.keras.backend.in_train_phase(input_bn, normalize_inference, training=training)
+    return tf.concat(tf.keras.backend.in_train_phase(input_bn, normalize_inference, training=training), axis=0)
+
+  def bn(self, input_centred, v):
+    w = self.compute_sqrt_inv(v)
+
+    broadcast_beta_shape = [1] * len(input_centred[0].shape)
+    broadcast_beta_shape[self.axis] = input_centred[0].shape[self.axis] # unittest [1, 1, 1, 5]
+
+    # Normalization. We multiply, x_normalized = W.x.
+    # The returned result will be a quaternion/complex standardized input
+    # For quaternions, r, i, j, and k parts are obtained as follows:
+    # x_r_normed = Wrr * x_r_cent + Wri * x_i_cent + Wrj * x_j_cent + Wrk * x_k_cent
+    # x_i_normed = Wri * x_r_cent + Wii * x_i_cent + Wij * x_j_cent + Wik * x_k_cent
+    # x_j_normed = Wrj * x_r_cent + Wij * x_i_cent + Wjj * x_j_cent + Wjk * x_k_cent
+    # x_k_normed = Wrk * x_r_cent + Wik * x_i_cent + Wjk * x_j_cent + Wkk * x_k_cent
+    output = []
+    for p1 in range(self.multivector_length):
+      tmp_out = 0
+      for p2 in range(self.multivector_length):
+        i1 = min(p1, p2)
+        i2 = max(p1, p2)
+        tmp_out += tf.reshape(w[self.dim_names[i1]+self.dim_names[i2]], broadcast_beta_shape) * input_centred[p2]
+      output.append(tmp_out)
+    standardized_output = output
+
+    # Now we perform the scaling and shifting of the normalized x using
+    # the scaling parameter
+    #           [  gamma_rr gamma_ri gamma_rj gamma_rk  ]
+    #   Gamma = [  gamma_ri gamma_ii gamma_ij gamma_ik  ]
+    #           [  gamma_rj gamma_ij gamma_jj gamma_jk  ]
+    #           [  gamma_rk gamma_ik gamma_jk gamma_kk  ]
+    # and the shifting parameter
+    #    Beta = [beta_r beta_i beta_j beta_k].T
+    # where:
+    # x_r_BN = gamma_rr * x_r + gamma_ri * x_i + gamma_rj * x_j + gamma_rk * x_k + beta_r
+    # x_i_BN = gamma_ri * x_r + gamma_ii * x_i + gamma_ij * x_j + gamma_ik * x_k + beta_i
+    # x_j_BN = gamma_rj * x_r + gamma_ij * x_i + gamma_jj * x_j + gamma_jk * x_k + beta_j
+    # x_k_BN = gamma_rk * x_r + gamma_ik * x_i + gamma_jk * x_j + gamma_kk * x_k + beta_k
+
+    output = []
+    for p1 in range(self.multivector_length):
+      tmp_out = 0
+      for p2 in range(self.multivector_length):
+        i1 = min(p1, p2)
+        i2 = max(p1, p2)
+        ratio = self.gamma[self.dim_names[i1]+self.dim_names[i2]] if self.scale else 1
+        tmp_out += tf.reshape(ratio, broadcast_beta_shape) * standardized_output[p2]
+      delta = tf.reshape(self.beta[self.dim_names[p1]], broadcast_beta_shape) if self.center else 0
+      output.append(tmp_out + delta)
+    return output
 
   def get_config(self):
     config = {
@@ -200,7 +250,7 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
     return dict(list(base_config.items()) + list(config.items()))
 
 
-class BatchNormalizationQ(GenericBatchNormalization):
+class BatchNormalizationH(GenericBatchNormalization):
   """
   quaternion implementation : https://github.com/gaudetcj/DeepQuaternionNetworks/blob/43b321e1701287ce9cf9af1eb16457bdd2c85175/quaternion_layers/bn.py
   tf implementation : https://github.com/tensorflow/tensorflow/blob/2b96f3662bd776e277f86997659e61046b56c315/tensorflow/python/keras/layers/normalization.py#L46
@@ -258,57 +308,6 @@ class BatchNormalizationQ(GenericBatchNormalization):
     o['jk'] = -(w['jk'] * o['jj']) * o['kk']
 
     return o
-
-  def bn(self, input_centred, v):
-    w = self.compute_sqrt_inv(v)
-
-    # Normalization. We multiply, x_normalized = W.x.
-    # The returned result will be a quaternion standardized input
-    # where the r, i, j, and k parts are obtained as follows:
-    # x_r_normed = Wrr * x_r_cent + Wri * x_i_cent + Wrj * x_j_cent + Wrk * x_k_cent
-    # x_i_normed = Wri * x_r_cent + Wii * x_i_cent + Wij * x_j_cent + Wik * x_k_cent
-    # x_j_normed = Wrj * x_r_cent + Wij * x_i_cent + Wjj * x_j_cent + Wjk * x_k_cent
-    # x_k_normed = Wrk * x_r_cent + Wik * x_i_cent + Wjk * x_j_cent + Wkk * x_k_cent
-    output = []
-    dim_names = "rijk"
-    for p1 in range(4):
-      tmp_out = 0
-      for p2 in range(4):
-        i1 = min(p1, p2)
-        i2 = max(p1, p2)
-        tmp_out += w[dim_names[i1]+dim_names[i2]] * input_centred[p2]
-      output.append(tmp_out)
-    standardized_output = output
-
-    # Now we perform the scaling and shifting of the normalized x using
-    # the scaling parameter
-    #           [  gamma_rr gamma_ri gamma_rj gamma_rk  ]
-    #   Gamma = [  gamma_ri gamma_ii gamma_ij gamma_ik  ]
-    #           [  gamma_rj gamma_ij gamma_jj gamma_jk  ]
-    #           [  gamma_rk gamma_ik gamma_jk gamma_kk  ]
-    # and the shifting parameter
-    #    Beta = [beta_r beta_i beta_j beta_k].T
-    # where:
-    # x_r_BN = gamma_rr * x_r + gamma_ri * x_i + gamma_rj * x_j + gamma_rk * x_k + beta_r
-    # x_i_BN = gamma_ri * x_r + gamma_ii * x_i + gamma_ij * x_j + gamma_ik * x_k + beta_i
-    # x_j_BN = gamma_rj * x_r + gamma_ij * x_i + gamma_jj * x_j + gamma_jk * x_k + beta_j
-    # x_k_BN = gamma_rk * x_r + gamma_ik * x_i + gamma_jk * x_j + gamma_kk * x_k + beta_k
-
-    output = []
-    broadcast_beta_shape = [1] * len(input_centred[0].shape)
-    broadcast_beta_shape[self.axis] = input_centred[0].shape[self.axis]  # unittest [1, 1, 1, 5]
-
-    dim_names = "rijk"
-    for p1 in range(4):
-      tmp_out = 0
-      for p2 in range(4):
-        i1 = min(p1, p2)
-        i2 = max(p1, p2)
-        ratio = self.gamma[dim_names[i1]+dim_names[i2]] if self.scale else 1
-        tmp_out += ratio * standardized_output[p2]
-      delta = tf.reshape(self.beta[dim_names[p1]], broadcast_beta_shape) if self.center else 0
-      output.append(tmp_out + delta)
-    return output
 
 
 class BatchNormalizationC(GenericBatchNormalization):
@@ -401,37 +400,3 @@ class BatchNormalizationC(GenericBatchNormalization):
     w['ii'] = (v['rr'] + s) * inverse_st
     w['ri'] = -v['ri'] * inverse_st
     return w
-
-  def bn(self, input_centred, v):
-    w = self.compute_sqrt_inv(v)
-
-    # And we have computed the inverse square root matrix W = sqrt(V)!
-    # Normalization. We multiply, x_normalized = W.x.
-
-    # The returned result will be a complex standardized input
-    # where the real and imaginary parts are obtained as follows:
-    # x_real_normed = w['rr'] * x_real_centred + w['ri'] * x_imag_centred
-    # x_imag_normed = w['ri'] * x_real_centred + w['ii'] * x_imag_centred
-
-    standardized_output = [w['rr'] * input_centred[0] + w['ri'] * input_centred[1],
-                           w['ri'] * input_centred[0] + w['ii'] * input_centred[1]]
-
-    # Now we perform the scaling and Shifting of the normalized x using
-    # the scaling parameter
-    #           [  gamma['rr'] gamma['ri']  ]
-    #   Gamma = [  gamma['ri'] gamma['ii']  ]
-    # and the shifting parameter
-    #    Beta = [beta_real beta_imag].T
-    # where:
-    # x_real_BN = gamma['rr'] * x_real_normed + gamma['ri'] * x_imag_normed + beta_real
-    # x_imag_BN = gamma['ri'] * x_real_normed + gamma['ii'] * x_imag_normed + beta_imag
-
-    broadcast_beta_shape = [1] * len(input_centred[0].shape)
-    broadcast_beta_shape[self.axis] = input_centred[0].shape[self.axis]
-
-    real_output = self.gamma['rr'] * standardized_output[0] + self.gamma['ri'] * standardized_output[1]
-    real_output += tf.reshape(self.beta['r'], broadcast_beta_shape)
-    imag_output = self.gamma['ri'] * standardized_output[0] + self.gamma['ii'] * standardized_output[1]
-    imag_output += tf.reshape(self.beta['i'], broadcast_beta_shape)
-
-    return [real_output, imag_output]
