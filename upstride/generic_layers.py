@@ -392,10 +392,10 @@ def learn_vector_component(x, channels=3):
   """
   x = tf.keras.layers.BatchNormalization()(x)
   x = tf.keras.layers.Activation('relu')(x)
-  x = tf.keras.layers.Conv2D(channels, (3, 3), padding='same')(x)
+  x = tf.keras.layers.Conv2D(channels, (1, 1), padding='same',use_bias=False)(x) # for now keeping 1x1 and bias False as per DCN
   x = tf.keras.layers.BatchNormalization()(x)
   x = tf.keras.layers.Activation('relu')(x)
-  x = tf.keras.layers.Conv2D(channels, (3, 3), padding='same')(x)
+  x = tf.keras.layers.Conv2D(channels, (1, 1), padding='same',use_bias=False)(x) # for now keeping 1x1 and bias False as per DCN
 
   return x
 

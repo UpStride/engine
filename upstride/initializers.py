@@ -143,6 +143,8 @@ class IndependentFilter(Initializer):
           For depthwise 2D convolution, shape = (kernel_x, kernel_y, n_channels, 1)
         dtype (type, optional): data type of the tensor
     """
+    shape = list(shape)
+    shape[-1] = int(shape[-1] / 2)
     if len(shape) == 2:  # then dense layer
       num_rows, num_cols = shape[0], shape[1]
     else:  # then Conv{1/2/3}D
@@ -214,6 +216,8 @@ class CInitializer(Initializer):
           For depthwise 2D convolution, shape = (kernel_x, kernel_y, n_channels, 1)
         dtype (type, optional): data type of the tensor
     """
+    shape = list(shape) 
+    shape[-1] = int(shape[-1] / 2)
     n_in, n_out = get_input_output_unit(self.depthwise, shape)
     desired_var = criterion_to_var[self.criterion](n_in, n_out)
     sigma = np.sqrt(desired_var/2)
