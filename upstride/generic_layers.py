@@ -501,7 +501,10 @@ class Upstride2TF:
 
   def __init__(self, strategy='basic'):
     self.strategies = {
-        'basic': self.basic
+        'basic': self.basic,
+        'concat': self.concat,
+        'max_pool': self.max_pool,
+        'avg_pool': self.avg_pool
     }
     self.strategy_name = strategy
 
@@ -513,3 +516,17 @@ class Upstride2TF:
   def basic(self, x):
     output = tf.split(x, multivector_length(), axis=0)
     return output[0]
+
+  def concat(self, x):
+    x = tf.split(x, multivector_length(), axis=0)
+    return tf.concat(x, 1)
+
+  def max_pool(self, x):
+    x = tf.split(x, multivector_length(), axis=0)
+    x = tf.stack(x, axis=-1)
+    return tf.math.reduce_max(x, axis=-1)
+
+  def avg_pool(self, x):
+    x = tf.split(x, multivector_length(), axis=0)
+    x = tf.stack(x, axis=-1)
+    return tf.math.reduce_mean(x, axis=-1)

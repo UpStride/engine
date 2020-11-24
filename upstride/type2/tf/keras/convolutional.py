@@ -185,7 +185,6 @@ class Conv(Layer):
 
   def build(self, input_shape):
     self.ga_dimension = 4
-    input_shape = input_shape[0]
     input_shape = tensor_shape.TensorShape(input_shape)
     input_channel = self._get_input_channel(input_shape)
     if input_channel % self.groups != 0:
@@ -259,6 +258,8 @@ class Conv(Layer):
     if self._is_causal:  # Apply causal padding to inputs for Conv1D.
       inputs = array_ops.pad(inputs, self._compute_causal_padding(inputs))
 
+    inputs = tf.split(inputs, 4, axis=0)
+
     outputs = utils.quaternion_mult(self._convolution_op, inputs, self.kernels)
     # outputs = utils.quaternion_mult_conv(self._convolution_op, inputs, self.kernels, self._get_channel_axis())
 
@@ -276,7 +277,7 @@ class Conv(Layer):
     if self.activation is not None:
       for i in range(self.ga_dimension):
         outputs[i] = self.activation(outputs[i])
-    return outputs
+    return tf.concat(outputs, axis=0)
 
   def _spatial_output_shape(self, spatial_input_shape):
     return [
@@ -2324,7 +2325,6 @@ class DepthwiseConv2D(Conv2D):
 
   def build(self, input_shape):
     self.ga_dimension = 4
-    input_shape = input_shape[0]
     if len(input_shape) < 4:
       raise ValueError('Inputs to `DepthwiseConv2D` should have rank 4. '
                        'Received input shape:', str(input_shape))
@@ -2372,6 +2372,7 @@ class DepthwiseConv2D(Conv2D):
     self.built = True
 
   def call(self, inputs):
+    inputs = tf.split(inputs, 4, axis=0)
     def tf_op(i, k):
       return backend.depthwise_conv2d(
           i,
@@ -2393,9 +2394,7 @@ class DepthwiseConv2D(Conv2D):
     if self.activation is not None:
       for i in range(self.ga_dimension):
         outputs[i] = self.activation(outputs[i])
-      return outputs
-
-    return outputs
+    return tf.concat(outputs, axis=0)
 
   @tf_utils.shape_type_conversion
   def compute_output_shape(self, input_shape):

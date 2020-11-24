@@ -1,12 +1,9 @@
-from typing import Dict
-from tensorflow.python.keras.engine import base_layer_utils
-from tensorflow.python.keras.utils import tf_utils
 from tensorflow.keras.layers import Layer
-from tensorflow.keras import initializers
 from .... import generic_layers
 from ....generic_layers import *
 from ....generic_layers import TF2Upstride as GenericTF2UP
-from ....batchnorm import BatchNormalizationQ
+from ....generic_layers import Upstride2TF as GenericUP2TF
+from ....batchnorm import BatchNormalizationH
 from .convolutional import Conv2D, DepthwiseConv2D
 from .dense import Dense
 from tensorflow.python.keras import backend
@@ -24,67 +21,50 @@ class TF2Upstride(GenericTF2UP):
   """assume this function is called at the begining of the network. Put colors to imaginary parts and grayscale in real
   """
 
-  def __init__(self, strategy=''):
-    self.rgb_in_img = False
-    self.gray_in_real_rgb_in_img = False
-    if strategy == "joint":
-      self.rgb_in_img = True
-    elif strategy == 'grayscale':
-      self.gray_in_real_rgb_in_img = True
-    super().__init__()
+  def __init__(self, strategy='learned'):
+    super().__init__(strategy)
+    self.strategies['joint'] = self.join
+    self.strategies['grayscale'] = self.grayscale
 
-  def __call__(self, x):
-    image_data_format = tf.keras.backend.image_data_format() # can be 'channels_last' or 'channels_first'
-    if self.rgb_in_img:
-      if image_data_format == 'channels_last':
-        red = tf.expand_dims(x[:, :, :, 0], -1)
-        green = tf.expand_dims(x[:, :, :, 1], -1)
-        blue = tf.expand_dims(x[:, :, :, 2], -1)
-        zeros = tf.zeros_like(red)
-      else:
-        red = tf.expand_dims(x[:, 0, :, :], 1)
-        green = tf.expand_dims(x[:, 1, :, :], 1)
-        blue = tf.expand_dims(x[:, 2, :, :], 1)
-        zeros = tf.zeros_like(red)
-      return [zeros, red, green, blue]
-    if self.gray_in_real_rgb_in_img:
-      if image_data_format == 'channels_last':
-        red = tf.expand_dims(x[:, :, :, 0], -1)
-        green = tf.expand_dims(x[:, :, :, 1], -1)
-        blue = tf.expand_dims(x[:, :, :, 2], -1)
-        grayscale = tf.image.rgb_to_grayscale(x)
-      else:
-        red = tf.expand_dims(x[:, 0, :, :], 1)
-        green = tf.expand_dims(x[:, 1, :, :], 1)
-        blue = tf.expand_dims(x[:, 2, :, :], 1)
-        x = tf.transpose(x, [0, 2, 3, 1])
-        grayscale = tf.image.rgb_to_grayscale(x)
-      return [grayscale, red, green, blue]
-    return super().__call__(x)
+  def join(self, x):
+    image_data_format = tf.keras.backend.image_data_format()  # can be 'channels_last' or 'channels_first'
+    if image_data_format == 'channels_last':
+      red = tf.expand_dims(x[:, :, :, 0], -1)
+      green = tf.expand_dims(x[:, :, :, 1], -1)
+      blue = tf.expand_dims(x[:, :, :, 2], -1)
+      zeros = tf.zeros_like(red)
+    else:
+      red = tf.expand_dims(x[:, 0, :, :], 1)
+      green = tf.expand_dims(x[:, 1, :, :], 1)
+      blue = tf.expand_dims(x[:, 2, :, :], 1)
+      zeros = tf.zeros_like(red)
+    return tf.concat([zeros, red, green, blue], axis=0)
+
+  def grayscale(self, x):
+    image_data_format = tf.keras.backend.image_data_format()  # can be 'channels_last' or 'channels_first'
+    if image_data_format == 'channels_last':
+      red = tf.expand_dims(x[:, :, :, 0], -1)
+      green = tf.expand_dims(x[:, :, :, 1], -1)
+      blue = tf.expand_dims(x[:, :, :, 2], -1)
+      grayscale = tf.image.rgb_to_grayscale(x)
+    else:
+      red = tf.expand_dims(x[:, 0, :, :], 1)
+      green = tf.expand_dims(x[:, 1, :, :], 1)
+      blue = tf.expand_dims(x[:, 2, :, :], 1)
+      # rgb_to_grayscale function is only channel last
+      x = tf.transpose(x, [0, 2, 3, 1])
+      grayscale = tf.image.rgb_to_grayscale(x)
+      x = tf.transpose(x, [0, 3, 1, 2])
+    return tf.concat([grayscale, red, green, blue], axis=0)
 
 
-def determine_norm_order(norm_strategy):
-  """
-    split the norm order from `norm_strategy` string. `norm_strategy` should be like: norm_1, norm_2, norm_inf etc.
-  """
-  norm_order = norm_strategy.split('_')[-1]
-  if norm_order =='inf':
-    return np.inf
-  else:
-    try:
-      norm_order = float(norm_order)
-      if norm_order > 0:
-        return  norm_order
-      else:
-        raise ValueError
-    except ValueError:
-        raise ValueError(f"norm order must be inf or real positive number (>0), but  given{ norm_order}")
 
 class Attention(Layer):
   """ Normal Attention and Gated Attention which can map complex non-linear relations 
        (introduced in this paper https://arxiv.org/pdf/1802.04712.pdf) is 
        extended for aggregating components 
   """
+
   def __init__(self, hidden_size=64, final_size=1, is_gated_attention=False):
     super(Attention, self).__init__()
     self.initial_proj = tf.keras.layers.Dense(hidden_size, use_bias=False)
@@ -101,14 +81,14 @@ class Attention(Layer):
       Returns:
         Attention scores with shape [batch_size, final_size, len(tensor_list)]
     """
-    if type(tensor_list) is not list: 
+    if type(tensor_list) is not list:
       raise TypeError(f"tensor_list must be a list of tensors but given {type(tensor_list)}")
 
-    tensor_rank = len(tensor_list[0].get_shape()) 
-    if not 2 <= tensor_rank <=4 : 
+    tensor_rank = len(tensor_list[0].get_shape())
+    if not 2 <= tensor_rank <= 4:
       raise TypeError(f"tensor rank must be 2, 3 or 4, but provied {tensor_rank}")
 
-    # Attention will be applied using fully connected layer, so if a tensor is provied of rank 3 or 4 than 
+    # Attention will be applied using fully connected layer, so if a tensor is provied of rank 3 or 4 than
     # their dimension will be reduced using average pooling
     reduced_tensor_list = []
     reduction_layer = None
@@ -116,7 +96,7 @@ class Attention(Layer):
       reduction_layer = tf.keras.layers.GlobalAveragePooling1D()
     elif tensor_rank == 4:
       reduction_layer = tf.keras.layers.GlobalAveragePooling2D()
-    
+
     # Apply reduction layer if required
     if reduction_layer:
       for tensor in tensor_list:
@@ -142,61 +122,48 @@ class Attention(Layer):
       scores = tf.expand_dims(scores, axis=1)
     elif tensor_rank == 4:
       # Expand spatial (height, width) dimension
-      scores = tf.expand_dims(tf.expand_dims(scores, axis=1), axis=1) 
+      scores = tf.expand_dims(tf.expand_dims(scores, axis=1), axis=1)
 
     # stacking components across last dimensiona and apply weighted sum using attentionj scores
     aggregated_tensor = tf.math.reduce_sum(tf.stack(tensor_list, axis=-1) * scores,  axis=-1)
 
     return aggregated_tensor
 
-class Upstride2TF(Layer):
+
+class Upstride2TF(GenericUP2TF):
   """convert multivector back to real values.
   """
 
-  def __init__(self, strategy='default'):
-    self.concat = False
-    self.max_pool = False
-    self.avg_pool = False
-    self.norm_pool = False
-    self.take_first = False
-    self.attention = False
-    self.gated_attention = False
+  def __init__(self, strategy='basic'):
+    super().__init__(strategy)
+    self.strategies['norm'] = self.norm
+    self.strategies['attention'] = self.attention
+
     self.norm_order = None
+    if self.strategy_name.startswith("norm"):
+      norm_order = self.strategy_name.split('_')[-1]
+      if norm_order == 'inf':
+        self.norm_order = np.inf
+      else:
+        self.norm_order = float(norm_order)  # can raise ValueError
+        assert self.norm_order > 0
+      self.strategy_name = 'norm'
 
-    if strategy == "take_first" or strategy=='default':
-      self.take_first = True
-    elif strategy == "concat":
-      self.concat = True
-    elif strategy == "max_pool":
-      self.max_pool = True
-    elif strategy == "avg_pool":
-      self.avg_pool = True
-    elif strategy == "attention":
-      self.attention = True
-    elif strategy == "gated_attention":
+    self.gated_attention = False
+    if self.strategy_name == 'gated_attention':
+      self.strategy_name = 'attention'
       self.gated_attention = True
-    elif strategy.startswith("norm"):
-      self.norm_order = determine_norm_order(strategy)
-    else:
-      raise ValueError(f"unknown UP2TF strategy: {strategy}")
 
-  def __call__(self, x):
-    if self.take_first:
-      return x[0]
-    elif self.concat:
-      return tf.concat(x, -1)
-    elif self.attention or self.gated_attention:
-      dim = x[0].get_shape()[-1]
-      return Attention(hidden_size=64, final_size=dim, is_gated_attention=self.gated_attention)(x)
-    else:
-      axis = -1
-      stacked_tensors = tf.stack(x, axis=axis)
-      if self.max_pool:
-        return tf.math.reduce_max(stacked_tensors,  axis=axis)
-      elif self.avg_pool:
-        return tf.math.reduce_mean(stacked_tensors,  axis=axis)
-      elif self.norm_order:
-        return tf.norm(stacked_tensors, axis=axis, ord=self.norm_order)
+  def norm(self, x):
+    x = tf.split(x, multivector_length(), axis=0)
+    stacked_tensors = tf.stack(x, axis=-1)
+    return tf.norm(stacked_tensors, axis=-1, ord=self.norm_order)
+
+  def attention(self, x):
+    x = tf.split(x, multivector_length(), axis=0)
+    dim = x[0].get_shape()[1]
+    return Attention(hidden_size=64, final_size=dim, is_gated_attention=self.gated_attention)(x)
+
 
 
 class MaxNormPooling2D(Layer):

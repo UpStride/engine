@@ -161,7 +161,7 @@ class IndependentFilter(Initializer):
         dtype (type, optional): data type of the tensor
     """
     shape = list(shape)
-    if complex:
+    if self.complex:
       shape[-1] = int(shape[-1] / 2) # divide per 2 to get shape in term of complex number
     if len(shape) == 2:  # then dense layer
       num_rows, num_cols = shape[0], shape[1]

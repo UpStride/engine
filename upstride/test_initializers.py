@@ -8,7 +8,7 @@ class TestCInitializer(unittest.TestCase):
   def test_init(self):
     np.random.seed(50)
     init = CInitializer()
-    kernel = init((200, 100))
+    kernel = init((200, 200))
     kernel_r = kernel[:, :100]
     kernel_i = kernel[:, 100:]
 
@@ -20,13 +20,11 @@ class TestHInitializer(unittest.TestCase):
   def test_init(self):
     np.random.seed(3)
     init = HInitializer()
-    kernel_r = init((200, 100))
-    kernel_i = init((200, 100))
-    kernel_j = init((200, 100))
-    kernel_k = init((200, 100))
+    kernel = init((200, 400))
 
+    kernel_r, kernel_i, kernel_j, kernel_k = np.split(kernel, 4, axis=1)
     # for quaternion, Var(W) = E[|W|**2] (because E[W]**2=0)
-    self.assertAlmostEqual(np.mean(kernel_r ** 2 + kernel_i ** 2 + kernel_j**2 + kernel_k**2), 2/300, 4)
+    self.assertAlmostEqual(np.mean(kernel_r ** 2 + kernel_i ** 2 + kernel_j**2 + kernel_k**2), 2/300, 4)  # 300 = 200 (fan_in) + 100 (fan_out)
 
 
 class TestIndependentFilter(unittest.TestCase):
@@ -48,10 +46,10 @@ class TestIndependentFilter(unittest.TestCase):
   def test_dense_layer(self):
     """ test initialization with a dense layer 20 -> 10
     """
-    N = 20
+    N = 10
     BS = 50
     outputs = []
-    for i in range(10):
+    for i in range(N):
       np.random.seed(i*50)
       dense_layer = tf.keras.layers.Dense(10, kernel_initializer=IndependentFilter(), use_bias=False)
       outputs += self.create_run_check_destroy_neural_net(dense_layer, (BS, 20), 2/(20 + 10))
@@ -63,10 +61,11 @@ class TestIndependentFilter(unittest.TestCase):
   def test_conv_layer(self):
     """ test conv with kernel (3, 3), from 20 channels to 10
     """
-    N = 20
+    tf.keras.backend.set_image_data_format('channels_last')
+    N = 10
     BS = 1
     outputs = []
-    for i in range(10):
+    for i in range(N):
       np.random.seed(i*50)
       conv_layer = tf.keras.layers.Conv2D(10, (3, 3), kernel_initializer=IndependentFilter(), use_bias=False, padding='same')
       outputs += self.create_run_check_destroy_neural_net(conv_layer, (BS, 224, 224, 20), 2/(3*3*20 + 10))
@@ -77,10 +76,10 @@ class TestIndependentFilter(unittest.TestCase):
 
   def test_conv_layer_channel_first(self):
     tf.keras.backend.set_image_data_format('channels_first')
-    N = 20
+    N = 10
     BS = 1
     outputs = []
-    for i in range(10):
+    for i in range(N):
       np.random.seed(i*50)
       conv_layer = tf.keras.layers.Conv2D(10, (3, 3), kernel_initializer=IndependentFilter(), use_bias=False, padding='same', data_format='channels_first')
       outputs += self.create_run_check_destroy_neural_net(conv_layer, (BS, 20, 224, 224), 2/(3*3*20 + 10))
@@ -91,10 +90,11 @@ class TestIndependentFilter(unittest.TestCase):
     tf.keras.backend.set_image_data_format('channels_last')
 
   def test_depthwise_conv_layer(self):
-    N = 20
+    tf.keras.backend.set_image_data_format('channels_last')
+    N = 10
     BS = 1
     outputs = []
-    for i in range(10):
+    for i in range(N):
       np.random.seed(i*50)
       conv_layer = tf.keras.layers.DepthwiseConv2D((3, 3), depthwise_initializer=IndependentFilter(depthwise=True), use_bias=False, padding='same')
       outputs += self.create_run_check_destroy_neural_net(conv_layer, (BS, 224, 224, 20), 2/(3*3 + 1), is_depthwise=True)
@@ -103,13 +103,29 @@ class TestIndependentFilter(unittest.TestCase):
     self.assertAlmostEqual(np.mean(outputs), 0.00046288496)  # not far from 0
     self.assertAlmostEqual(np.var(outputs), 1.8047282)  # not far from 3*3 * 2 /(3*3 + 1) = 18/10 = 1.8
 
+  def test_depthwise_conv_layer_channel_first(self):
+    tf.keras.backend.set_image_data_format('channels_first')
+    N = 10
+    BS = 1
+    outputs = []
+    for i in range(N):
+      np.random.seed(i*50)
+      conv_layer = tf.keras.layers.DepthwiseConv2D((3, 3), depthwise_initializer=IndependentFilter(depthwise=True), use_bias=False, padding='same', data_format='channels_first')
+      outputs += self.create_run_check_destroy_neural_net(conv_layer, (BS, 20, 224, 224), 2/(3*3 + 1), is_depthwise=True)
+    print(np.mean(outputs))
+    print(np.var(outputs))
+    self.assertAlmostEqual(np.mean(outputs), 0.00018445279)  # not far from 0
+    self.assertAlmostEqual(np.var(outputs), 1.8032125)  # not far from 3*3 * 2 /(3*3 + 1) = 18/10 = 1.8
+
   def test_complex_kernel(self):
+    tf.keras.backend.set_image_data_format('channels_last')
     np.random.seed(42)
     # simulate the call of a complex dense layer
     init = IndependentFilter(complex=True)
 
     # fist call for real part
-    kernel = init((20, 10))
+    kernel = init((20, 20))
+    print(kernel.shape)
     kernel_r = kernel[:, :10]
     kernel_i = kernel[:, 10:]
     print(np.mean(kernel_r))

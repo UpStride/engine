@@ -83,7 +83,7 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
     ndim = len(input_shape)  # usually 4
     # update self.axis
     if self.axis < 0:
-      self.axis = ndim + self.axis  # usually 3 if channel last
+      self.axis = ndim + self.axis  # usually 1 if channel first, 3 if channel last
     param_shape = input_shape[self.axis]
     if param_shape is None:
       raise ValueError(f'Axis {self.axis} of input tensor should have a defined dimension '
@@ -108,12 +108,12 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
     for p1 in range(self.multivector_length):
       postfix = self.dim_names[p1]
       if self.center:
-        self.beta[postfix] = self.add_weight(shape=(input_shape[self.axis],),
+        self.beta[postfix] = self.add_weight(shape=(param_shape,),
                                              name=f'beta{[postfix]}',
                                              initializer=self.beta_initializer,
                                              regularizer=self.beta_regularizer,
                                              constraint=self.beta_constraint)
-      self.moving_mean.append(self.add_weight(shape=(input_shape[self.axis],),
+      self.moving_mean.append(self.add_weight(shape=(param_shape,),
                                               initializer=self.moving_mean_initializer,
                                               name=f'moving_mean{[postfix]}',
                                               trainable=False))

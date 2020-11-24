@@ -1,21 +1,26 @@
 import unittest
 import tensorflow as tf
 import numpy as np
-from .batchnorm import BatchNormalizationQ, BatchNormalizationC
+from .batchnorm import BatchNormalizationH, BatchNormalizationC
 
 
 class TestQuaternionBN(unittest.TestCase):
   def test_init(self):
     """ Basic test to see if we can call BN on a simple case
     """
-    inputs = tf.convert_to_tensor([[[[1., 3, 4, 5, 6], [1, 3, 4, 5, 6], [1, 3, 4, 5, 6]],
-                                    [[1, 3, 4, 5, 6], [1, 3, 4, 5, 6], [1, 3, 4, 5, 6]]]])
-    self.assertEqual(inputs.shape, (1, 2, 3, 5))
-    inputs = [inputs for _ in range(4)]
-    bn_layer = BatchNormalizationQ()
+    inputs = tf.convert_to_tensor([[[[1., 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]],
+                                    [[2, 2, 2, 2, 2], [2, 2, 2, 2, 2], [2, 2, 2, 2, 2]]],
+                                   [[[3, 3, 3, 3, 3], [3, 3, 3, 3, 3], [3, 3, 3, 3, 3]],
+                                    [[4, 4, 4, 4, 4], [4, 4, 4, 4, 4], [4, 4, 4, 4, 4]]],
+                                   [[[3, 3, 3, 3, 3], [3, 3, 3, 3, 3], [3, 3, 3, 3, 3]],
+                                    [[4, 4, 4, 4, 4], [4, 4, 4, 4, 4], [4, 4, 4, 4, 4]]],
+                                   [[[3, 3, 3, 3, 3], [3, 3, 3, 3, 3], [3, 3, 3, 3, 3]],
+                                    [[4, 4, 4, 4, 4], [4, 4, 4, 4, 4], [4, 4, 4, 4, 4]]]])
+    self.assertEqual(inputs.shape, (4, 2, 3, 5))
+    bn_layer = BatchNormalizationH()
     outputs = bn_layer(inputs, training=False)
-    self.assertEqual(len(outputs), 4)
-    self.assertTrue(np.array_equal(outputs[0], np.zeros((1, 2, 3, 5))))
+    self.assertEqual(outputs.shape, (4, 2, 3, 5))
+    self.assertTrue(np.array_equal(outputs, np.zeros((4, 2, 3, 5))))
 
   def test_compute_sqrt_inv(self):
     """ 
@@ -23,10 +28,11 @@ class TestQuaternionBN(unittest.TestCase):
     Call compute_sqrt_inv to compute the inverse of the square root of M, I
     multiply M by I**2 to check that this gives Id
     """
-    inputs = [tf.random.normal(shape=(1, 2, 3, 5)) for _ in range(4)]
-    bn_layer = BatchNormalizationQ()
+    inputs = tf.random.normal(shape=(4, 2, 3, 5))
+    bn_layer = BatchNormalizationH()
     # call it once to init everything
     bn_layer(inputs, training=False)
+    inputs = tf.split(inputs, 4, axis=0)
     _, _, v, _ = bn_layer.compute_mean_var(inputs)
     w = bn_layer.compute_sqrt_inv(v)
 
@@ -51,14 +57,15 @@ class TestQuaternionBN(unittest.TestCase):
 
 class TestComplexBN(unittest.TestCase):
   def test_init(self):
-    inputs = tf.convert_to_tensor([[[[1., 3, 4, 5, 6], [1, 3, 4, 5, 6], [1, 3, 4, 5, 6]],
-                                    [[1, 3, 4, 5, 6], [1, 3, 4, 5, 6], [1, 3, 4, 5, 6]]]])
-    self.assertEqual(inputs.shape, (1, 2, 3, 5))
-    inputs = [inputs for _ in range(2)]
+    inputs = tf.convert_to_tensor([[[[1., 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]],
+                                    [[2, 2, 2, 2, 2], [2, 2, 2, 2, 2], [2, 2, 2, 2, 2]]],
+                                   [[[3, 3, 3, 3, 3], [3, 3, 3, 3, 3], [3, 3, 3, 3, 3]],
+                                    [[4, 4, 4, 4, 4], [4, 4, 4, 4, 4], [4, 4, 4, 4, 4]]]])
+    self.assertEqual(inputs.shape, (2, 2, 3, 5))
     bn_layer = BatchNormalizationC()
     outputs = bn_layer(inputs, training=False)
-    self.assertEqual(len(outputs), 2)
-    self.assertTrue(np.array_equal(outputs[0], np.zeros((1, 2, 3, 5))))
+    self.assertEqual(outputs.shape, (2, 2, 3, 5))
+    self.assertTrue(np.array_equal(outputs, np.zeros((2, 2, 3, 5))))
 
   def test_compute_sqrt_inv(self):
     """ 
@@ -66,10 +73,11 @@ class TestComplexBN(unittest.TestCase):
     Call a compute_sqrt_inv to compute the inverse of the square root of M, I
     multiply M by I**2 to check that this gives Id
     """
-    inputs = [tf.random.normal(shape=(1, 2, 3, 5)) for _ in range(2)]
+    inputs = tf.random.normal(shape=(10, 5, 3, 2))
     bn_layer = BatchNormalizationC()
     # call it once to init everything
     bn_layer(inputs, training=False)
+    inputs = tf.split(inputs, 2, axis=0)
     _, _, v, _ = bn_layer.compute_mean_var(inputs)
     w = bn_layer.compute_sqrt_inv(v)
 

@@ -1139,7 +1139,7 @@ class Dense(Layer):
     if not (dtype.is_floating or dtype.is_complex):
       raise TypeError('Unable to build `Dense` layer with non-floating point '
                       'dtype %s' % (dtype,))
-    input_shape = tensor_shape.TensorShape(input_shape[0])
+    input_shape = tensor_shape.TensorShape(input_shape)
     if tensor_shape.dimension_value(input_shape[-1]) is None:
       raise ValueError('The last dimension of the inputs to `Dense` '
                        'should be defined. Found `None`.')
@@ -1179,6 +1179,7 @@ class Dense(Layer):
     self.built = True
 
   def call(self, inputs):
+    inputs = tf.split(inputs, 4, axis=0)
     rank = inputs[0].shape.rank
     outputs = []
     if rank is not None and rank > 2:
@@ -1204,7 +1205,7 @@ class Dense(Layer):
     if self.activation is not None:
       for i in range(4):
         outputs[i] = self.activation(outputs[i])  # pylint: disable=not-callable
-    return outputs
+    return tf.concat(outputs, axis=0)
 
   def compute_output_shape(self, input_shape):
     input_shape = tensor_shape.TensorShape(input_shape)
