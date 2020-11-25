@@ -27,6 +27,7 @@ import types as python_types
 import warnings
 
 import numpy as np
+import tensorflow as tf
 
 from tensorflow.python.eager import backprop
 from tensorflow.python.eager import context

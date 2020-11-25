@@ -290,10 +290,17 @@ class GenericLinear(tf.keras.Model):
 class GenericNonLinear(tf.keras.Model):
   def __init__(self, layer, *argv, **kwargs):
     super().__init__()
+    self.stack_channels = False # usefull for BN
     self.layer, self.add_bias, self.bias_parameters = get_layers(layer, None, *argv, **kwargs)
 
   def __call__(self, input_tensor, training=False):
+    if self.stack_channels:
+      input_tensor = tf.split(input_tensor, multivector_length(), axis=0)
+      input_tensor = tf.concat(input_tensor, axis=1)
     x = self.layer(input_tensor)
+    if self.stack_channels:
+      x = tf.split(x, multivector_length(), axis=1)
+      x = tf.concat(x, axis=0)
     return x
 
 
@@ -380,6 +387,7 @@ class Reshape(GenericNonLinear):
 class BatchNormalization(GenericNonLinear):
   def __init__(self, *argv, **kwargs):
     super().__init__(tf.keras.layers.BatchNormalization, *argv, **kwargs)
+    self.stack_channels = True
 
 
 class Activation(GenericNonLinear):
