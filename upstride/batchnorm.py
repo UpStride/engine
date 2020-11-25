@@ -109,13 +109,13 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
       postfix = self.dim_names[p1]
       if self.center:
         self.beta[postfix] = self.add_weight(shape=(input_shape[0][self.axis],),
-                                             name=f'beta{[postfix]}',
+                                             name=f'beta{postfix}',
                                              initializer=self.beta_initializer,
                                              regularizer=self.beta_regularizer,
                                              constraint=self.beta_constraint)
       self.moving_mean.append(self.add_weight(shape=(input_shape[0][self.axis],),
                                               initializer=self.moving_mean_initializer,
-                                              name=f'moving_mean{[postfix]}',
+                                              name=f'moving_mean{postfix}',
                                               trainable=False))
     self.built = True
 
