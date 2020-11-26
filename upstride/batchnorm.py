@@ -186,7 +186,8 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
     w = self.compute_sqrt_inv(v)
 
     broadcast_beta_shape = [1] * len(input_centred[0].shape)
-    broadcast_beta_shape[self.axis] = input_centred[0].shape[self.axis] # unittest [1, 1, 1, 5]
+    num_channels = input_centred[0].shape[self.axis]
+    broadcast_beta_shape[self.axis] = num_channels # unittest [1, 1, 1, 5]
 
     # Normalization. We multiply, x_normalized = W.x.
     # The returned result will be a quaternion/complex standardized input
@@ -219,16 +220,30 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
     # x_j_BN = gamma_rj * x_r + gamma_ij * x_i + gamma_jj * x_j + gamma_jk * x_k + beta_j
     # x_k_BN = gamma_rk * x_r + gamma_ik * x_i + gamma_jk * x_j + gamma_kk * x_k + beta_k
 
+    # first multiply by gamma
     output = []
-    for p1 in range(self.multivector_length):
-      tmp_out = 0
-      for p2 in range(self.multivector_length):
-        i1 = min(p1, p2)
-        i2 = max(p1, p2)
-        ratio = self.gamma[self.dim_names[i1]+self.dim_names[i2]] if self.scale else 1
-        tmp_out += tf.reshape(ratio, broadcast_beta_shape) * standardized_output[p2]
-      delta = tf.reshape(self.beta[self.dim_names[p1]], broadcast_beta_shape) if self.center else 0
-      output.append(tmp_out + delta)
+    if self.scale:
+      for p1 in range(self.multivector_length):
+        tmp_out = 0
+        for p2 in range(self.multivector_length):
+          i1 = min(p1, p2)
+          i2 = max(p1, p2)
+          ratio = self.gamma[self.dim_names[i1]+self.dim_names[i2]]
+          tmp_out += tf.reshape(ratio, broadcast_beta_shape) * standardized_output[p2]
+        output.append(tmp_out)
+    else:
+      output = standardized_output
+    # then add beta
+    input = output
+    output = []
+    if self.center:
+      for p1 in range(self.multivector_length):
+        delta = self.beta[self.dim_names[p1]]
+        delta = tf.reshape(delta, broadcast_beta_shape) 
+        output.append(input + delta)
+    else:
+      output = input
+        
     return output
 
   def get_config(self):
