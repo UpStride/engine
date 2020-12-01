@@ -10,7 +10,10 @@ class TestUpstride(unittest.TestCase):
     layers.set_conjugaison_mult(False)
     tf.keras.backend.set_image_data_format('channels_first')
     inputs = tf.keras.layers.Input(shape=(3, 32, 32))
-    x = layers.TF2Upstride()(inputs)
+    x = layers.TF2Upstride(kernel_initializer='he_normal',
+          kernel_regularizer=tf.keras.regularizers.l2(l=0.0001),
+          use_bias=True,
+          kernel_size=1)(inputs)
     x = layers.Conv2D(8, (3, 3), name='test-names')(x)
     # #self.assertEqual(len(x), 1)
     # self.assertEqual(len(x), 2)
@@ -21,6 +24,7 @@ class TestUpstride(unittest.TestCase):
     x = layers.Conv2D(16, (3, 3), kernel_initializer='glorot')(x)
     x = layers.Activation('relu')(x)
     x = layers.Conv2D(24, (3, 3), kernel_initializer='he')(x)
+    x = layers.BatchNormalizationC(center=False, scale=False)(x)
     x = layers.Activation('relu')(x)
     x = layers.Flatten()(x)
     x = layers.Dense(50, kernel_initializer='he')(x)

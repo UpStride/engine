@@ -86,7 +86,7 @@ class TestIndependentFilter(unittest.TestCase):
     print(np.mean(outputs))
     print(np.var(outputs))
     self.assertAlmostEqual(np.mean(outputs), 0.0007675069)  # not far from 0
-    self.assertAlmostEqual(np.var(outputs), 1.9007603)  # not far from 20*3*3 * 2 /(20*3*3 + 10) = 36/19 = 1.894736842105263
+    self.assertAlmostEqual(np.var(outputs), 1.9007603, places=6)  # not far from 20*3*3 * 2 /(20*3*3 + 10) = 36/19 = 1.894736842105263
     tf.keras.backend.set_image_data_format('channels_last')
 
   def test_depthwise_conv_layer(self):

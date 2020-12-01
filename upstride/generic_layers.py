@@ -483,15 +483,19 @@ class TF2Upstride:
     channels = self.args.get('channels', 3)
     kernel_size = self.args.get('kernel_size', 3)
     use_bias = self.args.get('use_bias', False)
+    kernel_initializer = self.args.get('kernel_initializer','glorot_uniform')
+    kernel_regularizer = self.args.get('kernel_regularizer')
     input = x
     outputs = [x]
     for _ in range(1, multivector_length()):
       x = tf.keras.layers.BatchNormalization(axis=1)(input)
       x = tf.keras.layers.Activation('relu')(x)
-      x = tf.keras.layers.Conv2D(channels, (kernel_size, kernel_size), padding='same', use_bias=use_bias)(x)
+      x = tf.keras.layers.Conv2D(channels, (kernel_size, kernel_size), padding='same', use_bias=use_bias, 
+          kernel_initializer=kernel_initializer,kernel_regularizer=kernel_regularizer)(x)
       x = tf.keras.layers.BatchNormalization(axis=1)(x)
       x = tf.keras.layers.Activation('relu')(x)
-      x = tf.keras.layers.Conv2D(channels, (kernel_size, kernel_size), padding='same', use_bias=use_bias)(x)
+      x = tf.keras.layers.Conv2D(channels, (kernel_size, kernel_size), padding='same', use_bias=use_bias,
+          kernel_initializer=kernel_initializer,kernel_regularizer=kernel_regularizer)(x)
       outputs.append(x)
 
     return tf.keras.layers.Concatenate(axis=0)(outputs)
