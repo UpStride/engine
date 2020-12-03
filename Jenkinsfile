@@ -55,7 +55,7 @@ pipeline {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
                         docker.image(env.BUILD_DEV).inside("--gpus all"){
-                            tests = ['test.py', 'test_tf.py', 'test_type1.py','test_type2.py', 'test_type3.py']
+                            tests = ['test.py']
                             for (int i = 0; i < tests.size(); i++) {
                                 sh("""python3 ${tests[i]}""")
                             }

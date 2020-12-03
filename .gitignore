@@ -5,3 +5,4 @@ external_lib
 _upstride_ops.so
 venv/
 .idea/
+*.png

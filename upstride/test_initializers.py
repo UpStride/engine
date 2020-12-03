@@ -13,7 +13,7 @@ class TestCInitializer(unittest.TestCase):
     kernel_i = kernel[:, 100:]
 
     # for complex, Var(W) = E[|W|**2] (because E[W]**2=0)
-    self.assertAlmostEqual(np.mean(kernel_r ** 2 + kernel_i ** 2), 2/(200/2 + 100), 4)
+    self.assertAlmostEqual(np.mean(kernel_r ** 2 + kernel_i ** 2), 2/(200 + 100), 4)
 
 
 class TestHInitializer(unittest.TestCase):
@@ -55,8 +55,8 @@ class TestIndependentFilter(unittest.TestCase):
       outputs += self.create_run_check_destroy_neural_net(dense_layer, (BS, 20), 2/(20 + 10))
     print(np.mean(outputs))
     print(np.var(outputs))
-    self.assertAlmostEqual(np.mean(outputs), 0.013664723)  # not far from 0
-    self.assertAlmostEqual(np.var(outputs), 1.3137447)  # not far from 20 * 2 /(20 + 10) = 4 / 3
+    self.assertAlmostEqual(np.mean(outputs), -0.011353764)  # not far from 0
+    self.assertAlmostEqual(np.var(outputs), 1.3628457)  # not far from 20 * 2 /(20 + 10) = 4 / 3
 
   def test_conv_layer(self):
     """ test conv with kernel (3, 3), from 20 channels to 10
