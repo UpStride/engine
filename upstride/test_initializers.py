@@ -13,7 +13,7 @@ class TestCInitializer(unittest.TestCase):
     kernel_i = kernel[:, 100:]
 
     # for complex, Var(W) = E[|W|**2] (because E[W]**2=0)
-    self.assertAlmostEqual(np.mean(kernel_r ** 2 + kernel_i ** 2), 2/300, 4)
+    self.assertAlmostEqual(np.mean(kernel_r ** 2 + kernel_i ** 2), 2/(200/2 + 100), 4)
 
 
 class TestHInitializer(unittest.TestCase):

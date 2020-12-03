@@ -37,7 +37,7 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
     # this version of batch normalization implements a new security : if checked if axis is meaningful with Keras data_format.
     # If it is not, then print a warning
     if tf.keras.backend.image_data_format() == 'channels_first' and axis == -1:
-      print('Warning, Batchnormalization is called on channels -1 when data format is "channels_first". Do you really want to to this ?')
+      print('Warning, Batchnormalization is called on channels -1 when data format is "channels_first". Do you really want to do this ?')
     self.axis = axis
     self.momentum = momentum
     self.epsilon = epsilon

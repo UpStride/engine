@@ -73,6 +73,8 @@ class InitializersFactory():
 
 
 # functions that return the variance of a specific criterion
+# TODO : all framework doesn't seems to agree on this formulation, mainly the "2." is sometime "1."... We should benchmark both
+# Here the convention used is the same than in the paper DCN and DQN
 criterion_to_var = {
     'glorot': lambda n_in, n_out: 2. / (n_in + n_out),
     'he': lambda n_in, n_out: 2. / (n_in),
@@ -80,18 +82,28 @@ criterion_to_var = {
 
 
 def get_input_output_unit(depthwise, shape):
+  """ compute the n_in and n_out parameters used fot glorot or he criterion.
+  These variables are fan_in and fan_out in Keras
+
+  Note that here again, all frameworks implement different things. Here we try to stick as close as possible to the 
+  intuition of the paper
+  """
   if not depthwise:
     n_in, n_out = np.prod(shape[:-1]), shape[-1]
   else:
     n_in, n_out = np.prod(shape[:-2]), shape[-1]
   return n_in, n_out
 
-# This is the version compatible with the cpp engine, but not yet with python
+# Please note that the above function is for python engine only. For cpp engine,
+# the shape of the kernel is different so this function should change. It probably is the only
+# thing in this file that needs to be adapted for Phoenix
+#
+# This is the version compatible with the cpp engine, (beware, not tested yet, use it at your own risk)
 # def get_input_output_unit(depthwise, shape):
 #   """
-#   Dense layers have shape (N_dim, C_in, C_out)
-#   Conv layers have shape (N_dim, O, I, H, W)
-#   Depthwise conv layers have shape (N_dim, depth_mul * I, 1, H, W)
+#   Dense layers have kernel shape (N_dim, C_in, C_out)
+#   Conv layers have kernel shape (N_dim, O, I, [dim_list]) for instance Conv2D : (N_dim, O, I, H, W)
+#   Depthwise conv layers have kernel shape (N_dim, depth_mul * I, 1, [dim_list]) for instance Conv2D : (N_dim, depth_mul * I, 1, H, W)
 #   """
 #   if len(shape) == 3:
 #     # Then dense layer
@@ -104,10 +116,18 @@ def get_input_output_unit(depthwise, shape):
 #     n_in, n_out = np.prod(shape[2:]), shape[1]
 #   return n_in, n_out
 
+
 class IndependentFilter(Initializer):
   def __init__(self, criterion='glorot', depthwise=False, complex=False):
-    """ This initialization constructs real-valued kernels that are independent as much as possible from each other while
+    """ Idea for the DCN paper
+    This initialization constructs real-values or complex-values kernel with vectors that are independent as much as possible from each other while
     respecting either the He or the Glorot criterion. 
+
+    Please note that this initialization is hard to implement in quaternion. If we measure any performance improvement for R or C, then
+    we will implement it for H
+
+    Note: for H we will need to implement "np.linalg.svd" ourselves
+
     """
     assert criterion in ['glorot', 'he'], f"Invalid criterion {criterion}"
     self.criterion = criterion
@@ -121,9 +141,10 @@ class IndependentFilter(Initializer):
         desired_var (float): wanted variance 
         independent_filters (numpy array): real or complex matrice with variance 1
     """
+    # could be a lambda function, but I believe this formulation is clearer. If someone wants to change it feel free
     def scale(filters):
       return filters * np.sqrt(desired_var / np.var(filters))
-    # this part is probably useless because scaling a real or complex number by a real works the same way for numpy, but I think this formulation is clearer
+
     if self.complex:
       return [scale(independent_filters.real), scale(independent_filters.imag)]
     else:
@@ -131,9 +152,9 @@ class IndependentFilter(Initializer):
 
   def reshape_weights(self, shape, scaled_filters):
     """ Operation to transpose and reshape the weight
-    At this step, scaled_filters is a numpy array of shape (num_rows, num_cols)
-    Need to transform it to an array of shape (num_cols, num_rows) and then resize it to array of shape `shape`
-    Note that for shape == 2, this operation is identity
+    When calling this function, scaled_filters is a numpy array of shape (num_rows, num_cols)
+    Need to transform it to an array of shape (num_cols, num_rows) and then resize it to array of kernel shape
+    Note that for shape == 2, the resize operation is identity
 
     Args:
         shape (np.ndarray): shape of the kernel
@@ -142,15 +163,12 @@ class IndependentFilter(Initializer):
     Returns:
         reshaped filters
     """
-    if len(shape) != 2:
-      weights = np.transpose(scaled_filters, (1, 0))
-      weights = np.reshape(weights, shape)
-    else:
-      weights = scaled_filters
+    weights = np.transpose(scaled_filters, (1, 0))
+    weights = np.reshape(weights, shape)
     return weights
 
   def __call__(self, shape, dtype=None):
-    """function called then initialing the kernel of a keras layer
+    """function called when initialing the kernel of a keras layer
 
     Args:
         shape (List[int]): Shape of the kernel tensor in initialized
@@ -162,7 +180,7 @@ class IndependentFilter(Initializer):
     """
     shape = list(shape)
     if self.complex:
-      shape[-1] = int(shape[-1] / 2) # divide per 2 to get shape in term of complex number
+      shape[-1] = int(shape[-1] / 2)  # divide per 2 to get shape in term of complex number
     if len(shape) == 2:  # then dense layer
       num_rows, num_cols = shape[0], shape[1]
     else:  # then Conv{1/2/3}D
@@ -184,12 +202,9 @@ class IndependentFilter(Initializer):
     desired_var = criterion_to_var[self.criterion](n_in, n_out)
 
     scaled_filters = self.scale_filters(desired_var, independent_filters)
-    # At this step, scaled_filters is a list of tensor of shape (num_rows, num_cols). The list contains one element if Real and 2 if complex
+    # At this step, scaled_filters is a list of tensor than contains one element if Real and 2 if complex
 
-    # finish by transposing and reshaping the weight
-    # Need to transform it to a tensor of shape (num_cols, num_rows)
-    # and the resize to tensor of shape `shape`
-    # Note that for shape == 2, this operation is identity
+    # now need to reshape the kernel. If using complex then concatenate the real and imaginary components along the last axis
     weights = self.reshape_weights(shape, scaled_filters[0])
     if len(scaled_filters) == 2:
       weights = np.concatenate([weights, self.reshape_weights(shape, scaled_filters[1])], axis=-1)
@@ -234,8 +249,8 @@ class CInitializer(Initializer):
           For depthwise 2D convolution, shape = (kernel_x, kernel_y, n_channels, 1)
         dtype (type, optional): data type of the tensor
     """
-    shape = list(shape) 
-    shape[-1] = int(shape[-1] / 2) # because complex
+    shape = list(shape)
+    shape[-1] = int(shape[-1] / 2)  # because complex, we divide by 2 here and concatenate along the last axis at the end
     n_in, n_out = get_input_output_unit(self.depthwise, shape)
     desired_var = criterion_to_var[self.criterion](n_in, n_out)
     sigma = np.sqrt(desired_var/2)
@@ -252,15 +267,21 @@ class HInitializer(Initializer):
     self.depthwise = depthwise
 
   def __call__(self, shape, dtype=None):
-    shape = list(shape) 
-    shape[-1] = int(shape[-1] / 4) # because quaternion
+    """
+    see DQN paper for details regarding the math.
+
+    Implementation is very similar to CInitializer except that the rayleigh distribution become a Chi4
+    """
+    shape = list(shape)
+    shape[-1] = int(shape[-1] / 4)  # 4 because quaternion
     n_in, n_out = get_input_output_unit(self.depthwise, shape)
     desired_var = criterion_to_var[self.criterion](n_in, n_out)
     sigma = math.sqrt(desired_var/4)
 
     # Instead of implemented a Chi4 distribution, we can get 4 number from normal distribution, and get the norm
     # of the vector of these 4 components. This is maybe a bit more computational expensive but simpler to implement.
-    # and as this function is called during the graph creation and not execution, we don't really care
+    # and as this function is called during the graph creation and not execution, we don't really care about speed ^^
+    # (well, of course we care, but not a lot)
     r = np.random.normal(0., sigma, shape)
     i = np.random.normal(0., sigma, shape)
     j = np.random.normal(0., sigma, shape)
