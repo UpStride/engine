@@ -17,6 +17,6 @@ class Conv2D(generic_layers.Conv2D):
 
 
 class DepthwiseConv2D(generic_layers.DepthwiseConv2D):
-  def __init__(self, *argv, depthwise_initializer='deptwise_he', **kwargs):
+  def __init__(self, *argv, depthwise_initializer='depthwise_he', **kwargs):
     kwargs['depthwise_initializer'] = depthwise_initializer
     super().__init__(*argv, **kwargs)

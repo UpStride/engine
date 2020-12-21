@@ -38,24 +38,24 @@ class InitializersFactory():
     self.init_type0 = {
         'glorot_ind': IndependentFilter(),
         'he_ind': IndependentFilter(criterion='he'),
-        'deptwise_glorot_ind': IndependentFilter(depthwise=True),
-        'deptwise_he_ind': IndependentFilter(criterion='he', depthwise=True),
+        'depthwise_glorot_ind': IndependentFilter(depthwise=True),
+        'depthwise_he_ind': IndependentFilter(criterion='he', depthwise=True),
     }
     self.init_type1 = {
         'glorot_ind': IndependentFilter(complex=True),
         'he_ind': IndependentFilter(criterion='he', complex=True),
-        'deptwise_glorot_ind': IndependentFilter(depthwise=True, complex=True),
-        'deptwise_he_ind': IndependentFilter(criterion='he', depthwise=True, complex=True),
+        'depthwise_glorot_ind': IndependentFilter(depthwise=True, complex=True),
+        'depthwise_he_ind': IndependentFilter(criterion='he', depthwise=True, complex=True),
         'glorot': CInitializer(),
         'he': CInitializer(criterion='he'),
-        'deptwise_glorot': CInitializer(depthwise=True),
-        'deptwise_he': CInitializer(criterion='he', depthwise=True)
+        'depthwise_glorot': CInitializer(depthwise=True),
+        'depthwise_he': CInitializer(criterion='he', depthwise=True)
     }
     self.init_type2 = {
         'glorot': HInitializer(),
         'he': HInitializer(criterion='he'),
-        'deptwise_glorot': HInitializer(depthwise=True),
-        'deptwise_he': HInitializer(criterion='he', depthwise=True)
+        'depthwise_glorot': HInitializer(depthwise=True),
+        'depthwise_he': HInitializer(criterion='he', depthwise=True)
     }
     self.init_types = {0: self.init_type0, 1: self.init_type1, 2: self.init_type2}
 
