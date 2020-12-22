@@ -26,7 +26,7 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
                beta_initializer='zeros',
                gamma_initializer='sqrt_init',  # The default value of this parameter is different from TF
                moving_mean_initializer='zeros',
-               moving_variance_initializer='ones',
+               moving_variance_initializer='sqrt_init',
                beta_regularizer=None,
                gamma_regularizer=None,
                beta_constraint=None,
