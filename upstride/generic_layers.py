@@ -179,7 +179,7 @@ def geometric_multiplication(layer_output, inverse=False, bias=None):
   layer_outputs = tf.split(layer_output, multivector_length(), axis=0)
   # here layer_outputs is a list of output of multiplication of one blade per all kernel blade
   if bias is not None:
-    layer_outputs[0] = bias(layer_outputs[0]) # add the bias on one of these output
+    layer_outputs[0] = bias(layer_outputs[0])  # add the bias on one of these output
   cross_product_matrix = []
   for i in range(multivector_length()):
     cross_product_matrix.append(tf.split(layer_outputs[i], multivector_length(), axis=1))
@@ -290,10 +290,10 @@ class GenericLinear(tf.keras.Model):
 class GenericNonLinear(tf.keras.Model):
   def __init__(self, layer, *argv, **kwargs):
     super().__init__()
-    self.stack_channels = False # usefull for BN
+    self.stack_channels = False  # usefull for BN
     self.layer, self.add_bias, self.bias_parameters = get_layers(layer, None, *argv, **kwargs)
 
-  def __call__(self, input_tensor, training=False):
+  def call(self, input_tensor, training=False):
     if self.stack_channels:
       input_tensor = tf.split(input_tensor, multivector_length(), axis=0)
       input_tensor = tf.concat(input_tensor, axis=1)
@@ -445,8 +445,8 @@ class Dropout(GenericNonLinear):
     super().__init__(tf.keras.layers.Dropout, *argv, **kwargs)
 
 
-class TF2Upstride:
-  """ assume this function should be call to transform TF tensors to Upstride Tensors
+class TF2Upstride(tf.keras.layers.Layer):
+  """ This function should be called to transform TF tensors to Upstride Tensors
   an upstride tensor has the same shape than a TF tensor, but the imaginary part is stack among BS
 
   For specific types, if you want to add new strategies, then inherit this class, and add strategies inside
@@ -454,21 +454,31 @@ class TF2Upstride:
   """
 
   def __init__(self, strategy='learned', **args):
+    super().__init__()
     # This dictionary map the strategy name to the function to call
     self.strategies = {
-        'learned': self.learned_strategy,
-        'basic': self.basic
+        'learned': TF2UpstrideLearned,
+        'basic': TF2UpstrideBasic
     }
     self.strategy_name = strategy
-    self.args = args
 
-  def __call__(self, x):
+    self.add_strategies()
+
     if self.strategy_name not in self.strategies:
       raise ValueError(f"unknown strategy: {self.strategy_name}")
-    return self.strategies[self.strategy_name](x)
+    self.model = self.strategies[self.strategy_name](**args)
 
-  def learned_strategy(self, x):
+  def add_strategies(self):
+    """ The purpose of this function is to be overritten in a sub class to add elements in self.strategies 
     """
+    pass
+
+  def call(self, input_tensor):
+    return self.model(input_tensor)
+
+
+class TF2UpstrideLearned(tf.keras.layers.Layer):
+  """
     Learning module taken from this paper (https://arxiv.org/pdf/1712.04604.pdf)
     BN --> ReLU --> Conv --> BN --> ReLU --> Conv
 
@@ -480,38 +490,47 @@ class TF2Upstride:
       tensor: output of the network. Learned component of the multi-vector.
     """
 
-    channels = self.args.get('channels', 3)
-    kernel_size = self.args.get('kernel_size', 3)
-    use_bias = self.args.get('use_bias', False)
-    kernel_initializer = self.args.get('kernel_initializer','glorot_uniform')
-    kernel_regularizer = self.args.get('kernel_regularizer')
-    input = x
-    outputs = [x]
-    for _ in range(1, multivector_length()):
-      x = tf.keras.layers.BatchNormalization(axis=1)(input)
-      x = tf.keras.layers.Activation('relu')(x)
-      x = tf.keras.layers.Conv2D(channels, (kernel_size, kernel_size), padding='same', use_bias=use_bias, 
-          kernel_initializer=kernel_initializer,kernel_regularizer=kernel_regularizer)(x)
-      x = tf.keras.layers.BatchNormalization(axis=1)(x)
-      x = tf.keras.layers.Activation('relu')(x)
-      x = tf.keras.layers.Conv2D(channels, (kernel_size, kernel_size), padding='same', use_bias=use_bias,
-          kernel_initializer=kernel_initializer,kernel_regularizer=kernel_regularizer)(x)
-      outputs.append(x)
+  def __init__(self, channels=3, kernel_size=3, use_bias=False, kernel_initializer='glorot_uniform', kernel_regularizer=None):
+    super().__init__()
+    self.layers = []
+    for i in range(1, multivector_length()):
+      self.layers.append(tf.keras.Sequential([
+          tf.keras.layers.BatchNormalization(axis=1),
+          tf.keras.layers.Activation('relu'),
+          tf.keras.layers.Conv2D(channels, (kernel_size, kernel_size), padding='same', use_bias=use_bias,
+                                 kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer),
+          tf.keras.layers.BatchNormalization(axis=1),
+          tf.keras.layers.Activation('relu'),
+          tf.keras.layers.Conv2D(channels, (kernel_size, kernel_size), padding='same', use_bias=use_bias,
+                                 kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer)
+      ]))
+    self.concat = tf.keras.layers.Concatenate(axis=0)
 
-    return tf.keras.layers.Concatenate(axis=0)(outputs)
+  def call(self, input_tensor):
+    outputs = [input_tensor]
+    for layer in self.layers:
+      outputs.append(layer(input_tensor))
+    return self.concat(outputs)
 
-  def basic(self, x):
+
+class TF2UpstrideBasic(tf.keras.layers.Layer):
+  def __init__(self):
+    super().__init__()
+    self.concat = tf.keras.layers.Concatenate(axis=0)
+
+  def call(self, x):
     outputs = [x]
     for _ in range(1, multivector_length()):
       outputs.append(tf.zeros_like(x))
-    return tf.keras.layers.Concatenate(axis=0)(outputs)
+    return self.concat(outputs)
 
 
-class Upstride2TF:
+class Upstride2TF(tf.keras.layers.Layer):
   """convert multivector back to real values. 
   """
 
   def __init__(self, strategy='basic'):
+    super().__init__()
     self.strategies = {
         'basic': self.basic,
         'concat': self.concat,
@@ -520,10 +539,10 @@ class Upstride2TF:
     }
     self.strategy_name = strategy
 
-  def __call__(self, x):
+  def call(self, input_tensor):
     if self.strategy_name not in self.strategies:
       raise ValueError(f"unknown strategy: {self.strategy_name}")
-    return self.strategies[self.strategy_name](x)
+    return self.strategies[self.strategy_name](input_tensor)
 
   def basic(self, x):
     output = tf.split(x, multivector_length(), axis=0)

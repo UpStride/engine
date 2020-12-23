@@ -81,7 +81,7 @@ class TestConv2DQuaternion(unittest.TestCase):
     x = Upstride2TF("basic")(x)
     model = tf.keras.Model(inputs=[inputs], outputs=[x])
     model.summary()
-    self.assertEqual(len(model.layers), 7)
+    self.assertEqual(len(model.layers), 4)
     self.assertEqual(model.count_params(), (9*4*3+4)*4)
 
   def test_export(self):

@@ -17,46 +17,54 @@ generic_layers.geometrical_def = (3, 0, 0)
 # If you wish to overwrite some layers, please implements them here
 
 
-class TF2Upstride(GenericTF2UP):
-  """assume this function is called at the begining of the network. Put colors to imaginary parts and grayscale in real
-  """
+class TF2UpstrideJoint(tf.keras.layers.Layer):
+  def __init__(self) -> None:
+    super().__init__()
+    self.image_data_format = tf.keras.backend.image_data_format()
 
-  def __init__(self, strategy='learned'):
-    super().__init__(strategy)
-    self.strategies['joint'] = self.join
-    self.strategies['grayscale'] = self.grayscale
-
-  def join(self, x):
-    image_data_format = tf.keras.backend.image_data_format()  # can be 'channels_last' or 'channels_first'
-    if image_data_format == 'channels_last':
-      red = tf.expand_dims(x[:, :, :, 0], -1)
-      green = tf.expand_dims(x[:, :, :, 1], -1)
-      blue = tf.expand_dims(x[:, :, :, 2], -1)
+  def call(self, input_tensor):
+    if self.image_data_format == 'channels_last':
+      red = tf.expand_dims(input_tensor[:, :, :, 0], -1)
+      green = tf.expand_dims(input_tensor[:, :, :, 1], -1)
+      blue = tf.expand_dims(input_tensor[:, :, :, 2], -1)
       zeros = tf.zeros_like(red)
     else:
-      red = tf.expand_dims(x[:, 0, :, :], 1)
-      green = tf.expand_dims(x[:, 1, :, :], 1)
-      blue = tf.expand_dims(x[:, 2, :, :], 1)
+      red = tf.expand_dims(input_tensor[:, 0, :, :], 1)
+      green = tf.expand_dims(input_tensor[:, 1, :, :], 1)
+      blue = tf.expand_dims(input_tensor[:, 2, :, :], 1)
       zeros = tf.zeros_like(red)
     return tf.concat([zeros, red, green, blue], axis=0)
 
-  def grayscale(self, x):
-    image_data_format = tf.keras.backend.image_data_format()  # can be 'channels_last' or 'channels_first'
-    if image_data_format == 'channels_last':
-      red = tf.expand_dims(x[:, :, :, 0], -1)
-      green = tf.expand_dims(x[:, :, :, 1], -1)
-      blue = tf.expand_dims(x[:, :, :, 2], -1)
-      grayscale = tf.image.rgb_to_grayscale(x)
+
+class TF2UpstrideGrayscale(tf.keras.layers.Layer):
+  def __init__(self) -> None:
+    super().__init__()
+    self.image_data_format = tf.keras.backend.image_data_format()  # can be 'channels_last' or 'channels_first'
+
+  def call(self, input_tensor):
+    if self.image_data_format == 'channels_last':
+      red = tf.expand_dims(input_tensor[:, :, :, 0], -1)
+      green = tf.expand_dims(input_tensor[:, :, :, 1], -1)
+      blue = tf.expand_dims(input_tensor[:, :, :, 2], -1)
+      grayscale = tf.image.rgb_to_grayscale(input_tensor)
     else:
-      red = tf.expand_dims(x[:, 0, :, :], 1)
-      green = tf.expand_dims(x[:, 1, :, :], 1)
-      blue = tf.expand_dims(x[:, 2, :, :], 1)
+      red = tf.expand_dims(input_tensor[:, 0, :, :], 1)
+      green = tf.expand_dims(input_tensor[:, 1, :, :], 1)
+      blue = tf.expand_dims(input_tensor[:, 2, :, :], 1)
       # rgb_to_grayscale function is only channel last
-      x = tf.transpose(x, [0, 2, 3, 1])
+      x = tf.transpose(input_tensor, [0, 2, 3, 1])
       grayscale = tf.image.rgb_to_grayscale(x)
-      x = tf.transpose(x, [0, 3, 1, 2])
+      grayscale = tf.transpose(grayscale, [0, 3, 1, 2])
     return tf.concat([grayscale, red, green, blue], axis=0)
 
+
+class TF2Upstride(GenericTF2UP):
+  def __init__(self, strategy='learned'):
+    super().__init__(strategy)
+
+  def add_strategies(self):
+    self.strategies['joint'] = TF2UpstrideJoint
+    self.strategies['grayscale'] = TF2UpstrideGrayscale
 
 
 class Attention(Layer):
@@ -163,7 +171,6 @@ class Upstride2TF(GenericUP2TF):
     x = tf.split(x, multivector_length(), axis=0)
     dim = x[0].get_shape()[1]
     return Attention(hidden_size=64, final_size=dim, is_gated_attention=self.gated_attention)(x)
-
 
 
 class MaxNormPooling2D(Layer):
