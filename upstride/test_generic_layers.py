@@ -38,7 +38,7 @@ class TestGAMultiplication(unittest.TestCase):
     x = generic_layers.Conv2D(4, (3, 3))(x)
     x = generic_layers.Upstride2TF()(x)
     model = tf.keras.Model(inputs=[inputs], outputs=[x])
-    self.assertEqual(len(model.layers), 5)  # input, zero, concat, conv, split
+    self.assertEqual(len(model.layers), 4)  # input, tf2upstride, conv, split
     # one kernel has shape 3*3*3*4=108. we have one real and one imaginary, so 216 parameters.
     # one bias for real and one for imaginary, 224 parameters
     self.assertEqual(model.count_params(), 224)
@@ -51,7 +51,7 @@ class TestGAMultiplication(unittest.TestCase):
     x = generic_layers.Conv2D(4, (3, 3), use_bias=False)(x)
     x = generic_layers.Upstride2TF()(x)
     model = tf.keras.Model(inputs=[inputs], outputs=[x])
-    self.assertEqual(len(model.layers), 5)  # input, zero, concat, conv, split
+    self.assertEqual(len(model.layers), 4)  # input, tf2upstride, conv, split
     self.assertEqual(model.count_params(), 216)
 
   def test_bias_defined_true(self):
@@ -62,5 +62,5 @@ class TestGAMultiplication(unittest.TestCase):
     x = generic_layers.Conv2D(4, (3, 3), use_bias=True)(x)
     x = generic_layers.Upstride2TF()(x)
     model = tf.keras.Model(inputs=[inputs], outputs=[x])
-    self.assertEqual(len(model.layers), 5) # input, zero, concat, conv, split
+    self.assertEqual(len(model.layers), 4) # input, tf2upstride, conv, split
     self.assertEqual(model.count_params(), 224)

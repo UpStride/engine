@@ -18,7 +18,7 @@ class TestQuaternionBN(unittest.TestCase):
                                     [[4, 4, 4, 4, 4], [4, 4, 4, 4, 4], [4, 4, 4, 4, 4]]]])
     self.assertEqual(inputs.shape, (4, 2, 3, 5))
     bn_layer = BatchNormalizationH()
-    outputs = bn_layer(inputs, training=False)
+    outputs = bn_layer(inputs, training=True)
     self.assertEqual(outputs.shape, (4, 2, 3, 5))
     self.assertTrue(np.array_equal(outputs, np.zeros((4, 2, 3, 5))))
 
@@ -33,7 +33,7 @@ class TestQuaternionBN(unittest.TestCase):
     # call it once to init everything
     bn_layer(inputs, training=False)
     inputs = tf.split(inputs, 4, axis=0)
-    _, _, v, _ = bn_layer.compute_mean_var(inputs)
+    _, _, v = bn_layer.compute_mean_var(inputs)
     w = bn_layer.compute_sqrt_inv(v)
 
     for i in range(1):
@@ -63,7 +63,7 @@ class TestComplexBN(unittest.TestCase):
                                     [[4, 4, 4, 4, 4], [4, 4, 4, 4, 4], [4, 4, 4, 4, 4]]]])
     self.assertEqual(inputs.shape, (2, 2, 3, 5))
     bn_layer = BatchNormalizationC()
-    outputs = bn_layer(inputs, training=False)
+    outputs = bn_layer(inputs, training=True)
     self.assertEqual(outputs.shape, (2, 2, 3, 5))
     self.assertTrue(np.array_equal(outputs, np.zeros((2, 2, 3, 5))))
 
@@ -78,7 +78,7 @@ class TestComplexBN(unittest.TestCase):
     # call it once to init everything
     bn_layer(inputs, training=False)
     inputs = tf.split(inputs, 2, axis=0)
-    _, _, v, _ = bn_layer.compute_mean_var(inputs)
+    _, _, v = bn_layer.compute_mean_var(inputs)
     w = bn_layer.compute_sqrt_inv(v)
 
     for i in range(5):

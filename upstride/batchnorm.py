@@ -2,7 +2,7 @@
 This file implements special batch normalization for complex and quaterion cases
 """
 import tensorflow as tf
-from tensorflow.python.keras.utils import tf_utils
+from tensorflow.python.keras.utils import tf_utils, control_flow_util
 
 
 def get_sqrt_init(multivector_length):
@@ -51,6 +51,7 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
     self.gamma_regularizer = gamma_regularizer
     self.beta_constraint_str = beta_constraint
     self.gamma_constraint = gamma_constraint
+    self.trainable = trainable
 
     self.dim_names = 'rijk'[:self.multivector_length]
 
@@ -117,6 +118,10 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
                                               initializer=self.moving_mean_initializer,
                                               name=f'moving_mean{postfix}',
                                               trainable=False))
+    # prepare the broadcasting of the mean
+    self.broadcast_mu_shape = [1] * len(input_shape)
+    self.broadcast_mu_shape[self.axis] = input_shape[self.axis]
+
     self.built = True
 
   def _get_training_value(self, training=None):
@@ -137,11 +142,10 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
     # substract by mean
     mu = []
     broadcast_mu = []
-    broadcast_mu_shape = [1] * ndims
-    broadcast_mu_shape[self.axis] = input_shape[self.axis]
+
     for i in range(self.multivector_length):
       mu.append(tf.math.reduce_mean(inputs[i], axis=reduction_axes))  # compute mean for all blades.
-      broadcast_mu.append(tf.reshape(mu[i], broadcast_mu_shape))
+      broadcast_mu.append(tf.reshape(mu[i], self.broadcast_mu_shape))
     input_centred = [inputs[i] - broadcast_mu[i] for i in range(self.multivector_length)]
 
     # compute covariance matrix
@@ -153,41 +157,56 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
         if p1 == p2:
           v[postfix] += self.epsilon
 
-    return input_centred, mu, v, broadcast_mu_shape
+    return mu, v
 
   def call(self, inputs, training=None):
     # inputs is an array of 'multivector_length' tensors
     inputs = tf.split(inputs, self.multivector_length, axis=0)
     training = self._get_training_value(training)
-    input_centred, mu, v, broadcast_mu_shape = self.compute_mean_var(inputs)
 
-    input_bn = self.bn(input_centred, v)
-    training_value = tf_utils.constant_value(training)
+    training_value = control_flow_util.constant_value(training)
+    # Here training_value can be a bool if training has a fix value or None if training is a dynamic value
+    # see doc : https://github.com/tensorflow/tensorflow/blob/v2.4.0/tensorflow/python/keras/utils/control_flow_util.py#L118
+
     if training_value == False:  # not the same as "not training_value" because of possible none
-      return tf.concat(input_bn, axis=0)
+      # In this case we are in inference mode : mean and variance shouldn't be computed from input
+      # but values come from moving mean and variance computed during training
+      mean, variance = self.moving_mean, self.moving_V
+    else:
+      # Compute mean and variance from input data. This is not needed when training = False with training not a constant,
+      # but makes the code simpler.
+      # BTW, this idea is not mine, see https://github.com/tensorflow/tensorflow/blob/v2.4.0/tensorflow/python/keras/layers/normalization.py#L804
+      mean, variance = self.compute_mean_var(inputs)
 
-    update_list = []
-    for i in range(self.multivector_length):
-      update_list.append(tf.keras.backend.moving_average_update(self.moving_mean[i], mu[i], self.momentum))
-    for p1 in range(self.multivector_length):
-      for p2 in range(p1, self.multivector_length):
-        postfix = self.dim_names[p1]+self.dim_names[p2]
-        update_list.append(tf.keras.backend.moving_average_update(self.moving_V[postfix], v[postfix], self.momentum))
-    self.add_update(update_list, inputs)
+      mean = control_flow_util.smart_cond(training, lambda: mean, lambda: self.moving_mean)
+      variance = control_flow_util.smart_cond(training, lambda: variance, lambda: self.moving_V)
 
-    def normalize_inference():
-      inference_centred = [inputs[i] - tf.reshape(self.moving_mean[i], broadcast_mu_shape) for i in range(self.multivector_length)]
-      return self.bn(inference_centred, v)
+      # update the mean matrix and variance co-matrix
+      def false_branch(): return self.moving_mean
 
-    # Pick the normalized form corresponding to the training phase.
-    return tf.concat(tf.keras.backend.in_train_phase(input_bn, normalize_inference, training=training), axis=0)
+      def true_branch():
+        update_list = []
+        for i in range(self.multivector_length):
+          update_list.append(tf.keras.backend.moving_average_update(self.moving_mean[i], mean[i], self.momentum))
+        for p1 in range(self.multivector_length):
+          for p2 in range(p1, self.multivector_length):
+            postfix = self.dim_names[p1]+self.dim_names[p2]
+            update_list.append(tf.keras.backend.moving_average_update(self.moving_V[postfix], variance[postfix], self.momentum))
+        return update_list
+      self.add_update(control_flow_util.smart_cond(training, true_branch, false_branch))
+
+    # At this point, mean and variance have the correct value to compute BN, for both inference and both training mode.
+    # Only thing missing is actual BN computation
+    centred = [inputs[i] - tf.reshape(mean[i], self.broadcast_mu_shape) for i in range(self.multivector_length)]
+
+    return tf.concat(self.bn(centred, variance), axis=0)
 
   def bn(self, input_centred, v):
     w = self.compute_sqrt_inv(v)
 
     broadcast_beta_shape = [1] * len(input_centred[0].shape)
     num_channels = input_centred[0].shape[self.axis]
-    broadcast_beta_shape[self.axis] = num_channels # unittest [1, 1, 1, 5]
+    broadcast_beta_shape[self.axis] = num_channels  # unittest [1, 1, 1, 5]
 
     # Normalization. We multiply, x_normalized = W.x.
     # The returned result will be a quaternion/complex standardized input
@@ -239,11 +258,11 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
     if self.center:
       for p1 in range(self.multivector_length):
         delta = self.beta[self.dim_names[p1]]
-        delta = tf.reshape(delta, broadcast_beta_shape) 
+        delta = tf.reshape(delta, broadcast_beta_shape)
         output.append(input[p1] + delta)
     else:
       output = input
-        
+
     return output
 
   def get_config(self):
