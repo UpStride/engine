@@ -89,9 +89,9 @@ def get_input_output_unit(depthwise, shape):
   intuition of the paper
   """
   if not depthwise:
-    n_in, n_out = np.prod(shape[:-1]), shape[-1]
+    n_in, n_out = np.prod(shape[:-1]), shape[-1] * np.prod(shape[:-2])
   else:
-    n_in, n_out = np.prod(shape[:-2]), shape[-1]
+    n_in, n_out = np.prod(shape[:-2]), shape[-1] * np.prod(shape[:-2])
   return n_in, n_out
 
 # Please note that the above function is for python engine only. For cpp engine,
@@ -216,7 +216,6 @@ class CInitializer(Initializer):
     assert criterion in ['glorot', 'he'], f"Invalid criterion {criterion}"
     self.criterion = criterion
     self.depthwise = depthwise
-    self.complex_part = None
 
   def __call__(self, shape, dtype=None):
     """function called then initialing the kernel of a keras layer

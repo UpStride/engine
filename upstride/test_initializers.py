@@ -68,11 +68,11 @@ class TestIndependentFilter(unittest.TestCase):
     for i in range(N):
       np.random.seed(i*50)
       conv_layer = tf.keras.layers.Conv2D(10, (3, 3), kernel_initializer=IndependentFilter(), use_bias=False, padding='same')
-      outputs += self.create_run_check_destroy_neural_net(conv_layer, (BS, 224, 224, 20), 2/(3*3*20 + 10))
+      outputs += self.create_run_check_destroy_neural_net(conv_layer, (BS, 224, 224, 20), 2/(3*3*20 + 3*3*10))
     print(np.mean(outputs))
     print(np.var(outputs))
-    self.assertAlmostEqual(np.mean(outputs), -0.00011997313)  # not far from 0
-    self.assertAlmostEqual(np.var(outputs), 1.9009634)  # not far from 20*3*3 * 2 /(20*3*3 + 10) = 36/19 = 1.894736842105263
+    self.assertAlmostEqual(np.mean(outputs), -0.00010064204)  # not far from 0
+    self.assertAlmostEqual(np.var(outputs), 1.337714)  # not far from 20*3*3 * 2 /(20*3*3 + 3*3*10) = 4/3
 
   def test_conv_layer_channel_first(self):
     tf.keras.backend.set_image_data_format('channels_first')
@@ -82,11 +82,11 @@ class TestIndependentFilter(unittest.TestCase):
     for i in range(N):
       np.random.seed(i*50)
       conv_layer = tf.keras.layers.Conv2D(10, (3, 3), kernel_initializer=IndependentFilter(), use_bias=False, padding='same', data_format='channels_first')
-      outputs += self.create_run_check_destroy_neural_net(conv_layer, (BS, 20, 224, 224), 2/(3*3*20 + 10))
+      outputs += self.create_run_check_destroy_neural_net(conv_layer, (BS, 20, 224, 224), 2/(3*3*20 + 3*3*10))
     print(np.mean(outputs))
     print(np.var(outputs))
-    self.assertAlmostEqual(np.mean(outputs), 0.0007675069)  # not far from 0
-    self.assertAlmostEqual(np.var(outputs), 1.9007603, places=6)  # not far from 20*3*3 * 2 /(20*3*3 + 10) = 36/19 = 1.894736842105263
+    self.assertAlmostEqual(np.mean(outputs), 0.00064383936)  # not far from 0
+    self.assertAlmostEqual(np.var(outputs), 1.3375726, places=6)  # not far from 20*3*3 * 2 /(20*3*3 + 3*3*10) = 4/3
     tf.keras.backend.set_image_data_format('channels_last')
 
   def test_depthwise_conv_layer(self):
@@ -97,11 +97,11 @@ class TestIndependentFilter(unittest.TestCase):
     for i in range(N):
       np.random.seed(i*50)
       conv_layer = tf.keras.layers.DepthwiseConv2D((3, 3), depthwise_initializer=IndependentFilter(depthwise=True), use_bias=False, padding='same')
-      outputs += self.create_run_check_destroy_neural_net(conv_layer, (BS, 224, 224, 20), 2/(3*3 + 1), is_depthwise=True)
+      outputs += self.create_run_check_destroy_neural_net(conv_layer, (BS, 224, 224, 20), 2/(3*3 + 3*3), is_depthwise=True)
     print(np.mean(outputs))
     print(np.var(outputs))
-    self.assertAlmostEqual(np.mean(outputs), 0.00046288496)  # not far from 0
-    self.assertAlmostEqual(np.var(outputs), 1.8047282)  # not far from 3*3 * 2 /(3*3 + 1) = 18/10 = 1.8
+    self.assertAlmostEqual(np.mean(outputs), 0.00034501406)  # not far from 0
+    self.assertAlmostEqual(np.var(outputs), 1.002627)  # not far from 3*3 * 2 /(3*3 + 3*3) = 1.0
 
   def test_depthwise_conv_layer_channel_first(self):
     tf.keras.backend.set_image_data_format('channels_first')
@@ -111,11 +111,9 @@ class TestIndependentFilter(unittest.TestCase):
     for i in range(N):
       np.random.seed(i*50)
       conv_layer = tf.keras.layers.DepthwiseConv2D((3, 3), depthwise_initializer=IndependentFilter(depthwise=True), use_bias=False, padding='same', data_format='channels_first')
-      outputs += self.create_run_check_destroy_neural_net(conv_layer, (BS, 20, 224, 224), 2/(3*3 + 1), is_depthwise=True)
-    print(np.mean(outputs))
-    print(np.var(outputs))
-    self.assertAlmostEqual(np.mean(outputs), 0.00018445279)  # not far from 0
-    self.assertAlmostEqual(np.var(outputs), 1.8032125)  # not far from 3*3 * 2 /(3*3 + 1) = 18/10 = 1.8
+      outputs += self.create_run_check_destroy_neural_net(conv_layer, (BS, 20, 224, 224), 2/(3*3 + 3*3), is_depthwise=True)
+    self.assertAlmostEqual(np.mean(outputs), 0.00013748328)  # not far from 0
+    self.assertAlmostEqual(np.var(outputs), 1.0017835)  # not far from 3*3 * 2 /(3*3 + 3*3) = 1.0
 
   def test_complex_kernel(self):
     tf.keras.backend.set_image_data_format('channels_last')
