@@ -20,7 +20,7 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
   def __init__(self,
                axis=1,
                momentum=0.99,
-               epsilon=1e-3,
+               epsilon=1e-4,
                center=True,
                scale=True,
                beta_initializer='zeros',
@@ -97,11 +97,11 @@ class GenericBatchNormalization(tf.keras.layers.Layer):
         if self.scale:
           self.gamma[postfix] = self.add_weight(shape=param_shape,
                                                 name=f'gamma_{postfix}',
-                                                initializer=self.gamma_diag_initializer,
-                                                regularizer=self.gamma_diag_regularizer,
-                                                constraint=self.gamma_diag_constraint)
+                                                initializer=self.gamma_diag_initializer if postfix != 'ri' else self.gamma_off_initializer,
+                                                regularizer=self.gamma_diag_regularizer if postfix != 'ri' else self.gamma_off_regularizer,
+                                                constraint=self.gamma_diag_constraint if postfix != 'ri' else self.gamma_off_constraint)
         self.moving_V[postfix] = self.add_weight(shape=param_shape,
-                                                 initializer=self.moving_variance_initializer,
+                                                 initializer=self.moving_variance_initializer if postfix != 'ri' else self.moving_covariance_initializer,
                                                  name=f'moving_V{postfix}',
                                                  trainable=False)
     self.beta = {}
