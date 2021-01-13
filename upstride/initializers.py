@@ -29,6 +29,7 @@ for He distribution, Var(W) = 2/n_in, solving the equation gives sigma = 1/sqrt(
 
 import math
 import numpy as np
+from numpy.random import RandomState
 import tensorflow as tf
 from tensorflow.keras.initializers import Initializer
 
@@ -134,7 +135,7 @@ class IndependentFilter(Initializer):
     self.depthwise = depthwise
     self.complex = complex
 
-  def scale_filters(self, desired_var: float, independent_filters):
+  def scale_filters(self, desired_var: float, independent_filters, shape):
     """scale the independent filters to get the desired variance
 
     Args:
@@ -146,7 +147,11 @@ class IndependentFilter(Initializer):
       return filters * np.sqrt(desired_var / np.var(filters))
 
     if self.complex:
-      return [scale(independent_filters.real), scale(independent_filters.imag)]
+      real = np.reshape(independent_filters.real, shape)
+      print(real.shape)
+      img = np.reshape(independent_filters.imag, shape)
+      print(img.shape)
+      return [scale(real), scale(img)]
     else:
       return [scale(independent_filters)]
 
@@ -163,7 +168,7 @@ class IndependentFilter(Initializer):
     Returns:
         reshaped filters
     """
-    weights = np.transpose(scaled_filters, (1, 0))
+    weights = np.transpose(scaled_filters, (1, 2, 0))
     weights = np.reshape(weights, shape)
     return weights
 
@@ -186,14 +191,15 @@ class IndependentFilter(Initializer):
     else:  # then Conv{1/2/3}D
       num_rows = shape[-1] * shape[-2]
       num_cols = np.prod(shape[:-2])  # product of all components of the kernel
-
+      print(num_rows, num_cols)
     # generate the (semi-)unitary matrix
     if not self.complex:
       x = np.random.uniform(size=(num_rows, num_cols))
       u, _, v = np.linalg.svd(x)
       independent_filters = np.dot(u, np.dot(np.eye(num_rows, num_cols), v.T))
     else:
-      x = np.random.uniform(size=(num_rows, num_cols)) + 1j * np.random.uniform(size=(num_rows, num_cols))
+      rng = RandomState()
+      x = rng.uniform(size=(num_rows, num_cols)) + 1j * rng.uniform(size=(num_rows, num_cols))
       u, _, v = np.linalg.svd(x)
       independent_filters = np.dot(u, np.dot(np.eye(num_rows, num_cols), np.conjugate(v).T))
 
@@ -201,7 +207,7 @@ class IndependentFilter(Initializer):
     n_in, n_out = get_input_output_unit(self.depthwise, shape)
     desired_var = criterion_to_var[self.criterion](n_in, n_out)
 
-    scaled_filters = self.scale_filters(desired_var, independent_filters)
+    scaled_filters = self.scale_filters(desired_var, independent_filters, shape=(num_rows, ) + tuple(shape[:-2]))
     # At this step, scaled_filters is a list of tensor than contains one element if Real and 2 if complex
 
     # now need to reshape the kernel. If using complex then concatenate the real and imaginary components along the last axis
