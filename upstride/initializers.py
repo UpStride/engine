@@ -77,8 +77,8 @@ class InitializersFactory():
 # TODO : all framework doesn't seems to agree on this formulation, mainly the "2." is sometime "1."... We should benchmark both
 # Here the convention used is the same than in the paper DCN and DQN
 criterion_to_var = {
-    'glorot': lambda n_in, n_out: 2. / (n_in + n_out),
-    'he': lambda n_in, n_out: 2. / (n_in),
+    'glorot': lambda n_in, n_out: 1. / (n_in + n_out),
+    'he': lambda n_in, n_out: 1. / (n_in),
 }
 
 
@@ -148,9 +148,7 @@ class IndependentFilter(Initializer):
 
     if self.complex:
       real = np.reshape(independent_filters.real, shape)
-      print(real.shape)
       img = np.reshape(independent_filters.imag, shape)
-      print(img.shape)
       return [scale(real), scale(img)]
     else:
       return [scale(independent_filters)]
@@ -191,14 +189,13 @@ class IndependentFilter(Initializer):
     else:  # then Conv{1/2/3}D
       num_rows = shape[-1] * shape[-2]
       num_cols = np.prod(shape[:-2])  # product of all components of the kernel
-      print(num_rows, num_cols)
     # generate the (semi-)unitary matrix
     if not self.complex:
       x = np.random.uniform(size=(num_rows, num_cols))
       u, _, v = np.linalg.svd(x)
       independent_filters = np.dot(u, np.dot(np.eye(num_rows, num_cols), v.T))
     else:
-      rng = RandomState()
+      rng = RandomState(seed=1337)
       x = rng.uniform(size=(num_rows, num_cols)) + 1j * rng.uniform(size=(num_rows, num_cols))
       u, _, v = np.linalg.svd(x)
       independent_filters = np.dot(u, np.dot(np.eye(num_rows, num_cols), np.conjugate(v).T))

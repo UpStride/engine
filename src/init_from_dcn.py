@@ -141,7 +141,6 @@ class ComplexIndependentFilters(Initializer):
             num_cols = self.kernel_size[-1]
         
         flat_shape = (int(num_rows), int(num_cols))
-        print(flat_shape)
         rng = RandomState(self.seed)
         r = rng.uniform(size=flat_shape)
         i = rng.uniform(size=flat_shape)
@@ -171,9 +170,7 @@ class ComplexIndependentFilters(Initializer):
         multip_real = np.sqrt(desired_var / np.var(indep_real))
         multip_imag = np.sqrt(desired_var / np.var(indep_imag))
         scaled_real = multip_real * indep_real
-        print(scaled_real.shape)
         scaled_imag = multip_imag * indep_imag
-        print(scaled_imag.shape)
 
 
         if self.weight_dim == 2 and self.nb_filters is None:

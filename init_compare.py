@@ -5,9 +5,9 @@ import os, csv
 import numpy as np
 
 from upstride.initializers import InitializersFactory
-from conv_from_dcn import ComplexConv2D
+from src.conv_from_dcn import ComplexConv2D
 from upstride.type1.tf.keras import layers
-from bn_compare import Channel2Batch, Batch2Channel
+from upstride.test_batchnorm import Channel2Batch, Batch2Channel
 
 tf.keras.backend.set_image_data_format('channels_first')
 parser = argparse.ArgumentParser("compare_init")
@@ -17,27 +17,31 @@ args = parser.parse_args()
 init_factory = InitializersFactory()
 def main(args):
   conv_args = {
-    "filters": 32,
-    "kernel_size": 3,
+    "filters": 3,
+    "kernel_size": 1,
     # "init_criterion": 'he',
     "kernel_initializer": "complex_independent" if not args.DCN_ours else init_factory.get_initializer('he_ind',1),
     "data_format": "channels_first",
     "use_bias": False
   }
-  subset = 2 if args.DCN_ours else 1 # for picking the kernel:0 name in weights 
+  subset = 1 if args.DCN_ours else 0 # for picking the kernel:0 name in weights 
   batch_size = 16
   epochs = 1
 
-  def get_model(seed = None):
-    inputs = tf.keras.layers.Input(shape=(12,3,3))
+  def get_model(seed = 42):
+    inputs = tf.keras.layers.Input(shape=(6,3,3))
     if args.DCN_ours:
       x = Channel2Batch()(inputs)
-      x = layers.Conv2D(**conv_args)(x)
-      # x = layers.Conv2D(**conv_args)(x)
+      x = layers.Conv2D(**conv_args,name="conv_1")(x)
+      x = layers.Conv2D(**conv_args,name="conv_2")(x)
+      x = layers.Conv2D(**conv_args,name="conv_3")(x)
+      x = layers.Conv2D(**conv_args,name="conv_4")(x)
       x = Batch2Channel()(x)
     else:
-      x = ComplexConv2D(**conv_args,seed=seed)(inputs)
-      # x = ComplexConv2D(**conv_args)(x)
+      x = ComplexConv2D(**conv_args,seed=seed,name="conv_1")(inputs)
+      x = ComplexConv2D(**conv_args,seed=seed,name="conv_2")(x)
+      x = ComplexConv2D(**conv_args,seed=seed,name="conv_3")(x)
+      x = ComplexConv2D(**conv_args,seed=seed,name="conv_4")(x)
     x = tf.keras.layers.Flatten()(x)
     model = tf.keras.Model(inputs=[inputs], outputs=[x])
     # model.summary()
@@ -45,7 +49,7 @@ def main(args):
 
   list_of_batches = []
   for i in range(1, 11): 
-    list_of_batches.append(tf.ones((batch_size,12,3,3)) * i)
+    list_of_batches.append(tf.ones((batch_size,6,3,3)) * i)
   X = tf.concat(list_of_batches,axis=0)
   y = tf.ones((batch_size * len(list_of_batches) ,64*3*3))
   dataset = tf.data.Dataset.from_tensor_slices((X, y))
@@ -65,9 +69,9 @@ def main(args):
       weight_dict[weight_name]["mean"].append(mean) 
       weight_dict[weight_name]["std"].append(std)
     tf.keras.backend.clear_session() 
-  print(weight_dict)
-  print(np.mean(weight_dict[weight_name]["mean"]))
-  print(np.mean(weight_dict[weight_name]["std"]))
+  # print(weight_dict[weight_name])
+  for conv in weight_dict.keys():
+    print(conv, np.mean(weight_dict[conv]["mean"]),np.mean(weight_dict[conv]["std"]))
 
   # model = get_model()
   # weight_dict = {}
