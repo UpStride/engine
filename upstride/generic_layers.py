@@ -534,6 +534,7 @@ class Upstride2TF(tf.keras.layers.Layer):
     super().__init__()
     self.strategies = {
         'basic': self.basic,
+        'default': self.basic,
         '': self.basic,
         'concat': self.concat,
         'max_pool': self.max_pool,
