@@ -1,8 +1,3 @@
-import java.util.logging.FileHandler
-import java.util.logging.SimpleFormatter
-import java.util.logging.LogManager
-import jenkins.model.Jenkins
-
 pipeline {
     agent {
         label 'azure-gpu'
@@ -26,7 +21,6 @@ pipeline {
                     env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.BUILD_PROD = "${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}"
                     env.DOCKER_AGENT = "${REGISTRY_DEV}/ops:azure-cloud"
-                    setLogger()
                 }
             }
         }
@@ -124,35 +118,6 @@ pipeline {
     }
 }
 
-// Log into a file
-def setLogger(){
-    def RunLogger = LogManager.getLogManager().getLogger("global")
-    def logsDir = new File(Jenkins.instance.rootDir, "logs")
-    if(!logsDir.exists()){logsDir.mkdirs()}
-    env.LOGFILE = logsDir.absolutePath+'/default.log'
-    FileHandler handler = new FileHandler("${env.LOGFILE}", 1024 * 1024, 10, true);
-    handler.setFormatter(new SimpleFormatter());
-    RunLogger.addHandler(handler)
-}
-
-import groovy.json.JsonOutput;
-
-class Event {
-    def event
-    def id
-    def service
-    def status
-    def infos
-}
-
-def publish(String id, String status, String infos){
-    Event evt = new Event('event':'ci', 'id':id, 'service':'bitbucket', 'status':status, 'infos':infos)
-    def message = JsonOutput.toJson(evt)
-    sh"""
-        gcloud pubsub topics publish notifications-prod --message ${message}
-    """
-}
-
 def header(){
     env.SLACK_HEADER = "[META]\n-repo <"+env.GIT_REPO+">\n- push on branch <"+env.GIT_BRANCH+">\n- author <"+env.GIT_COMMITTER_NAME+">"
     env.SLACK_MESSAGE = ''
@@ -174,13 +139,3 @@ def error(String body){
     env.SLACK_MESSAGE = env.SLACK_MESSAGE+'\n[ERROR] '+body.toString()
 }
 
-def readLogs(){
-    try {
-        def logs = readFile(env.LOGFILE)
-        return logs
-    }
-    catch(e){
-        def logs = "-- no logs --"
-        return logs
-    }
-}
