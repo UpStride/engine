@@ -77,9 +77,9 @@ class TestIndependentFilter(unittest.TestCase):
     print(np.var(outputs))
     self.assertAlmostEqual(np.mean(outputs), -7.1164446e-05)  # not far from 0
     self.assertAlmostEqual(np.var(outputs), 0.6666, places=2)  # not far from 20*3*3 * 1 /(20*3*3 + 3*3*10) = 2/3
+    tf.keras.backend.set_image_data_format('channels_first')
 
   def test_conv_layer_channel_first(self):
-    tf.keras.backend.set_image_data_format('channels_first')
     N = 10
     BS = 1
     outputs = []
@@ -91,7 +91,6 @@ class TestIndependentFilter(unittest.TestCase):
     print(np.var(outputs))
     self.assertAlmostEqual(np.mean(outputs), 0.00045526333)  # not far from 0
     self.assertAlmostEqual(np.var(outputs), 0.666, places=2)  # not far from 20*3*3 * 1 /(20*3*3 + 3*3*10) = 2/3
-    tf.keras.backend.set_image_data_format('channels_last')
 
   def test_depthwise_conv_layer(self):
     tf.keras.backend.set_image_data_format('channels_last')
@@ -106,9 +105,9 @@ class TestIndependentFilter(unittest.TestCase):
     print(np.var(outputs))
     self.assertAlmostEqual(np.mean(outputs), 0.00024396196)  # not farrom 0
     self.assertAlmostEqual(np.var(outputs), 0.50, places=2)  # not far from 3*3 * 1 /(3*3 + 3*3) = 0.5
+    tf.keras.backend.set_image_data_format('channels_first')
 
   def test_depthwise_conv_layer_channel_first(self):
-    tf.keras.backend.set_image_data_format('channels_first')
     N = 10
     BS = 1
     outputs = []
@@ -144,7 +143,6 @@ class TestComplexInitCompare(unittest.TestCase):
       "filters": 3,
       "kernel_size": 1,
       "kernel_initializer": "complex_independent" if not DCN_ours else IndependentFilter(criterion='he',complex=True,seed=1337),
-      "data_format": "channels_first",
       "use_bias": False
     }
     inputs = tf.keras.layers.Input(shape=(6, 3, 3))
@@ -161,7 +159,6 @@ class TestComplexInitCompare(unittest.TestCase):
     return model
     
   def get_statistics(self, num_of_conv_layer, iteration=10, is_dcn_ours=True):
-    tf.keras.backend.clear_session() 
     weight_dict = defaultdict(lambda: defaultdict(list)) # dict(dict(list))
     for i in range(iteration):
       model = self.get_model(num_of_conv_layer, is_dcn_ours)
@@ -170,12 +167,9 @@ class TestComplexInitCompare(unittest.TestCase):
         weight_value = weight.numpy()
         weight_dict[weight_name]["mean"].append(np.mean(weight_value)) 
         weight_dict[weight_name]["std"].append(np.std(weight_value))
-      tf.keras.backend.clear_session() 
-      del model
     return weight_dict
 
   def test_compare(self):
-    tf.keras.backend.set_image_data_format('channels_first')
     # required to force type1 so that the below tests are working. 
     # Need to rethink on how we use global values. This is a a pain to debug.
     change_upstride_type(1,["", "12"],(2, 0, 0))
