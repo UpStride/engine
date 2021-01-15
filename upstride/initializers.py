@@ -119,7 +119,7 @@ def get_input_output_unit(depthwise, shape):
 
 
 class IndependentFilter(Initializer):
-  def __init__(self, criterion='glorot', depthwise=False, complex=False):
+  def __init__(self, criterion='glorot', depthwise=False, complex=False, seed=None):
     """ Idea for the DCN paper
     This initialization constructs real-values or complex-values kernel with vectors that are independent as much as possible from each other while
     respecting either the He or the Glorot criterion. 
@@ -134,8 +134,9 @@ class IndependentFilter(Initializer):
     self.criterion = criterion
     self.depthwise = depthwise
     self.complex = complex
+    self.seed = seed
 
-  def scale_filters(self, desired_var: float, independent_filters, shape):
+  def scale_filters(self, desired_var: float, independent_filters):
     """scale the independent filters to get the desired variance
 
     Args:
@@ -147,9 +148,7 @@ class IndependentFilter(Initializer):
       return filters * np.sqrt(desired_var / np.var(filters))
 
     if self.complex:
-      real = np.reshape(independent_filters.real, shape)
-      img = np.reshape(independent_filters.imag, shape)
-      return [scale(real), scale(img)]
+      return [scale(independent_filters.real), scale(independent_filters.imag)]
     else:
       return [scale(independent_filters)]
 
@@ -166,7 +165,7 @@ class IndependentFilter(Initializer):
     Returns:
         reshaped filters
     """
-    weights = np.transpose(scaled_filters, (1, 2, 0))
+    weights = np.transpose(scaled_filters, (1, 0))
     weights = np.reshape(weights, shape)
     return weights
 
@@ -195,7 +194,7 @@ class IndependentFilter(Initializer):
       u, _, v = np.linalg.svd(x)
       independent_filters = np.dot(u, np.dot(np.eye(num_rows, num_cols), v.T))
     else:
-      rng = RandomState(seed=1337)
+      rng = RandomState(self.seed) 
       x = rng.uniform(size=(num_rows, num_cols)) + 1j * rng.uniform(size=(num_rows, num_cols))
       u, _, v = np.linalg.svd(x)
       independent_filters = np.dot(u, np.dot(np.eye(num_rows, num_cols), np.conjugate(v).T))
@@ -204,7 +203,7 @@ class IndependentFilter(Initializer):
     n_in, n_out = get_input_output_unit(self.depthwise, shape)
     desired_var = criterion_to_var[self.criterion](n_in, n_out)
 
-    scaled_filters = self.scale_filters(desired_var, independent_filters, shape=(num_rows, ) + tuple(shape[:-2]))
+    scaled_filters = self.scale_filters(desired_var, independent_filters)
     # At this step, scaled_filters is a list of tensor than contains one element if Real and 2 if complex
 
     # now need to reshape the kernel. If using complex then concatenate the real and imaginary components along the last axis
