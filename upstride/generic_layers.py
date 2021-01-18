@@ -458,7 +458,8 @@ class TF2Upstride(tf.keras.layers.Layer):
     # This dictionary map the strategy name to the function to call
     self.strategies = {
         'learned': TF2UpstrideLearned,
-        'basic': TF2UpstrideBasic
+        'basic': TF2UpstrideBasic,
+        '': TF2UpstrideBasic,
     }
     self.strategy_name = strategy
 
@@ -533,6 +534,8 @@ class Upstride2TF(tf.keras.layers.Layer):
     super().__init__()
     self.strategies = {
         'basic': self.basic,
+        'default': self.basic,
+        '': self.basic,
         'concat': self.concat,
         'max_pool': self.max_pool,
         'avg_pool': self.avg_pool
