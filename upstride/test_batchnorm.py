@@ -222,11 +222,18 @@ class TestBatchNorm(unittest.TestCase):
     self.compare_runs(list_of_batches)
 
   def test_dataset_r_i_random_normal_mean_stddev(self):
-    print("test_dataset_r_i_random_normal_mean_stddev")
     list_of_batches = []
     for _ in range(10):
       re = tf.random.normal((self.batch_size, 3, 3, 3), seed=42)
       im = tf.random.normal((self.batch_size, 3, 3, 3), seed=42, mean=1., stddev=2.)
+      list_of_batches.append(tf.concat([re, im], axis=1))
+    self.compare_runs(list_of_batches)
+    
+  def test_dataset_r_i_random_uniform(self):
+    list_of_batches = []
+    for _ in range(10):
+      re = tf.random.uniform((self.batch_size, 3, 3, 3), seed=42)
+      im = tf.random.uniform((self.batch_size, 3, 3, 3), seed=42)
       list_of_batches.append(tf.concat([re, im], axis=1))
     self.compare_runs(list_of_batches)
 

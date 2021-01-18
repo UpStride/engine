@@ -29,6 +29,7 @@ for He distribution, Var(W) = 2/n_in, solving the equation gives sigma = 1/sqrt(
 
 import math
 import numpy as np
+from numpy.random import RandomState
 import tensorflow as tf
 from tensorflow.keras.initializers import Initializer
 
@@ -76,8 +77,8 @@ class InitializersFactory():
 # TODO : all framework doesn't seems to agree on this formulation, mainly the "2." is sometime "1."... We should benchmark both
 # Here the convention used is the same than in the paper DCN and DQN
 criterion_to_var = {
-    'glorot': lambda n_in, n_out: 2. / (n_in + n_out),
-    'he': lambda n_in, n_out: 2. / (n_in),
+    'glorot': lambda n_in, n_out: 1. / (n_in + n_out),
+    'he': lambda n_in, n_out: 1. / (n_in),
 }
 
 
@@ -118,7 +119,7 @@ def get_input_output_unit(depthwise, shape):
 
 
 class IndependentFilter(Initializer):
-  def __init__(self, criterion='glorot', depthwise=False, complex=False):
+  def __init__(self, criterion='glorot', depthwise=False, complex=False, seed=None):
     """ Idea for the DCN paper
     This initialization constructs real-values or complex-values kernel with vectors that are independent as much as possible from each other while
     respecting either the He or the Glorot criterion. 
@@ -133,6 +134,7 @@ class IndependentFilter(Initializer):
     self.criterion = criterion
     self.depthwise = depthwise
     self.complex = complex
+    self.seed = seed
 
   def scale_filters(self, desired_var: float, independent_filters):
     """scale the independent filters to get the desired variance
@@ -186,14 +188,14 @@ class IndependentFilter(Initializer):
     else:  # then Conv{1/2/3}D
       num_rows = shape[-1] * shape[-2]
       num_cols = np.prod(shape[:-2])  # product of all components of the kernel
-
     # generate the (semi-)unitary matrix
     if not self.complex:
       x = np.random.uniform(size=(num_rows, num_cols))
       u, _, v = np.linalg.svd(x)
       independent_filters = np.dot(u, np.dot(np.eye(num_rows, num_cols), v.T))
     else:
-      x = np.random.uniform(size=(num_rows, num_cols)) + 1j * np.random.uniform(size=(num_rows, num_cols))
+      rng = RandomState(self.seed) 
+      x = rng.uniform(size=(num_rows, num_cols)) + 1j * rng.uniform(size=(num_rows, num_cols))
       u, _, v = np.linalg.svd(x)
       independent_filters = np.dot(u, np.dot(np.eye(num_rows, num_cols), np.conjugate(v).T))
 
