@@ -11,9 +11,9 @@ from tensorflow.keras.layers import Lambda, Layer, InputSpec, Convolution1D, Con
 from tensorflow.python.keras.utils import conv_utils
 from tensorflow.keras.models import Model
 import numpy as np
-from src.bn_dcn_source import ComplexBN as complex_normalization
-from src.bn_dcn_source import sqrt_init
-from src.init_from_dcn import ComplexInit, ComplexIndependentFilters
+from .bn_dcn_source import ComplexBN as complex_normalization
+from .bn_dcn_source import sqrt_init
+from .init_from_dcn import ComplexInit, ComplexIndependentFilters
 # from norm import LayerNormalization, ComplexLayerNorm
 
 

@@ -118,13 +118,13 @@ def unit_multiplier(i: int, j: int) -> Tuple[int, int]:
   return blade_index_to_position(index), s
 
 
-def convert_all_args_to_kwargs(function, argv, kwargs):
+def convert_all_args_to_kwargs(function, args, kwargs):
   """ This function use the information in the signature of the function
-  to convert all elements of argv to kwargs.
+  to convert all elements of args to kwargs.
   Then it also add in kwargs the default parameters of the function
   """
   parameters = inspect.getfullargspec(function).args
-  for i, arg in enumerate(argv):
+  for i, arg in enumerate(args):
     kwargs[parameters[i + 1]] = arg  # + 1 because the first element of parameters is 'self'
   # add all default parameters to kwargs
   for key, value in inspect.signature(function).parameters.items():
@@ -147,39 +147,41 @@ def remove_bias_from_kwargs(kwargs):
   return kwargs, add_bias, bias_parameters
 
 
-def get_layers(layer: tf.keras.layers.Layer, conj_layer: tf.keras.layers.Layer = None, *argv, **kwargs) -> Tuple[List[tf.keras.layers.Layer], bool, dict]:
-  """instantiate layer several times to match the number needed by the GA definition
+def get_layers(layer: tf.keras.layers.Layer, conj_layer: tf.keras.layers.Layer = None, **kwargs) -> Tuple[List[tf.keras.layers.Layer], bool, dict]:
+  """instantiate layer with the correct initializer
 
-  Any parameter analysis need to be done here. For instance, we can't define several times 
-  a layer with the same name, so we need to edit the name manually
-
-  Args:
-      layer (tf.keras.layers.Layer): a keras layer that we need to instantiate several times
-
-  Returns:
-      List[tf.keras.layers.Layer]: the list of keras layers
+  TODO the ability to compute conjugate has been removed, because not used for now
   """
-  kwargs = convert_all_args_to_kwargs(layer.__init__, argv, kwargs)
-  kwargs, add_bias, bias_parameters = remove_bias_from_kwargs(kwargs)
 
-  # hyper-complex initialization
   init_factory = InitializersFactory()
-  # kernel_arg_name = ""
 
   for possible_name in ["kernel_initializer", "depthwise_initializer"]:
     if (possible_name in kwargs) and init_factory.is_custom_init(kwargs[possible_name]):
       custom_init = init_factory.get_initializer(kwargs[possible_name], upstride_type)
       kwargs[possible_name] = custom_init
 
-  return layer(**kwargs), add_bias, bias_parameters
+  return layer(**kwargs)
 
 
-def geometric_multiplication(layer_output, inverse=False, bias=None):
+def geometric_multiplication(linear_layer_output, inverse=False, bias=None):
+  """
+  Args:
+    linear_layer_output: Tensor of shape (N * BS, N * C, ...) with BS the batch size and C the output size if this layer was a real one
+    inverse: if True then the engine compute y = W.x and not x.W
+    bias: the bias operation, if needed
+
+  Returns: A tensor of shape (N * BS, C, ...)
+
+  """
   # first, let's split the output of the layer
-  layer_outputs = tf.split(layer_output, multivector_length(), axis=0)
+  layer_outputs = tf.split(linear_layer_output, multivector_length(), axis=0)
   # here layer_outputs is a list of output of multiplication of one blade per all kernel blade
+
+  # Now we apply the bias. This can seem like a weird place but by applying it here, between the 2 split, we can do in
+  # a single operation what else would take N operations
   if bias is not None:
     layer_outputs[0] = bias(layer_outputs[0])  # add the bias on one of these output
+
   cross_product_matrix = []
   for i in range(multivector_length()):
     cross_product_matrix.append(tf.split(layer_outputs[i], multivector_length(), axis=1))
@@ -206,40 +208,27 @@ def geometric_multiplication(layer_output, inverse=False, bias=None):
           output[k] = -cross_product_matrix[i][j]
         else:
           output[k] -= cross_product_matrix[i][j]
-  return tf.keras.layers.Concatenate(axis=0)(output)
+  return tf.concat(output, axis=0)
 
 
 class BiasLayer(tf.keras.layers.Layer):
-  """Keras layer that only adds a bias to the input.
+  """Keras layer that only adds a bias to the input. It implements the operation:
 
-  code from https://github.com/tensorflow/agents/blob/v0.4.0/tf_agents/networks/bias_layer.py#L24-L81
-  with some modifications when initializing the weight to use the same conf as other layers
+  output = input + bias
 
-  `BiasLayer` implements the operation:
-  `output = input + bias`
-  Arguments:
+  Note that this layer only work in channel first neural network
+
+  Args:
       bias_initializer: Initializer for the bias vector.
-  Input shape:
-      nD tensor with shape: `(batch_size, ..., input_dim)`. The most common
-        situation would be a 2D input with shape `(batch_size, input_dim)`. Note
-        a rank of at least 2 is required.
-  Output shape:
-      nD tensor with shape: `(batch_size, ..., input_dim)`. For instance, for a
-        2D input with shape `(batch_size, input_dim)`, the output would have
-        shape `(batch_size, input_dim)`.
+      bias_regularizer: Regularizer for the bias vector.
+      bias_constraint: Constraint for the bias vector.
   """
 
-  def __init__(self, bias_initializer='zeros', bias_regularizer=None, bias_constraint=None, **kwargs):
-    if 'input_shape' not in kwargs and 'input_dim' in kwargs:
-      kwargs['input_shape'] = (kwargs.pop('input_dim'),)
-
-    super(BiasLayer, self).__init__(**kwargs)
+  def __init__(self, bias_initializer='zeros', bias_regularizer=None, bias_constraint=None):
+    super().__init__()
     self.bias_initializer = tf.keras.initializers.get(bias_initializer)
     self.bias_regularizer = tf.keras.regularizers.get(bias_regularizer)
     self.bias_constraint = tf.keras.constraints.get(bias_constraint)
-
-    self.supports_masking = True
-    self.input_spec = tf.keras.layers.InputSpec(min_ndim=2)
 
   def build(self, input_shape):
     input_shape = tf.TensorShape(input_shape)
@@ -267,31 +256,63 @@ class BiasLayer(tf.keras.layers.Layer):
   def get_config(self):
     config = {
         'bias_initializer': tf.keras.initializers.serialize(self.bias_initializer),
+        'bias_regularizer': tf.keras.initializers.serialize(self.bias_regularizer),
+        'bias_constraint': tf.keras.initializers.serialize(self.bias_constraint),
     }
     base_config = super(BiasLayer, self).get_config()
     return dict(list(base_config.items()) + list(config.items()))
 
 
 class GenericLinear(tf.keras.Model):
-  def __init__(self, layer, *argv, conj_layer=None, **kwargs):
+  def __init__(self, layer, *args, conj_layer=None, **kwargs):
+    """
+    Args:
+      layer: a subclass of tf.keras.layers.Layer 
+      conj_layer: the layer implementing the conjugaison operation matching the layer operation
+    """
     super().__init__()
+
+    # convert all arguments to kwargs to ease processing
+    kwargs = convert_all_args_to_kwargs(layer.__init__, args, kwargs)
+    kwargs[map_tf_linear_op_to_kwarg_output_size[layer]] *= multivector_length()
+    kwargs, add_bias, bias_parameters = remove_bias_from_kwargs(kwargs)
+
     # if the layer can run conjugaison, then self.conj_layer is an instance of the conj layer, else none
-    self.layer, self.add_bias, self.bias_parameters = get_layers(layer, conj_layer, *argv, **kwargs)
+    self.layer = get_layers(layer, conj_layer, **kwargs)
     self.bias = None
-    if self.add_bias:
-      self.bias = BiasLayer(self.bias_parameters['bias_initializer'], self.bias_parameters['bias_regularizer'], self.bias_parameters['bias_constraint'])
+    if add_bias:
+      self.bias = BiasLayer(bias_parameters['bias_initializer'], bias_parameters['bias_regularizer'], bias_parameters['bias_constraint'])
 
   def call(self, input_tensor, training=False):
+    """
+    Implementation note : keeping "training=False" is important. Even if the training parameter doesn't make sense here because the behavior of the linear
+    layer is the same in both training and eval mode, tensorflow expect this parameter to exist.
+
+    see https://www.tensorflow.org/tutorials/customization/custom_layers for more information
+    """
     x = self.layer(input_tensor)
     x = geometric_multiplication(x, bias=self.bias)
     return x
 
 
 class GenericNonLinear(tf.keras.Model):
-  def __init__(self, layer, *argv, **kwargs):
+  def __init__(self, layer, *args, stack_channels = False, **kwargs):
+    """
+    stack_channels is a boolean that control how to prepare teh data before appling the real operation. 
+    - If false then keep the blades stack on the first axis (batch size)
+    - If true then move the blades to the second axis (channel). Useful for BN for instance
+    """
     super().__init__()
     self.stack_channels = False  # usefull for BN
-    self.layer, self.add_bias, self.bias_parameters = get_layers(layer, None, *argv, **kwargs)
+
+    # convert all arguments to kwargs to ease processing
+    kwargs = convert_all_args_to_kwargs(layer.__init__, args, kwargs)
+    kwargs, add_bias, bias_parameters = remove_bias_from_kwargs(kwargs)
+
+    self.layer = layer(**kwargs)
+    self.bias = None
+    if add_bias:
+      self.bias = BiasLayer(self.bias_parameters['bias_initializer'], self.bias_parameters['bias_regularizer'], self.bias_parameters['bias_constraint'])
 
   def call(self, input_tensor, training=False):
     if self.stack_channels:
@@ -304,145 +325,159 @@ class GenericNonLinear(tf.keras.Model):
     return x
 
 
+# All linear layers should be defined here
+map_tf_linear_op_to_kwarg_output_size = {
+    tf.keras.layers.Conv2D: 'filters',
+    tf.keras.layers.Conv2DTranspose: 'filters',
+    tf.keras.layers.Dense: 'units',
+    tf.keras.layers.DepthwiseConv2D: 'depth_multiplier',
+}
+
+
 class Conv2D(GenericLinear):
-  def __init__(self, *argv, **kwargs):
-    kwargs = convert_all_args_to_kwargs(tf.keras.layers.Conv2D.__init__, argv, kwargs)
-    kwargs['filters'] *= multivector_length()
-    super().__init__(tf.keras.layers.Conv2D, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.Conv2D, *args, **kwargs)
 
 
 class Dense(GenericLinear):
-  def __init__(self, *argv, **kwargs):
-    kwargs = convert_all_args_to_kwargs(tf.keras.layers.Dense.__init__, argv, kwargs)
-    kwargs['units'] *= multivector_length()
+  def __init__(self, *args, **kwargs):
     super().__init__(tf.keras.layers.Dense, **kwargs)
 
 
 class Conv2DTranspose(GenericLinear):
-  def __init__(self, *argv, **kwargs):
-    kwargs = convert_all_args_to_kwargs(tf.keras.layers.Conv2DTranspose.__init__, argv, kwargs)
-    kwargs['filters'] *= multivector_length()
+  def __init__(self, *args, **kwargs):
     super().__init__(tf.keras.layers.Conv2DTranspose, **kwargs)
 
 
-class UpSampling2D(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.UpSampling2D, *argv, **kwargs)
-
-
 class DepthwiseConv2D(GenericLinear):
-  def __init__(self, *argv, **kwargs):
-    kwargs = convert_all_args_to_kwargs(tf.keras.layers.DepthwiseConv2D.__init__, argv, kwargs)
-    kwargs['depth_multiplier'] *= multivector_length()
+  def __init__(self, *args, **kwargs):
     super().__init__(tf.keras.layers.DepthwiseConv2D, **kwargs)
 
 
-class DepthwiseConv2DTranspose(GenericLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.DepthwiseConv2DTranspose, *argv, **kwargs)
+# TODO SeparableConv2D is probably an exception. Go through the math
+# class SeparableConv2D(GenericLinear):
+#   def __init__(self, *args, **kwargs):
+#     super().__init__(tf.keras.layers.SeparableConv2D, **kwargs)
 
 
-class SeparableConv2D(GenericLinear):
-  def __init__(self, *argv, **kwargs):
-    kwargs = convert_all_args_to_kwargs(tf.keras.layers.SeparableConv2D.__init__, argv, kwargs)
-    kwargs['filters'] *= multivector_length()
-    super().__init__(tf.keras.layers.SeparableConv2D, **kwargs)
+# and now non linear layers
+class UpSampling2D(GenericNonLinear):
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.UpSampling2D, *args, **kwargs)
 
 
 class MaxPooling2D(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.MaxPooling2D, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.MaxPooling2D, *args, **kwargs)
 
 
 class AveragePooling2D(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.AveragePooling2D, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.AveragePooling2D, *args, **kwargs)
 
 
 class MaxPool2D(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.MaxPool2D, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.MaxPool2D, *args, **kwargs)
 
 
 class AveragePool2D(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.AveragePool2D, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.AveragePool2D, *args, **kwargs)
 
 
 class GlobalMaxPooling2D(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.GlobalMaxPooling2D, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.GlobalMaxPooling2D, *args, **kwargs)
 
 
 class GlobalAveragePooling2D(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.GlobalAveragePooling2D, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.GlobalAveragePooling2D, *args, **kwargs)
 
 
 class Reshape(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.Reshape, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.Reshape, *args, **kwargs)
 
 
 class BatchNormalization(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.BatchNormalization, *argv, **kwargs)
-    self.stack_channels = True
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.BatchNormalization, *args, stack_channels = True, **kwargs)
 
 
 class Activation(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.Activation, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.Activation, *args, **kwargs)
 
 
 class Flatten(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.Flatten, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.Flatten, *args, **kwargs)
 
 
 class ZeroPadding2D(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.ZeroPadding2D, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.ZeroPadding2D, *args, **kwargs)
 
 
 class Cropping2D(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.Cropping2D, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.Cropping2D, *args, **kwargs)
 
 
 class ReLU(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.ReLU, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.ReLU, *args, **kwargs)
 
 
 class LeakyReLU(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.LeakyReLU, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.LeakyReLU, *args, **kwargs)
 
 
 class Add(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.Add, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.Add, *args, **kwargs)
     self.list_as_input = True
 
 
 class Multiply(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.Multiply, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.Multiply, *args, **kwargs)
     self.list_as_input = True
 
 
 class Concatenate(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    super().__init__(tf.keras.layers.Concatenate, *argv, **kwargs)
+  def __init__(self, *args, **kwargs):
+    super().__init__(tf.keras.layers.Concatenate, *args, **kwargs)
     self.list_as_input = True
 
 
-class Dropout(GenericNonLinear):
-  def __init__(self, *argv, **kwargs):
-    # TODO for now dropout manage real part and img part separately. better if manage both at the same time
-    # solution : only one layer and concat before ? Or define all Dropout with the same seed ?
-    super().__init__(tf.keras.layers.Dropout, *argv, **kwargs)
+class Dropout(tf.keras.Model):
+  """ Among the non linear operation, dropout is a exception.
+  We want to cancel all components of a hypercomplex number at the same time. This can't be done with a single Dropout.
+  We need to define N Dropout with the same random seed so they are all synchronized 
+  """
+  def __init__(self, rate, noise_shape=None, seed=None, **kwargs):
+    super().__init__()
+
+    # Prevent the seed to be different for the several Dropout operations
+    if seed is None:
+      seed = 4242
+
+    self.layers = []
+    for i in range(multivector_length()):
+      self.layers.append(tf.keras.layers.Dropout(rate, noise_shape, seed))
+
+  def call(self, input_tensor, training=False):
+    input_tensor = tf.split(input_tensor, multivector_length(), axis=0)
+    x = []
+    for i in range(multivector_length()):
+      x.append(self.layers[i](input_tensor[i], training))
+    x = tf.concat(x, axis=0)
+    return x
+
 
 
 class TF2Upstride(tf.keras.layers.Layer):
@@ -453,7 +488,7 @@ class TF2Upstride(tf.keras.layers.Layer):
   the self.strategies dic
   """
 
-  def __init__(self, strategy='learned', **args):
+  def __init__(self, strategy='', **args):
     super().__init__()
     # This dictionary map the strategy name to the function to call
     self.strategies = {
@@ -530,7 +565,7 @@ class Upstride2TF(tf.keras.layers.Layer):
   """convert multivector back to real values. 
   """
 
-  def __init__(self, strategy='basic'):
+  def __init__(self, strategy=''):
     super().__init__()
     self.strategies = {
         'basic': self.basic,

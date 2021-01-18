@@ -5,7 +5,7 @@ import tensorflow as tf
 from upstride.type1.tf.keras import layers 
 from .initializers import CInitializer, HInitializer, IndependentFilter, InitializersFactory
 from .test_batchnorm import Channel2Batch, Batch2Channel
-from src.conv_from_dcn import ComplexConv2D
+from src_test.conv_from_dcn import ComplexConv2D
 from .generic_layers import change_upstride_type
 
 class TestCInitializer(unittest.TestCase):

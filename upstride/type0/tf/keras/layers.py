@@ -16,5 +16,5 @@ class Upstride2TF(tf.keras.layers.Layer):
   """Dummy class 
   """
 
-  def __init__(self, strategy='basic'):
+  def __init__(self, strategy=''):
     super().__init__()
