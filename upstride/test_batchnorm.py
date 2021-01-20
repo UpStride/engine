@@ -4,7 +4,7 @@ from functools import reduce
 
 import numpy as np
 import tensorflow as tf
-from src_test.bn_dcn_source import ComplexBatchNormalization
+from src_test.bn_from_dcn import ComplexBatchNormalization
 
 from upstride.type1.tf.keras import layers
 
