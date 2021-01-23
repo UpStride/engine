@@ -1109,7 +1109,7 @@ class Dense(Layer):
                units,
                activation=None,
                use_bias=True,
-               kernel_initializer='up2_init_he',  # upstride initialization, either 'up2_init_he'  or 'up2_init_glorot'
+               kernel_initializer='glorot_uniform',
                bias_initializer='zeros',
                kernel_regularizer=None,
                bias_regularizer=None,

@@ -142,7 +142,7 @@ class Upstride2TF(GenericUP2TF):
   """convert multivector back to real values.
   """
 
-  def __init__(self, strategy='basic'):
+  def __init__(self, strategy=''):
     super().__init__(strategy)
     self.strategies['norm'] = self.norm
     self.strategies['attention'] = self.attention

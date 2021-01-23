@@ -11,12 +11,10 @@ generic_layers.geometrical_def = (2, 0, 0)
 
 
 class Conv2D(generic_layers.Conv2D):
-  def __init__(self, *argv, kernel_initializer='he', **kwargs):
-    kwargs['kernel_initializer'] = kernel_initializer
+  def __init__(self, *argv, **kwargs):
     super().__init__(*argv, **kwargs)
 
 
 class DepthwiseConv2D(generic_layers.DepthwiseConv2D):
-  def __init__(self, *argv, depthwise_initializer='depthwise_he', **kwargs):
-    kwargs['depthwise_initializer'] = depthwise_initializer
+  def __init__(self, *argv, **kwargs):
     super().__init__(*argv, **kwargs)
