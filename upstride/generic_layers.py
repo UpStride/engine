@@ -456,19 +456,31 @@ class Concatenate(GenericNonLinear):
 
 class Dropout(tf.keras.Model):
   """ Among the non linear operation, dropout is a exception.
-  We want to cancel all components of a hypercomplex number at the same time. This can't be done with a single Dropout.
-  We need to define N Dropout with the same random seed so they are all synchronized 
+  We may want to cancel all components of a hypercomplex number at the same time. This can't be done with a single Dropout.
+  We need to define N Dropout.
+  - if we want the dropout to be synchronized, then they should all have the same random seed
+  - else we should give them different random seed
   """
-  def __init__(self, rate, noise_shape=None, seed=None, **kwargs):
+  def __init__(self, rate, noise_shape=None, seed=None, synchronized=False, **kwargs):
     super().__init__()
 
-    # Prevent the seed to be different for the several Dropout operations
-    if seed is None:
-      seed = 4242
+    seeds = []
+    if synchronized:
+      # Prevent the seed to be different for the several Dropout operations
+      if seed is not None:
+        seeds = [seed] * multivector_length()
+      else:
+        seeds = [4242] * multivector_length()
+    if not synchronized:
+      if seed is not None:
+        # Prevent the seed to be the same for the several Dropout operations
+        seeds = [seed + i for i in range(multivector_length())]
+      else:
+        seeds = [None] * multivector_length()
 
     self.layers = []
     for i in range(multivector_length()):
-      self.layers.append(tf.keras.layers.Dropout(rate, noise_shape, seed))
+      self.layers.append(tf.keras.layers.Dropout(rate, noise_shape, seeds[i]))
 
   def call(self, input_tensor, training=False):
     input_tensor = tf.split(input_tensor, multivector_length(), axis=0)
