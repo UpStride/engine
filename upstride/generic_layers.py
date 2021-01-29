@@ -38,15 +38,7 @@ def multivector_length() -> int:
 
 
 def blade_index_to_position(index: str) -> int:
-  @functools.lru_cache(maxsize=1)
-  def get_dict():
-    """return a dictionary that map the blade index to the position in the list encoding the multivector
-    """
-    d = {}
-    for i, e in enumerate(blade_indexes):
-      d[e] = i
-    return d
-  return get_dict()[index]
+  return blade_indexes.index(index)
 
 
 def square_vector(index: int) -> int:
@@ -197,7 +189,7 @@ def geometric_multiplication(linear_layer_output, inverse=False, bias=None):
       else:
         k, s = unit_multiplier(j, i)
 
-      # same as output[k] += s*self.layers[i](inputs[j]), but cleaner graph
+      # same as output[k] += s*self.layers[i](inputs[j]), but cleaner TensorFlow execution graph
       if s == 1:
         if output[k] is None:
           output[k] = cross_product_matrix[i][j]
