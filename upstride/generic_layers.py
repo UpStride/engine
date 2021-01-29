@@ -42,18 +42,16 @@ def blade_index_to_position(index: str) -> int:
 
 
 def square_vector(index: int) -> int:
-  @functools.lru_cache(maxsize=1)
-  def get_list():
-    """return a list that map the indice to the square
-    For instance, for geometrical_def = (2, 3, 1) this function will return
-    [1, 1, -1, -1, -1, 0]
-    """
-    l = [0]
-    possible_squares = [1, -1, 0]
-    for i in range(3):
-      l += [possible_squares[i]] * geometrical_def[i]
-    return l
-  return get_list()[index]
+  # geometrical_def is a triplet (A, B, C) defining a GA where:
+  # - the square of the A first elements is 1
+  # - the square of the B next elements is -1
+  # - the square of the C last elements is 0
+  # dev note : the + 1 is because the first index in the vector notation of a GA is... 1
+  if index < geometrical_def[0] + 1:
+    return 1
+  if index < geometrical_def[0] + geometrical_def[1] + 1:
+    return -1
+  return 0
 
 
 def _ga_multiply_get_index(index_1: str, index_2: str) -> Tuple[int, str]:
