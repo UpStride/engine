@@ -122,7 +122,7 @@ class Conv(Layer):
                groups=1,
                activation=None,
                use_bias=True,
-               kernel_initializer='up2_init_he',  # upstride initialization, either 'up2_init_he'  or 'up2_init_glorot'
+               kernel_initializer='glorot_uniform',
                bias_initializer='zeros',
                kernel_regularizer=None,
                bias_regularizer=None,
@@ -488,7 +488,7 @@ class Conv1D(Conv):
                groups=1,
                activation=None,
                use_bias=True,
-               kernel_initializer='up2_init_he',  # upstride initialization, either 'up2_init_he'  or 'up2_init_glorot'
+               kernel_initializer='glorot_uniform',
                bias_initializer='zeros',
                kernel_regularizer=None,
                bias_regularizer=None,
@@ -643,7 +643,7 @@ class Conv2D(Conv):
                groups=1,
                activation=None,
                use_bias=True,
-               kernel_initializer='up2_init_he',  # upstride initialization, either 'up2_init_he'  or 'up2_init_glorot'
+               kernel_initializer='glorot_uniform',
                bias_initializer='zeros',
                kernel_regularizer=None,
                bias_regularizer=None,
@@ -908,7 +908,7 @@ class Conv1DTranspose(Conv1D):
                dilation_rate=1,
                activation=None,
                use_bias=True,
-               kernel_initializer='up2_init_he',  # upstride initialization, either 'up2_init_he'  or 'up2_init_glorot'
+               kernel_initializer='glorot_uniform',
                bias_initializer='zeros',
                kernel_regularizer=None,
                bias_regularizer=None,
@@ -2296,7 +2296,7 @@ class DepthwiseConv2D(Conv2D):
                dilation_rate=(1, 1),
                activation=None,
                use_bias=True,
-               depthwise_initializer='up2_init_he',  # upstride initialization, either 'up2_init_he'  or 'up2_init_glorot'
+               depthwise_initializer='glorot_uniform',
                bias_initializer='zeros',
                depthwise_regularizer=None,
                bias_regularizer=None,

@@ -9,7 +9,7 @@ pipeline {
         REPO = 'upstride'
         GIT_REPO = 'upstride_python'
         BUILD_TAG = "py"
-        BUILD_VERSION = "1.0.0"
+        BUILD_VERSION = "2.1.0"
     }
     stages {
         stage('setup') {
