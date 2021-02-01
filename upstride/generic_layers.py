@@ -293,7 +293,7 @@ class GenericNonLinear(tf.keras.Model):
     - If true then move the blades to the second axis (channel). Useful for BN for instance
     """
     super().__init__()
-    self.stack_channels = False  # usefull for BN
+    self.stack_channels = stack_channels  # usefull for BN
 
     # convert all arguments to kwargs to ease processing
     kwargs = convert_all_args_to_kwargs(layer.__init__, args, kwargs)
