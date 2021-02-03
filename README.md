@@ -12,3 +12,8 @@ The versioning here follow roughly the Semantic Versioning:
 - 3rd number evolve for bug fix, cleaning, small stuff
 
 One exception: as this engine is focused on research, the notion of alpha and beta versions doesn't make much sense here.
+
+# Testing
+
+* To run the unittests, run `python test.py`
+* To get the coverage, run `coverage run test.py`. Then `coverage report` show the coverage information and `coverage xml` create a file usable by VSCode

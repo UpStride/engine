@@ -4,6 +4,8 @@ import functools
 import inspect
 from typing import List, Tuple
 import tensorflow as tf
+from tensorflow.python.ops import array_ops
+from tensorflow.python.framework import ops
 
 # from .convolutional import Conv2D as Conv2DConj for now conjugate is not used
 from .initializers import InitializersFactory
@@ -286,7 +288,7 @@ class GenericLinear(tf.keras.Model):
 
 
 class GenericNonLinear(tf.keras.Model):
-  def __init__(self, layer, *args, stack_channels = False, **kwargs):
+  def __init__(self, layer, *args, stack_channels=False, **kwargs):
     """
     stack_channels is a boolean that control how to prepare teh data before appling the real operation. 
     - If false then keep the blades stack on the first axis (batch size)
@@ -393,7 +395,7 @@ class Reshape(GenericNonLinear):
 
 class BatchNormalization(GenericNonLinear):
   def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.BatchNormalization, *args, stack_channels = True, **kwargs)
+    super().__init__(tf.keras.layers.BatchNormalization, *args, stack_channels=True, **kwargs)
 
 
 class Activation(GenericNonLinear):
@@ -444,42 +446,49 @@ class Concatenate(GenericNonLinear):
     self.list_as_input = True
 
 
-class Dropout(tf.keras.Model):
+class Dropout(tf.keras.layers.Dropout):
   """ Among the non linear operation, dropout is a exception.
-  We may want to cancel all components of a hypercomplex number at the same time. This can't be done with a single Dropout.
-  We need to define N Dropout.
-  - if we want the dropout to be synchronized, then they should all have the same random seed
-  - else we should give them different random seed
+  We may want to cancel all components of a hypercomplex number at the same time. This can be done using the noise_shape parameter
+  - if we don't want the dropout to be synchronized along the blades, then standard dropout is enough
+  - else we need to reorganise the components to create a new dimension for the blades, and changing the noise so we don't apply dropout along this
+  dimension
   """
+
   def __init__(self, rate, noise_shape=None, seed=None, synchronized=False, **kwargs):
-    super().__init__()
+    super().__init__(rate, noise_shape, seed, **kwargs)
+    self.synchronized = synchronized
 
-    seeds = []
-    if synchronized:
-      # Prevent the seed to be different for the several Dropout operations
-      if seed is not None:
-        seeds = [seed] * multivector_length()
+  def _get_noise_shape(self, inputs):
+    # see https://github.com/tensorflow/tensorflow/blob/v2.4.1/tensorflow/python/keras/layers/core.py#L144-L244
+    # for more details
+    if self.noise_shape is None:
+      if not self.synchronized:
+        return None
       else:
-        seeds = [4242] * multivector_length()
-    if not synchronized:
-      if seed is not None:
-        # Prevent the seed to be the same for the several Dropout operations
-        seeds = [seed + i for i in range(multivector_length())]
-      else:
-        seeds = [None] * multivector_length()
+        concrete_inputs_shape = array_ops.shape(inputs)  # concrete_inputs_shape is a tf.Tensor
+        # transform the first value in the list to 1, so we don't perform Dropout along this dim
+        return ops.convert_to_tensor_v2_with_dispatch(tf.concat([[1], concrete_inputs_shape[1:]], axis=0))
 
-    self.layers = []
-    for i in range(multivector_length()):
-      self.layers.append(tf.keras.layers.Dropout(rate, noise_shape, seeds[i]))
+    concrete_inputs_shape = array_ops.shape(inputs)
+
+    if not self.synchronized:
+      noise_shape = []
+    else:
+      noise_shape = [1]
+    for i, value in enumerate(self.noise_shape):
+      noise_shape.append(concrete_inputs_shape[i] if value is None else value)
+    return ops.convert_to_tensor_v2_with_dispatch(noise_shape)
 
   def call(self, input_tensor, training=False):
-    input_tensor = tf.split(input_tensor, multivector_length(), axis=0)
-    x = []
-    for i in range(multivector_length()):
-      x.append(self.layers[i](input_tensor[i], training))
-    x = tf.concat(x, axis=0)
-    return x
-
+    if not self.synchronized:
+      return super().call(input_tensor, training)
+    else:
+      input_shape = tf.shape(input_tensor)
+      transform_shape = tf.concat([[multivector_length(), -1], input_shape[1:]], axis=0)
+      x = tf.reshape(input_tensor, transform_shape)
+      x = super().call(x, training)
+      x = tf.reshape(x, input_shape)
+      return x
 
 
 class TF2Upstride(tf.keras.layers.Layer):

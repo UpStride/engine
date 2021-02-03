@@ -1,5 +1,6 @@
 import unittest
 import tensorflow as tf
+import numpy as np
 from upstride.generic_layers import _ga_multiply_get_index, unit_multiplier, change_upstride_type
 from upstride import generic_layers
 
@@ -64,3 +65,25 @@ class TestGAMultiplication(unittest.TestCase):
     model = tf.keras.Model(inputs=[inputs], outputs=[x])
     self.assertEqual(len(model.layers), 4) # input, tf2upstride, conv, split
     self.assertEqual(model.count_params(), 224)
+
+
+class TestDropout(unittest.TestCase):
+  def test_synchronized(self):
+    change_upstride_type(1, ["", "12"], (2, 0, 0))
+    model = tf.keras.Sequential(generic_layers.Dropout(0.5, synchronized=True, seed=42))
+    images = np.ones((10, 10, 10, 3), dtype=np.float32)
+    output = model(images, training=True)
+
+    # check that real and imaginary parts are synchronized
+    split_output = tf.split(output, 2, axis=0)
+    self.assertTrue(np.alltrue((split_output[1] == split_output[0]).numpy()))
+
+  def test_not_synchronized(self):
+    change_upstride_type(1, ["", "12"], (2, 0, 0))
+    model = tf.keras.Sequential(generic_layers.Dropout(0.5, synchronized=False, seed=42))
+    images = np.ones((10, 10, 10, 3), dtype=np.float32)
+    output = model(images, training=True)
+
+    # check that real and imaginary parts are synchronized
+    split_output = tf.split(output, 2, axis=0)
+    self.assertFalse(np.alltrue((split_output[1] == split_output[0]).numpy()))
