@@ -1,8 +1,6 @@
 from tensorflow.keras.layers import Layer
 from .... import generic_layers
 from ....generic_layers import *
-from ....generic_layers import TF2Upstride as GenericTF2UP
-from ....generic_layers import Upstride2TF as GenericUP2TF
 from ....batchnorm import BatchNormalizationH
 from .convolutional import Conv2D, DepthwiseConv2D
 from .dense import Dense
@@ -10,15 +8,16 @@ from tensorflow.python.keras import backend
 from tensorflow.python.keras.utils import conv_utils
 import numpy as np
 
-generic_layers.upstride_type = 2
-generic_layers.blade_indexes = ["", "12", "23", "13"]
-generic_layers.geometrical_def = (3, 0, 0)
+
+UPSTRIDE_TYPE = 2
+BLADES_INDEXES = ['', '12', '13', '23']
+GEOMETRICAL_DEF = (3, 0, 0)
 
 # If you wish to overwrite some layers, please implements them here
 
 
 class TF2UpstrideJoint(tf.keras.layers.Layer):
-  def __init__(self) -> None:
+  def __init__(self, blade_indexes) -> None:
     super().__init__()
     self.image_data_format = tf.keras.backend.image_data_format()
 
@@ -37,7 +36,7 @@ class TF2UpstrideJoint(tf.keras.layers.Layer):
 
 
 class TF2UpstrideGrayscale(tf.keras.layers.Layer):
-  def __init__(self) -> None:
+  def __init__(self, blade_indexes) -> None:
     super().__init__()
     self.image_data_format = tf.keras.backend.image_data_format()  # can be 'channels_last' or 'channels_first'
 
@@ -58,9 +57,9 @@ class TF2UpstrideGrayscale(tf.keras.layers.Layer):
     return tf.concat([grayscale, red, green, blue], axis=0)
 
 
-class TF2Upstride(GenericTF2UP):
+class TF2Upstride(generic_layers.TF2Upstride):
   def __init__(self, strategy=''):
-    super().__init__(strategy)
+    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, strategy)
 
   def add_strategies(self):
     self.strategies['joint'] = TF2UpstrideJoint
@@ -138,12 +137,12 @@ class Attention(Layer):
     return aggregated_tensor
 
 
-class Upstride2TF(GenericUP2TF):
+class Upstride2TF(generic_layers.Upstride2TF):
   """convert multivector back to real values.
   """
 
   def __init__(self, strategy=''):
-    super().__init__(strategy)
+    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, strategy)
     self.strategies['norm'] = self.norm
     self.strategies['attention'] = self.attention
 
@@ -163,12 +162,12 @@ class Upstride2TF(GenericUP2TF):
       self.gated_attention = True
 
   def norm(self, x):
-    x = tf.split(x, multivector_length(), axis=0)
+    x = tf.split(x, self.multivector_length, axis=0)
     stacked_tensors = tf.stack(x, axis=-1)
     return tf.norm(stacked_tensors, axis=-1, ord=self.norm_order)
 
   def attention(self, x):
-    x = tf.split(x, multivector_length(), axis=0)
+    x = tf.split(x, self.multivector_length, axis=0)
     dim = x[0].get_shape()[1]
     return Attention(hidden_size=64, final_size=dim, is_gated_attention=self.gated_attention)(x)
 
@@ -252,3 +251,18 @@ class MaxNormPooling2D(Layer):
     }
     base_config = super(MaxNormPooling2D, self).get_config()
     return dict(list(base_config.items()) + list(config.items()))
+
+
+class Conv2DTranspose(generic_layers.Conv2DTranspose):
+  def __init__(self, *args, **kwargs):
+    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, *args, **kwargs)
+
+
+class Dropout(generic_layers.Dropout):
+  def __init__(self, *args, **kwargs):
+    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, *args, **kwargs)
+
+
+class BatchNormalization(generic_layers.BatchNormalization):
+  def __init__(self, *args, **kwargs):
+    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, *args, **kwargs)

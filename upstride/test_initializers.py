@@ -6,7 +6,6 @@ from upstride.type1.tf.keras import layers
 from .initializers import CInitializer, HInitializer, IndependentFilter, InitializersFactory
 from .test_batchnorm import Channel2Batch, Batch2Channel
 from src_test.conv_from_dcn import ComplexConv2D
-from .generic_layers import change_upstride_type
 
 class TestCInitializer(unittest.TestCase):
   def test_init(self):
@@ -170,9 +169,6 @@ class TestComplexInitCompare(unittest.TestCase):
     return weight_dict
 
   def test_compare(self):
-    # required to force type1 so that the below tests are working. 
-    # Need to rethink on how we use global values. This is a a pain to debug.
-    change_upstride_type(1,["", "12"],(2, 0, 0))
     weight_dcn_ours = self.get_statistics(1, iteration=3, is_dcn_ours=True)
     weight_dcn_source = self.get_statistics(1, iteration=3, is_dcn_ours=False)
     for (k1, v1), (k2, v2) in zip(sorted(weight_dcn_ours.items()), sorted(weight_dcn_source.items())):

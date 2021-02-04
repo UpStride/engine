@@ -3,12 +3,10 @@ import unittest
 import tensorflow as tf
 import numpy as np
 from .layers import TF2Upstride, Upstride2TF, Conv2D, DepthwiseConv2D
-from upstride.generic_layers import change_upstride_type
 
 
 class TestQuaternionTF2Upstride(unittest.TestCase):
   def test_TF2Upstride(self):
-    change_upstride_type(2, ["", "12", "13", "23"], (3, 0, 0))
     tf.keras.backend.set_image_data_format('channels_first')
     inputs = tf.convert_to_tensor([[[[1.]], [[3]], [[4]]]])
     self.assertEqual(inputs.shape, (1, 3, 1, 1))
@@ -73,7 +71,6 @@ class TestQuaternionUpstride2TF(unittest.TestCase):
 
 class TestConv2DQuaternion(unittest.TestCase):
   def test_conv2d(self):
-    change_upstride_type(2, ["", "12", "13", "23"], (3, 0, 0))
     tf.keras.backend.set_image_data_format('channels_first')
     inputs = tf.keras.layers.Input((3, 224, 224))
     x = TF2Upstride('basic')(inputs)
@@ -85,7 +82,6 @@ class TestConv2DQuaternion(unittest.TestCase):
     self.assertEqual(model.count_params(), (9*4*3+4)*4)
 
   def test_export(self):
-    change_upstride_type(2, ["", "12", "13", "23"], (3, 0, 0))
     tf.keras.backend.set_image_data_format('channels_first')
     inputs = tf.keras.layers.Input((3, 224, 224))
     x = TF2Upstride('basic')(inputs)

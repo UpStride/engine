@@ -3,13 +3,12 @@ import tensorflow as tf
 from upstride.type2.tf.keras import layers
 
 
-class TestUpstride(unittest.TestCase):
+class TestType2(unittest.TestCase):
   def test_network(self):
-    inputs = tf.keras.layers.Input(shape=(24, 24, 3))
+    tf.keras.backend.set_image_data_format('channels_first')
+    inputs = tf.keras.layers.Input(shape=(3, 24, 24))
     x = layers.TF2Upstride()(inputs)
-    # self.assertEqual(len(x), 1)
     x = layers.Conv2D(4, (3, 3), name='test-names')(x)
-    # self.assertEqual(len(x), 4)
     x = layers.Activation('relu')(x)
     x = layers.Conv2D(4, (3, 3))(x)
     x = layers.Activation('relu')(x)
@@ -21,8 +20,3 @@ class TestUpstride(unittest.TestCase):
 
     model = tf.keras.Model(inputs=[inputs], outputs=[x])
     model.summary()
-    tf.keras.utils.plot_model(model, to_file='model_type2.png', show_shapes=True)
-
-
-if __name__ == "__main__":
-  unittest.main()

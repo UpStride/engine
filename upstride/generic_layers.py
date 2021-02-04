@@ -1,113 +1,22 @@
 """users shouldn't import this package directly. instead import upstride.typeX.tf.keras.layers
 """
-import functools
 import inspect
 from typing import List, Tuple
+
 import tensorflow as tf
-from tensorflow.python.ops import array_ops
 from tensorflow.python.framework import ops
+from tensorflow.python.ops import array_ops
+# Here we import some keras layers, but we don't use them. This is on purpose : these layers
+# Have the same definition between real and hypercomplex. So they are imported to be available
+from tensorflow.keras.layers import (Activation, Add, AveragePooling2D,
+                                     Concatenate, Cropping2D, Flatten,
+                                     GlobalAveragePooling2D, GlobalMaxPooling2D,
+                                     LeakyReLU, MaxPool2D, MaxPooling2D, Multiply,
+                                     ReLU, Reshape, UpSampling2D, ZeroPadding2D)
+
 
 # from .convolutional import Conv2D as Conv2DConj for now conjugate is not used
 from .initializers import InitializersFactory
-
-# Definition of the GA, setup when calling upstride.type{1/2/3}.tf.keras.layers
-upstride_type = 3
-blade_indexes = ["", "1", "2", "3", "12", "13", "23", "123"]
-geometrical_def = (3, 0, 0)
-
-conjugate = False
-
-
-def change_upstride_type(type: int, new_blade_indexes: List[str],  new_geometrical_def: Tuple[int, int, int]):
-  """ Called in upstride.type{1/2/3}.tf.keras.layers to setup the algebra. In a near future we should stop using 
-  global variables for this
-  """
-  global upstride_type, blade_indexes, geometrical_def
-  upstride_type = type
-  blade_indexes = new_blade_indexes
-  geometrical_def = new_geometrical_def
-
-
-def set_conjugaison_mult(b):
-  global conjugate
-  conjugate = b
-
-
-def multivector_length() -> int:
-  """map the upstride type to the number of dimensions in our GA
-  """
-  return len(blade_indexes)
-
-
-def blade_index_to_position(index: str) -> int:
-  return blade_indexes.index(index)
-
-
-def square_vector(index: int) -> int:
-  # geometrical_def is a triplet (A, B, C) defining a GA where:
-  # - the square of the A first elements is 1
-  # - the square of the B next elements is -1
-  # - the square of the C last elements is 0
-  # dev note : the + 1 is because the first index in the vector notation of a GA is... 1
-  if index < geometrical_def[0] + 1:
-    return 1
-  if index < geometrical_def[0] + geometrical_def[1] + 1:
-    return -1
-  return 0
-
-
-def _ga_multiply_get_index(index_1: str, index_2: str) -> Tuple[int, str]:
-  """given \beta_{index_1}, \beta_{index_2} return (s, index) such as \beta_{index_1} * \beta_{index_2} = s * \beta_{index}
-  """
-  l1 = [int(i) for i in index_1]
-  l2 = [int(i) for i in index_2]
-  s = 1
-
-  # as l1 and l2 are already sorted, we can just merge them and count the number of permutation needed
-  i1, i2, length_l1 = 0, 0, len(l1)
-  out_l = []
-  while i1 < len(l1) and i2 < len(l2):
-    if l1[i1] == l2[i2]:
-      # then move the element of l2 near the element of l1 and remove them
-      if (length_l1 - 1) % 2 != 0:
-        s *= -1
-      # check the sign of the square
-      s *= square_vector(l1[i1])
-      length_l1 -= 1
-      i1 += 1
-      i2 += 1
-    elif l1[i1] > l2[i2]:
-      # then move the element of l2 before the element of l1
-      if length_l1 % 2 != 0:
-        s *= -1
-      out_l.append(l2[i2])
-      i2 += 1
-    elif l1[i1] < l2[i2]:
-      out_l.append(l1[i1])
-      length_l1 -= 1
-      i1 += 1
-  out_l += l1[i1:] + l2[i2:]
-
-  return s, "".join([str(i) for i in out_l])
-
-
-def unit_multiplier(i: int, j: int) -> Tuple[int, int]:
-  """given \beta_i and \beta_j, return (k,s) such as : \beta_i * \beta_j = s * \beta_k
-
-  with:
-      \beta_0 = 1, \beta_1 = i if upstride_type == 1
-      \beta_0 = 1, \beta_1 = i, \beta_2 = j, \beta_3 = k if upstride_type == 2
-      s in {-1, 1}
-
-  for instance, upstride_type == 1,
-  (0, 0) -> (0, 1) because \beta_0 * \beta_0 = 1 * 1 = 1 * \beta_0
-  (0, 1) -> (1, 1) because \beta_0 * \beta_1 = 1 * \beta_1
-  (1, 1) -> (0, -1) because \beta_1 * \beta_1 = i**2 = -1 = -1 * \beta_0
-  """
-  index1 = blade_indexes[i]
-  index2 = blade_indexes[j]
-  s, index = _ga_multiply_get_index(index1, index2)
-  return blade_index_to_position(index), s
 
 
 def convert_all_args_to_kwargs(function, args, kwargs):
@@ -139,7 +48,7 @@ def remove_bias_from_kwargs(kwargs):
   return kwargs, add_bias, bias_parameters
 
 
-def get_layers(layer: tf.keras.layers.Layer, conj_layer: tf.keras.layers.Layer = None, **kwargs) -> Tuple[List[tf.keras.layers.Layer], bool, dict]:
+def get_layers(layer: tf.keras.layers.Layer, upstride_type, conj_layer: tf.keras.layers.Layer = None, **kwargs) -> Tuple[List[tf.keras.layers.Layer], bool, dict]:
   """instantiate layer with the correct initializer
 
   TODO the ability to compute conjugate has been removed, because not used for now
@@ -153,54 +62,6 @@ def get_layers(layer: tf.keras.layers.Layer, conj_layer: tf.keras.layers.Layer =
       kwargs[possible_name] = custom_init
 
   return layer(**kwargs)
-
-
-def geometric_multiplication(linear_layer_output, inverse=False, bias=None):
-  """
-  Args:
-    linear_layer_output: Tensor of shape (N * BS, N * C, ...) with BS the batch size and C the output size if this layer was a real one
-    inverse: if True then the engine compute y = W.x and not x.W
-    bias: the bias operation, if needed
-
-  Returns: A tensor of shape (N * BS, C, ...)
-
-  """
-  # first, let's split the output of the layer
-  layer_outputs = tf.split(linear_layer_output, multivector_length(), axis=0)
-  # here layer_outputs is a list of output of multiplication of one blade per all kernel blade
-
-  # Now we apply the bias. This can seem like a weird place but by applying it here, between the 2 split, we can do in
-  # a single operation what else would take N operations
-  if bias is not None:
-    layer_outputs[0] = bias(layer_outputs[0])  # add the bias on one of these output
-
-  cross_product_matrix = []
-  for i in range(multivector_length()):
-    cross_product_matrix.append(tf.split(layer_outputs[i], multivector_length(), axis=1))
-
-  # cross_product_matrix is a matrix such as
-  # cross_product_matrix[i][j] is the result of the multiplication of the
-  # i input by the j kernel
-  output = [None] * multivector_length()
-  for i in range(multivector_length()):
-    for j in range(multivector_length()):
-      if not inverse:
-        k, s = unit_multiplier(i, j)
-      else:
-        k, s = unit_multiplier(j, i)
-
-      # same as output[k] += s*self.layers[i](inputs[j]), but cleaner TensorFlow execution graph
-      if s == 1:
-        if output[k] is None:
-          output[k] = cross_product_matrix[i][j]
-        else:
-          output[k] += cross_product_matrix[i][j]
-      elif s == -1:
-        if output[k] is None:
-          output[k] = -cross_product_matrix[i][j]
-        else:
-          output[k] -= cross_product_matrix[i][j]
-  return tf.concat(output, axis=0)
 
 
 class BiasLayer(tf.keras.layers.Layer):
@@ -255,22 +116,32 @@ class BiasLayer(tf.keras.layers.Layer):
     return dict(list(base_config.items()) + list(config.items()))
 
 
-class GenericLinear(tf.keras.Model):
-  def __init__(self, layer, *args, conj_layer=None, **kwargs):
+class UpstrideLayer(tf.keras.layers.Layer):
+  def __init__(self, upstride_type, blade_indexes, geometrical_def, **kwargs):
+    super().__init__(**kwargs)
+    self.upstride_type = upstride_type
+    self.blade_indexes = blade_indexes
+    self.geometrical_def = geometrical_def
+    self.multivector_length = len(self.blade_indexes)
+
+
+class GenericLinear(UpstrideLayer):
+  def __init__(self, layer, upstride_type, blade_indexes, geometrical_def, *args, conj_layer=None, **kwargs):
     """
     Args:
       layer: a subclass of tf.keras.layers.Layer 
       conj_layer: the layer implementing the conjugaison operation matching the layer operation
     """
-    super().__init__()
+    super().__init__(upstride_type, blade_indexes, geometrical_def)
+    self.multivector_length = len(self.blade_indexes)
 
     # convert all arguments to kwargs to ease processing
     kwargs = convert_all_args_to_kwargs(layer.__init__, args, kwargs)
-    kwargs[map_tf_linear_op_to_kwarg_output_size[layer]] *= multivector_length()
+    kwargs[map_tf_linear_op_to_kwarg_output_size[layer]] *= self.multivector_length
     kwargs, add_bias, bias_parameters = remove_bias_from_kwargs(kwargs)
 
     # if the layer can run conjugaison, then self.conj_layer is an instance of the conj layer, else none
-    self.layer = get_layers(layer, conj_layer, **kwargs)
+    self.layer = get_layers(layer, self.upstride_type, conj_layer, **kwargs)
     self.bias = None
     if add_bias:
       self.bias = BiasLayer(bias_parameters['bias_initializer'], bias_parameters['bias_regularizer'], bias_parameters['bias_constraint'])
@@ -283,38 +154,119 @@ class GenericLinear(tf.keras.Model):
     see https://www.tensorflow.org/tutorials/customization/custom_layers for more information
     """
     x = self.layer(input_tensor)
-    x = geometric_multiplication(x, bias=self.bias)
+    x = self.geometric_multiplication(x, bias=self.bias)
     return x
 
-
-class GenericNonLinear(tf.keras.Model):
-  def __init__(self, layer, *args, stack_channels=False, **kwargs):
+  def geometric_multiplication(self, linear_layer_output, inverse=False, bias=None):
     """
-    stack_channels is a boolean that control how to prepare teh data before appling the real operation. 
-    - If false then keep the blades stack on the first axis (batch size)
-    - If true then move the blades to the second axis (channel). Useful for BN for instance
+    Args:
+      linear_layer_output: Tensor of shape (N * BS, N * C, ...) with BS the batch size and C the output size if this layer was a real one
+      inverse: if True then the engine compute y = W.x and not x.W
+      bias: the bias operation, if needed
+
+    Returns: A tensor of shape (N * BS, C, ...)
+
     """
-    super().__init__()
-    self.stack_channels = stack_channels  # usefull for BN
+    # first, let's split the output of the layer
+    layer_outputs = tf.split(linear_layer_output, self.multivector_length, axis=0)
+    # here layer_outputs is a list of output of multiplication of one blade per all kernel blade
 
-    # convert all arguments to kwargs to ease processing
-    kwargs = convert_all_args_to_kwargs(layer.__init__, args, kwargs)
-    kwargs, add_bias, bias_parameters = remove_bias_from_kwargs(kwargs)
+    # Now we apply the bias. This can seem like a weird place but by applying it here, between the 2 split, we can do in
+    # a single operation what else would take N operations
+    if bias is not None:
+      layer_outputs[0] = bias(layer_outputs[0])  # add the bias on one of these output
 
-    self.layer = layer(**kwargs)
-    self.bias = None
-    if add_bias:
-      self.bias = BiasLayer(self.bias_parameters['bias_initializer'], self.bias_parameters['bias_regularizer'], self.bias_parameters['bias_constraint'])
+    cross_product_matrix = []
+    for i in range(self.multivector_length):
+      cross_product_matrix.append(tf.split(layer_outputs[i], self.multivector_length, axis=1))
 
-  def call(self, input_tensor, training=False):
-    if self.stack_channels:
-      input_tensor = tf.split(input_tensor, multivector_length(), axis=0)
-      input_tensor = tf.concat(input_tensor, axis=1)
-    x = self.layer(input_tensor)
-    if self.stack_channels:
-      x = tf.split(x, multivector_length(), axis=1)
-      x = tf.concat(x, axis=0)
-    return x
+    # cross_product_matrix is a matrix such as
+    # cross_product_matrix[i][j] is the result of the multiplication of the
+    # i input by the j kernel
+    output = [None] * self.multivector_length
+    for i in range(self.multivector_length):
+      for j in range(self.multivector_length):
+        if not inverse:
+          k, s = self.unit_multiplier(i, j)
+        else:
+          k, s = self.unit_multiplier(j, i)
+
+        # same as output[k] += s*self.layers[i](inputs[j]), but cleaner TensorFlow execution graph
+        if s == 1:
+          if output[k] is None:
+            output[k] = cross_product_matrix[i][j]
+          else:
+            output[k] += cross_product_matrix[i][j]
+        elif s == -1:
+          if output[k] is None:
+            output[k] = -cross_product_matrix[i][j]
+          else:
+            output[k] -= cross_product_matrix[i][j]
+    return tf.concat(output, axis=0)
+
+  def unit_multiplier(self, i: int, j: int) -> Tuple[int, int]:
+    """given \beta_i and \beta_j, return (k,s) such as : \beta_i * \beta_j = s * \beta_k
+
+    with:
+        \beta_0 = 1, \beta_1 = i if upstride_type == 1
+        \beta_0 = 1, \beta_1 = i, \beta_2 = j, \beta_3 = k if upstride_type == 2
+        s in {-1, 1}
+
+    for instance, upstride_type == 1,
+    (0, 0) -> (0, 1) because \beta_0 * \beta_0 = 1 * 1 = 1 * \beta_0
+    (0, 1) -> (1, 1) because \beta_0 * \beta_1 = 1 * \beta_1
+    (1, 1) -> (0, -1) because \beta_1 * \beta_1 = i**2 = -1 = -1 * \beta_0
+    """
+    index1 = self.blade_indexes[i]
+    index2 = self.blade_indexes[j]
+    s, index = self._ga_multiply_get_index(index1, index2)
+    return self.blade_indexes.index(index), s
+
+  def _ga_multiply_get_index(self, index_1: str, index_2: str) -> Tuple[int, str]:
+    """given \beta_{index_1}, \beta_{index_2} return (s, index) such as \beta_{index_1} * \beta_{index_2} = s * \beta_{index}
+    """
+    l1 = [int(i) for i in index_1]
+    l2 = [int(i) for i in index_2]
+    s = 1
+
+    # as l1 and l2 are already sorted, we can just merge them and count the number of permutation needed
+    i1, i2, length_l1 = 0, 0, len(l1)
+    out_l = []
+    while i1 < len(l1) and i2 < len(l2):
+      if l1[i1] == l2[i2]:
+        # then move the element of l2 near the element of l1 and remove them
+        if (length_l1 - 1) % 2 != 0:
+          s *= -1
+        # check the sign of the square
+        s *= self.square_vector(l1[i1])
+        length_l1 -= 1
+        i1 += 1
+        i2 += 1
+      elif l1[i1] > l2[i2]:
+        # then move the element of l2 before the element of l1
+        if length_l1 % 2 != 0:
+          s *= -1
+        out_l.append(l2[i2])
+        i2 += 1
+      elif l1[i1] < l2[i2]:
+        out_l.append(l1[i1])
+        length_l1 -= 1
+        i1 += 1
+    out_l += l1[i1:] + l2[i2:]
+
+    return s, "".join([str(i) for i in out_l])
+
+  def square_vector(self, index: int) -> int:
+    # geometrical_def is a triplet (A, B, C) defining a GA where:
+    # - the square of the A first elements is 1
+    # - the square of the B next elements is -1
+    # - the square of the C last elements is 0
+    # dev note : the + 1 is because the first index in the vector notation of a GA is... 1
+    if index < self.geometrical_def[0] + 1:
+      return 1
+    if index < self.geometrical_def[0] + self.geometrical_def[1] + 1:
+      return -1
+    return 0
 
 
 # All linear layers should be defined here
@@ -327,23 +279,23 @@ map_tf_linear_op_to_kwarg_output_size = {
 
 
 class Conv2D(GenericLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.Conv2D, *args, **kwargs)
+  def __init__(self, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
+    super().__init__(tf.keras.layers.Conv2D, upstride_type, blade_indexes, geometrical_def, *args, **kwargs)
 
 
 class Dense(GenericLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.Dense, **kwargs)
+  def __init__(self, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
+    super().__init__(tf.keras.layers.Dense, upstride_type, blade_indexes, geometrical_def, *args,  **kwargs)
 
 
 class Conv2DTranspose(GenericLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.Conv2DTranspose, **kwargs)
+  def __init__(self, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
+    super().__init__(tf.keras.layers.Conv2DTranspose, upstride_type, blade_indexes, geometrical_def, *args,  **kwargs)
 
 
 class DepthwiseConv2D(GenericLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.DepthwiseConv2D, **kwargs)
+  def __init__(self, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
+    super().__init__(tf.keras.layers.DepthwiseConv2D, upstride_type, blade_indexes, geometrical_def, *args,  **kwargs)
 
 
 # TODO SeparableConv2D is probably an exception. Go through the math
@@ -353,97 +305,19 @@ class DepthwiseConv2D(GenericLinear):
 
 
 # and now non linear layers
-class UpSampling2D(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.UpSampling2D, *args, **kwargs)
 
+class BatchNormalization(UpstrideLayer):
+  def __init__(self, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
+    super().__init__(upstride_type, blade_indexes, geometrical_def)
+    self.bn = tf.keras.layers.BatchNormalization(*args, **kwargs)
 
-class MaxPooling2D(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.MaxPooling2D, *args, **kwargs)
-
-
-class AveragePooling2D(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.AveragePooling2D, *args, **kwargs)
-
-
-class MaxPool2D(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.MaxPool2D, *args, **kwargs)
-
-
-class AveragePool2D(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.AveragePool2D, *args, **kwargs)
-
-
-class GlobalMaxPooling2D(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.GlobalMaxPooling2D, *args, **kwargs)
-
-
-class GlobalAveragePooling2D(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.GlobalAveragePooling2D, *args, **kwargs)
-
-
-class Reshape(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.Reshape, *args, **kwargs)
-
-
-class BatchNormalization(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.BatchNormalization, *args, stack_channels=True, **kwargs)
-
-
-class Activation(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.Activation, *args, **kwargs)
-
-
-class Flatten(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.Flatten, *args, **kwargs)
-
-
-class ZeroPadding2D(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.ZeroPadding2D, *args, **kwargs)
-
-
-class Cropping2D(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.Cropping2D, *args, **kwargs)
-
-
-class ReLU(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.ReLU, *args, **kwargs)
-
-
-class LeakyReLU(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.LeakyReLU, *args, **kwargs)
-
-
-class Add(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.Add, *args, **kwargs)
-    self.list_as_input = True
-
-
-class Multiply(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.Multiply, *args, **kwargs)
-    self.list_as_input = True
-
-
-class Concatenate(GenericNonLinear):
-  def __init__(self, *args, **kwargs):
-    super().__init__(tf.keras.layers.Concatenate, *args, **kwargs)
-    self.list_as_input = True
+  def call(self, input_tensor, training=False):
+    x = tf.split(input_tensor, self.multivector_length, axis=0)
+    x = tf.concat(x, axis=1)
+    x = self.bn(x)
+    x = tf.split(x, self.multivector_length, axis=1)
+    x = tf.concat(x, axis=0)
+    return x
 
 
 class Dropout(tf.keras.layers.Dropout):
@@ -454,9 +328,10 @@ class Dropout(tf.keras.layers.Dropout):
   dimension
   """
 
-  def __init__(self, rate, noise_shape=None, seed=None, synchronized=False, **kwargs):
+  def __init__(self, upstride_type, blade_indexes, geometrical_def, rate, noise_shape=None, seed=None, synchronized=False, **kwargs):
     super().__init__(rate, noise_shape, seed, **kwargs)
     self.synchronized = synchronized
+    self.multivector_length = len(blade_indexes)
 
   def _get_noise_shape(self, inputs):
     # see https://github.com/tensorflow/tensorflow/blob/v2.4.1/tensorflow/python/keras/layers/core.py#L144-L244
@@ -484,14 +359,14 @@ class Dropout(tf.keras.layers.Dropout):
       return super().call(input_tensor, training)
     else:
       input_shape = tf.shape(input_tensor)
-      transform_shape = tf.concat([[multivector_length(), -1], input_shape[1:]], axis=0)
+      transform_shape = tf.concat([[self.multivector_length, -1], input_shape[1:]], axis=0)
       x = tf.reshape(input_tensor, transform_shape)
       x = super().call(x, training)
       x = tf.reshape(x, input_shape)
       return x
 
 
-class TF2Upstride(tf.keras.layers.Layer):
+class TF2Upstride(UpstrideLayer):
   """ This function should be called to transform TF tensors to Upstride Tensors
   an upstride tensor has the same shape than a TF tensor, but the imaginary part is stack among BS
 
@@ -499,8 +374,8 @@ class TF2Upstride(tf.keras.layers.Layer):
   the self.strategies dic
   """
 
-  def __init__(self, strategy='', **args):
-    super().__init__()
+  def __init__(self, upstride_type, blade_indexes, geometrical_def, strategy='', **kwargs):
+    super().__init__(upstride_type, blade_indexes, geometrical_def, **kwargs)
     # This dictionary map the strategy name to the function to call
     self.strategies = {
         'learned': TF2UpstrideLearned,
@@ -513,7 +388,7 @@ class TF2Upstride(tf.keras.layers.Layer):
 
     if self.strategy_name not in self.strategies:
       raise ValueError(f"unknown strategy: {self.strategy_name}")
-    self.model = self.strategies[self.strategy_name](**args)
+    self.model = self.strategies[self.strategy_name](self.blade_indexes, **kwargs)
 
   def add_strategies(self):
     """ The purpose of this function is to be overritten in a sub class to add elements in self.strategies 
@@ -537,10 +412,11 @@ class TF2UpstrideLearned(tf.keras.layers.Layer):
       tensor: output of the network. Learned component of the multi-vector.
     """
 
-  def __init__(self, channels=3, kernel_size=3, use_bias=False, kernel_initializer='glorot_uniform', kernel_regularizer=None):
+  def __init__(self, blade_indexes, channels=3, kernel_size=3, use_bias=False, kernel_initializer='glorot_uniform', kernel_regularizer=None):
     super().__init__()
     self.layers = []
-    for i in range(1, multivector_length()):
+    self.multivector_length = len(blade_indexes)
+    for i in range(1, self.multivector_length):
       self.layers.append(tf.keras.Sequential([
           tf.keras.layers.BatchNormalization(axis=1),
           tf.keras.layers.Activation('relu'),
@@ -561,23 +437,24 @@ class TF2UpstrideLearned(tf.keras.layers.Layer):
 
 
 class TF2UpstrideBasic(tf.keras.layers.Layer):
-  def __init__(self):
+  def __init__(self, blade_indexes):
     super().__init__()
+    self.multivector_length = len(blade_indexes)
     self.concat = tf.keras.layers.Concatenate(axis=0)
 
   def call(self, x):
     outputs = [x]
-    for _ in range(1, multivector_length()):
+    for _ in range(1, self.multivector_length):
       outputs.append(tf.zeros_like(x))
     return self.concat(outputs)
 
 
-class Upstride2TF(tf.keras.layers.Layer):
+class Upstride2TF(UpstrideLayer):
   """convert multivector back to real values. 
   """
 
-  def __init__(self, strategy=''):
-    super().__init__()
+  def __init__(self, upstride_type, blade_indexes, geometrical_def, strategy='', **kwargs):
+    super().__init__(upstride_type, blade_indexes, geometrical_def, **kwargs)
     self.strategies = {
         'basic': self.basic,
         'default': self.basic,
@@ -594,19 +471,19 @@ class Upstride2TF(tf.keras.layers.Layer):
     return self.strategies[self.strategy_name](input_tensor)
 
   def basic(self, x):
-    output = tf.split(x, multivector_length(), axis=0)
+    output = tf.split(x, self.multivector_length, axis=0)
     return output[0]
 
   def concat(self, x):
-    x = tf.split(x, multivector_length(), axis=0)
+    x = tf.split(x, self.multivector_length, axis=0)
     return tf.concat(x, 1)
 
   def max_pool(self, x):
-    x = tf.split(x, multivector_length(), axis=0)
+    x = tf.split(x, self.multivector_length, axis=0)
     x = tf.stack(x, axis=-1)
     return tf.math.reduce_max(x, axis=-1)
 
   def avg_pool(self, x):
-    x = tf.split(x, multivector_length(), axis=0)
+    x = tf.split(x, self.multivector_length, axis=0)
     x = tf.stack(x, axis=-1)
     return tf.math.reduce_mean(x, axis=-1)

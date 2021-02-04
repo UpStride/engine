@@ -1,20 +1,15 @@
 import tensorflow as tf
 from tensorflow.keras.layers import *
 
-class TF2Upstride(tf.keras.layers.Layer):
-  """ Dummy class
-  """
+UPSTRIDE_TYPE = 0
+BLADES_INDEXES = ['']
+GEOMETRICAL_DEF = (0, 0, 0)
 
+
+class TF2Upstride(Layer):
   def __init__(self, strategy='', **kwargs):
-      super().__init__(**kwargs)
+    super().__init__()
 
-  def call(self, input_tensor):
-    return input_tensor
-
-
-class Upstride2TF(tf.keras.layers.Layer):
-  """Dummy class 
-  """
-
-  def __init__(self, strategy=''):
+class Upstride2TF(Layer):
+  def __init__(self, strategy='', **kwargs):
     super().__init__()
