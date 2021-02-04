@@ -10,6 +10,7 @@ pipeline {
         GIT_REPO = 'upstride_python'
         BUILD_TAG = "py"
         TF_VERSION = "2.4.1"
+        TAG = ''
     }
     stages {
         stage('setup') {
@@ -67,7 +68,7 @@ pipeline {
             }
         }
         stage('promote image to dev') {
-            when { not { branch 'master' } }
+            when { branch 'master' }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_DEV}",'registry-dev'){
@@ -85,7 +86,7 @@ pipeline {
             }
         }
         stage('promote image to staging') {
-            when {  branch 'master'  }
+            when { tag "release-*" }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_PROD}",'registry-prod'){
