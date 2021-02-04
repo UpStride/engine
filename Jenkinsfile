@@ -10,7 +10,7 @@ pipeline {
         GIT_REPO = 'upstride_python'
         BUILD_TAG = "py"
         TF_VERSION = "2.4.1"
-        TAG = ''
+        TAG = sh(script: "git describe --tag --exact-match 2>/dev/null||echo 'not'", returnStdout: true).trim()
     }
     stages {
         stage('setup') {
@@ -86,7 +86,7 @@ pipeline {
             }
         }
         stage('promote image to staging') {
-            when { tag "release-*" }
+            when { not { environment name: 'TAG', value: 'not' }  }
             steps {
                 script {
                     docker.withRegistry("https://${REGISTRY_PROD}",'registry-prod'){
