@@ -10,7 +10,6 @@ pipeline {
         GIT_REPO = 'upstride_python'
         BUILD_TAG = "py"
         TF_VERSION = "2.4.1"
-        TAG = sh(script: "git describe --tag --exact-match 2>/dev/null||echo 'not'", returnStdout: true).trim()
     }
     stages {
         stage('setup') {
@@ -22,6 +21,8 @@ pipeline {
                     env.BUILD_DEV = "${REGISTRY_DEV}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}-tf${TF_VERSION}-gpu"
                     env.BUILD_PROD = "${REGISTRY_PROD}/${REPO}:${BUILD_TAG}-${BUILD_VERSION}-tf${TF_VERSION}-gpu"
                     env.DOCKER_AGENT = "${REGISTRY_DEV}/ops:azure-cloud"
+                    sh("git fetch --tags")
+                    env.TAG = sh(script: "git describe --tag --exact-match 2>/dev/null||echo 'not'", returnStdout: true).trim()
                 }
             }
         }
