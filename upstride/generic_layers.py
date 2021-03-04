@@ -310,12 +310,13 @@ class BatchNormalization(UpstrideLayer):
   def __init__(self, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
     super().__init__(upstride_type, blade_indexes, geometrical_def)
     self.bn = tf.keras.layers.BatchNormalization(*args, **kwargs)
+    self.axis = -1 if tf.keras.backend.image_data_format() == 'channels_last' else 1 
 
   def call(self, input_tensor, training=False):
     x = tf.split(input_tensor, self.multivector_length, axis=0)
-    x = tf.concat(x, axis=1)
+    x = tf.concat(x, axis=self.axis)
     x = self.bn(x)
-    x = tf.split(x, self.multivector_length, axis=1)
+    x = tf.split(x, self.multivector_length, axis=self.axis)
     x = tf.concat(x, axis=0)
     return x
 
@@ -414,15 +415,16 @@ class TF2UpstrideLearned(tf.keras.layers.Layer):
 
   def __init__(self, blade_indexes, channels=3, kernel_size=3, use_bias=False, kernel_initializer='glorot_uniform', kernel_regularizer=None):
     super().__init__()
+    self.axis = -1 if tf.keras.backend.image_data_format() == 'channels_last' else 1 
     self.layers = []
     self.multivector_length = len(blade_indexes)
     for i in range(1, self.multivector_length):
       self.layers.append(tf.keras.Sequential([
-          tf.keras.layers.BatchNormalization(axis=1),
+          tf.keras.layers.BatchNormalization(axis=self.axis),
           tf.keras.layers.Activation('relu'),
           tf.keras.layers.Conv2D(channels, (kernel_size, kernel_size), padding='same', use_bias=use_bias,
                                  kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer),
-          tf.keras.layers.BatchNormalization(axis=1),
+          tf.keras.layers.BatchNormalization(axis=self.axis),
           tf.keras.layers.Activation('relu'),
           tf.keras.layers.Conv2D(channels, (kernel_size, kernel_size), padding='same', use_bias=use_bias,
                                  kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer)
