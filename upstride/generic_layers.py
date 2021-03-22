@@ -69,7 +69,7 @@ class BiasLayer(tf.keras.layers.Layer):
 
   output = input + bias
 
-  Note that this layer only work in channel first neural network
+  This layer supports both channels first and channels last
 
   Args:
       bias_initializer: Initializer for the bias vector.
@@ -82,12 +82,13 @@ class BiasLayer(tf.keras.layers.Layer):
     self.bias_initializer = tf.keras.initializers.get(bias_initializer)
     self.bias_regularizer = tf.keras.regularizers.get(bias_regularizer)
     self.bias_constraint = tf.keras.constraints.get(bias_constraint)
+    self.axis = -1 if tf.keras.backend.image_data_format() == "channels_last" else 1
 
   def build(self, input_shape):
     input_shape = tf.TensorShape(input_shape)
 
     broadcast_beta_shape = [1] * len(input_shape)
-    broadcast_beta_shape[1] = input_shape[1]
+    broadcast_beta_shape[self.axis] = input_shape[self.axis]
 
     self.bias = self.add_weight(
         name='bias',
@@ -123,6 +124,7 @@ class UpstrideLayer(tf.keras.layers.Layer):
     self.blade_indexes = blade_indexes
     self.geometrical_def = geometrical_def
     self.multivector_length = len(self.blade_indexes)
+    self.axis = -1 if tf.keras.backend.image_data_format() == "channels_last" else 1
 
 
 class GenericLinear(UpstrideLayer):
@@ -178,7 +180,7 @@ class GenericLinear(UpstrideLayer):
 
     cross_product_matrix = []
     for i in range(self.multivector_length):
-      cross_product_matrix.append(tf.split(layer_outputs[i], self.multivector_length, axis=1))
+      cross_product_matrix.append(tf.split(layer_outputs[i], self.multivector_length, axis=self.axis))
 
     # cross_product_matrix is a matrix such as
     # cross_product_matrix[i][j] is the result of the multiplication of the
@@ -310,7 +312,6 @@ class BatchNormalization(UpstrideLayer):
   def __init__(self, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
     super().__init__(upstride_type, blade_indexes, geometrical_def)
     self.bn = tf.keras.layers.BatchNormalization(*args, **kwargs)
-    self.axis = -1 if tf.keras.backend.image_data_format() == 'channels_last' else 1 
 
   def call(self, input_tensor, training=False):
     x = tf.split(input_tensor, self.multivector_length, axis=0)
@@ -478,7 +479,7 @@ class Upstride2TF(UpstrideLayer):
 
   def concat(self, x):
     x = tf.split(x, self.multivector_length, axis=0)
-    return tf.concat(x, 1)
+    return tf.concat(x, self.axis)
 
   def max_pool(self, x):
     x = tf.split(x, self.multivector_length, axis=0)

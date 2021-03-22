@@ -138,6 +138,7 @@ class TestIndependentFilter(unittest.TestCase):
 
 class TestComplexInitCompare(unittest.TestCase):
   def get_model(self, num_of_conv_layer, DCN_ours = True):
+    tf.keras.backend.set_image_data_format('channels_first')
     conv_args = {
       "filters": 3,
       "kernel_size": 1,

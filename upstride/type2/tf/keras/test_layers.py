@@ -7,7 +7,6 @@ from .layers import TF2Upstride, Upstride2TF, Conv2D, DepthwiseConv2D
 
 class TestQuaternionTF2Upstride(unittest.TestCase):
   def test_TF2Upstride(self):
-    tf.keras.backend.set_image_data_format('channels_first')
     inputs = tf.convert_to_tensor([[[[1.]], [[3]], [[4]]]])
     self.assertEqual(inputs.shape, (1, 3, 1, 1))
     o = TF2Upstride()(inputs)
@@ -18,7 +17,6 @@ class TestQuaternionTF2Upstride(unittest.TestCase):
 
     o = TF2Upstride("grayscale")(inputs)
     self.assertEqual(o.shape, (4, 1, 1, 1))
-    tf.keras.backend.set_image_data_format('channels_last')
 
 
 class TestQuaternionUpstride2TF(unittest.TestCase):
@@ -27,10 +25,17 @@ class TestQuaternionUpstride2TF(unittest.TestCase):
     output = Upstride2TF()(inputs)
     self.assertEqual(inputs[0].numpy().tolist(), output[0].numpy().tolist())
 
-  def test_concat(self):
+  def test_concat_channels_first(self):
     inputs = tf.random.uniform((4, 3, 32, 32))
     output = Upstride2TF("concat")(inputs)
     self.assertEqual(output.shape, (1, 12, 32, 32))
+
+  def test_concat_channels_last(self):
+    tf.keras.backend.set_image_data_format("channels_last")
+    inputs = tf.random.uniform((4, 32, 32, 3))
+    output = Upstride2TF("concat")(inputs)
+    self.assertEqual(output.shape, (1, 32, 32, 12))
+    tf.keras.backend.set_image_data_format("channels_first")
 
   def test_max_pool(self):
     inputs = tf.random.uniform((4, 3, 32, 32))

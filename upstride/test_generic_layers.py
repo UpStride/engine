@@ -57,25 +57,47 @@ class TestGAMultiplication(unittest.TestCase):
     # one bias for real and one for imaginary, 224 parameters
     self.assertEqual(model.count_params(), 224)
 
-  def test_bias_defined_false(self):
-    tf.keras.backend.set_image_data_format('channels_first')
-    inputs = tf.keras.layers.Input((3, 224, 224))
+  def test_bias_defined_channels_last(self):
+    tf.keras.backend.set_image_data_format('channels_last')
+    inputs = tf.keras.layers.Input((224, 224, 3))
     x = layers_t1.TF2Upstride('basic')(inputs)
-    x = layers_t1.Conv2D(4, (3, 3), use_bias=False)(x)
+    x = layers_t1.Conv2D(32, (3, 3), use_bias=True)(x)
     x = layers_t1.Upstride2TF()(x)
     model = tf.keras.Model(inputs=[inputs], outputs=[x])
-    self.assertEqual(len(model.layers), 4)  # input, tf2upstride, conv, split
-    self.assertEqual(model.count_params(), 216)
+    self.assertEqual(len(model.layers), 4)  # input, TF2Upstride, conv, Upstride2TF
+    self.assertEqual(model.count_params(), 1792)
+    tf.keras.backend.set_image_data_format('channels_first')
 
-  def test_bias_defined_true(self):
+  def test_bias_defined_channels_first(self):
     tf.keras.backend.set_image_data_format('channels_first')
     inputs = tf.keras.layers.Input((3, 224, 224))
     x = layers_t1.TF2Upstride('basic')(inputs)
-    x = layers_t1.Conv2D(4, (3, 3), use_bias=True)(x)
+    x = layers_t1.Conv2D(32, (3, 3), use_bias=True)(x)
     x = layers_t1.Upstride2TF()(x)
     model = tf.keras.Model(inputs=[inputs], outputs=[x])
-    self.assertEqual(len(model.layers), 4)  # input, tf2upstride, conv, split
-    self.assertEqual(model.count_params(), 224)
+    self.assertEqual(len(model.layers), 4)  # input, TF2Upstride, conv, UpStride2TF
+    self.assertEqual(model.count_params(), 1792)
+
+  def test_without_bias_channels_last(self):
+    tf.keras.backend.set_image_data_format('channels_last')
+    inputs = tf.keras.layers.Input((224, 224, 3))
+    x = layers_t1.TF2Upstride('basic')(inputs)
+    x = layers_t1.Conv2D(32, (3, 3), use_bias=False)(x)
+    x = layers_t1.Upstride2TF()(x)
+    model = tf.keras.Model(inputs=[inputs], outputs=[x])
+    self.assertEqual(len(model.layers), 4)  # input, TF2Upstride, conv, Upstride2TF
+    self.assertEqual(model.count_params(), 1728)
+    tf.keras.backend.set_image_data_format('channels_first')
+
+  def test_without_bias_channels_first(self):
+    tf.keras.backend.set_image_data_format('channels_first')
+    inputs = tf.keras.layers.Input((3, 224, 224))
+    x = layers_t1.TF2Upstride('basic')(inputs)
+    x = layers_t1.Conv2D(32, (3, 3), use_bias=False)(x)
+    x = layers_t1.Upstride2TF()(x)
+    model = tf.keras.Model(inputs=[inputs], outputs=[x])
+    self.assertEqual(len(model.layers), 4)  # input, TF2Upstride, conv, UpStride2TF
+    self.assertEqual(model.count_params(), 1728)
 
 
 class TestDropout(unittest.TestCase):
@@ -99,12 +121,20 @@ class TestDropout(unittest.TestCase):
 
 
 class TestBatchNormalization(unittest.TestCase):
-  def test_n_params(self):
+  def test_n_params_channels_first(self):
     """Simple test to count the number of parameters in the batch norm, to be sure we normalize the right axis
     """
-    tf.keras.backend.set_image_data_format('channels_first')
     model = tf.keras.Sequential(layers_t1.BatchNormalization(axis=1))
     images = np.ones((10, 3, 10, 10), dtype=np.float32)
+    output = model(images, training=True)
+    self.assertTrue(model.trainable_weights[0].shape == (6,))  # 3*2 because complex
+
+  def test_n_params_channels_last(self):
+    """Simple test to count the number of parameters in the batch norm, to be sure we normalize the right axis
+    """
+    tf.keras.backend.set_image_data_format('channels_last')
+    model = tf.keras.Sequential(layers_t1.BatchNormalization(axis=-1))
+    images = np.ones((10, 10, 10, 3), dtype=np.float32)
     output = model(images, training=True)
     self.assertTrue(model.trainable_weights[0].shape == (6,))  # 3*2 because complex
 
