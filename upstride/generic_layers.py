@@ -15,7 +15,6 @@ from tensorflow.keras.layers import (Activation, Add, AveragePooling2D,
                                      ReLU, Reshape, UpSampling2D, ZeroPadding2D)
 
 
-# from .convolutional import Conv2D as Conv2DConj for now conjugate is not used
 from .initializers import InitializersFactory
 import dataclasses
 import functools
@@ -168,51 +167,6 @@ def prepare_hyper_weight(uptype, weight, **kwargs):
     hyper_weight = tf.concat(hyper_weight_list, axis=3)
   return hyper_weight
 
-def convert_all_args_to_kwargs(function, args, kwargs):
-  """ This function use the information in the signature of the function
-  to convert all elements of args to kwargs.
-  Then it also add in kwargs the default parameters of the function
-  """
-  parameters = inspect.getfullargspec(function).args
-  for i, arg in enumerate(args):
-    kwargs[parameters[i + 1]] = arg  # + 1 because the first element of parameters is 'self'
-  # add all default parameters to kwargs
-  for key, value in inspect.signature(function).parameters.items():
-    if key in ['self', 'kwargs']:
-      continue
-    if key not in kwargs:
-      kwargs[key] = value.default
-  return kwargs
-
-
-def remove_bias_from_kwargs(kwargs):
-  add_bias = False
-  if "use_bias" in kwargs:
-    add_bias = kwargs["use_bias"]
-    kwargs["use_bias"] = False
-  bias_parameters = {}
-  if add_bias:
-    for param in ["bias_initializer", "bias_regularizer", "bias_constraint"]:
-      bias_parameters[param] = kwargs[param]
-  return kwargs, add_bias, bias_parameters
-
-
-def get_layers(layer: tf.keras.layers.Layer, upstride_type, conj_layer: tf.keras.layers.Layer = None, **kwargs) -> Tuple[List[tf.keras.layers.Layer], bool, dict]:
-  """instantiate layer with the correct initializer
-
-  TODO the ability to compute conjugate has been removed, because not used for now
-  """
-
-  init_factory = InitializersFactory()
-
-  for possible_name in ["kernel_initializer", "depthwise_initializer"]:
-    if (possible_name in kwargs) and init_factory.is_custom_init(kwargs[possible_name]):
-      custom_init = init_factory.get_initializer(kwargs[possible_name], upstride_type)
-      kwargs[possible_name] = custom_init
-
-  return layer(**kwargs)
-
-
 class BiasLayer(tf.keras.layers.Layer):
   """Keras layer that only adds a bias to the input. It implements the operation:
 
@@ -277,22 +231,20 @@ class UpstrideLayer(tf.keras.layers.Layer):
 
 
 class GenericLinear(UpstrideLayer):
-  def __init__(self, layer, upstride_type, blade_indexes, geometrical_def, *args, conj_layer=None, **kwargs):
+  def __init__(self, layer, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
     """
     Args:
       layer: a subclass of tf.keras.layers.Layer 
-      conj_layer: the layer implementing the conjugaison operation matching the layer operation
     """
     super().__init__(upstride_type, blade_indexes, geometrical_def)
     self.multivector_length = len(self.blade_indexes)
 
     # convert all arguments to kwargs to ease processing
-    kwargs = convert_all_args_to_kwargs(layer.__init__, args, kwargs)
+    kwargs = self.convert_all_args_to_kwargs(layer.__init__, args, kwargs)
     kwargs[map_tf_linear_op_to_kwarg_output_size[layer]] *= self.multivector_length
-    kwargs, add_bias, bias_parameters = remove_bias_from_kwargs(kwargs)
+    kwargs, add_bias, bias_parameters = self.remove_bias_from_kwargs(kwargs)
 
-    # if the layer can run conjugaison, then self.conj_layer is an instance of the conj layer, else none
-    self.layer = get_layers(layer, self.upstride_type, conj_layer, **kwargs)
+    self.layer = self.get_layers(layer, self.upstride_type, **kwargs)
     self.bias = None
     if add_bias:
       self.bias = BiasLayer(bias_parameters['bias_initializer'], bias_parameters['bias_regularizer'], bias_parameters['bias_constraint'])
@@ -419,8 +371,49 @@ class GenericLinear(UpstrideLayer):
       return -1
     return 0
 
+  def convert_all_args_to_kwargs(self, function, args, kwargs):
+    """ This function use the information in the signature of the function
+    to convert all elements of args to kwargs.
+    Then it also add in kwargs the default parameters of the function
+    """
+    parameters = inspect.getfullargspec(function).args
+    for i, arg in enumerate(args):
+      kwargs[parameters[i + 1]] = arg  # + 1 because the first element of parameters is 'self'
+    # add all default parameters to kwargs
+    for key, value in inspect.signature(function).parameters.items():
+      if key in ['self', 'kwargs']:
+        continue
+      if key not in kwargs:
+        kwargs[key] = value.default
+    return kwargs
+
+  def remove_bias_from_kwargs(self, kwargs):
+    add_bias = False
+    if "use_bias" in kwargs:
+      add_bias = kwargs["use_bias"]
+      kwargs["use_bias"] = False
+    bias_parameters = {}
+    if add_bias:
+      for param in ["bias_initializer", "bias_regularizer", "bias_constraint"]:
+        bias_parameters[param] = kwargs[param]
+    return kwargs, add_bias, bias_parameters
+
+  def get_layers(self, layer: tf.keras.layers.Layer, upstride_type, **kwargs) -> Tuple[List[tf.keras.layers.Layer], bool, dict]:
+    """instantiate layer with the correct initializer
+    """
+
+    init_factory = InitializersFactory()
+
+    for possible_name in ["kernel_initializer", "depthwise_initializer"]:
+      if (possible_name in kwargs) and init_factory.is_custom_init(kwargs[possible_name]):
+        custom_init = init_factory.get_initializer(kwargs[possible_name], upstride_type)
+        kwargs[possible_name] = custom_init
+
+    return layer(**kwargs)
+
 
 # All linear layers should be defined here
+# TODO add more explainations here
 map_tf_linear_op_to_kwarg_output_size = {
     tf.keras.layers.Conv2D: 'filters',
     tf.keras.layers.Conv2DTranspose: 'filters',
@@ -447,12 +440,6 @@ class Conv2DTranspose(GenericLinear):
 class DepthwiseConv2D(GenericLinear):
   def __init__(self, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
     super().__init__(tf.keras.layers.DepthwiseConv2D, upstride_type, blade_indexes, geometrical_def, *args,  **kwargs)
-
-
-# TODO SeparableConv2D is probably an exception. Go through the math
-# class SeparableConv2D(GenericLinear):
-#   def __init__(self, *args, **kwargs):
-#     super().__init__(tf.keras.layers.SeparableConv2D, **kwargs)
 
 
 # and now non linear layers
@@ -565,7 +552,7 @@ class TF2UpstrideLearned(tf.keras.layers.Layer):
 
   def __init__(self, blade_indexes, channels=3, kernel_size=3, use_bias=False, kernel_initializer='glorot_uniform', kernel_regularizer=None):
     super().__init__()
-    self.axis = -1 if tf.keras.backend.image_data_format() == 'channels_last' else 1 
+    self.axis = -1 if tf.keras.backend.image_data_format() == 'channels_last' else 1
     self.layers = []
     self.multivector_length = len(blade_indexes)
     for i in range(1, self.multivector_length):

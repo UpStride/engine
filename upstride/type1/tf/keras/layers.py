@@ -1,6 +1,5 @@
 from .... import generic_layers
 from ....generic_layers import *
-from .activations import *
 from ....batchnorm import BatchNormalizationC
 
 UPSTRIDE_TYPE = 1
