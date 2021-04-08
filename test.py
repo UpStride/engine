@@ -8,7 +8,6 @@ from src_test.test_tf import *
 from src_test.test_type0 import *
 from src_test.test_type1 import *
 from src_test.test_type2 import *
-from src_test.test_type3 import *
 
 if __name__ == "__main__":
   # Channel first is the default for the engine
