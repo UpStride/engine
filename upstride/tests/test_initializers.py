@@ -2,10 +2,10 @@ import unittest
 import numpy as np
 from collections import defaultdict
 import tensorflow as tf
-from upstride.type1.tf.keras import layers 
-from .initializers import CInitializer, HInitializer, IndependentFilter, InitializersFactory
+from upstride.type1.tf.keras import layers
+from upstride.initializers import CInitializer, HInitializer, IndependentFilter, InitializersFactory
 from .test_batchnorm import Channel2Batch, Batch2Channel
-from src_test.conv_from_dcn import ComplexConv2D
+# from src_test.conv_from_dcn import ComplexConv2D
 
 class TestCInitializer(unittest.TestCase):
   def test_init(self):
@@ -136,44 +136,44 @@ class TestIndependentFilter(unittest.TestCase):
     self.assertAlmostEqual(np.var(kernel_i), 1/(20 + 10))
     tf.keras.backend.set_image_data_format('channels_first')
 
-class TestComplexInitCompare(unittest.TestCase):
-  def get_model(self, num_of_conv_layer, DCN_ours = True):
-    tf.keras.backend.set_image_data_format('channels_first')
-    conv_args = {
-      "filters": 3,
-      "kernel_size": 1,
-      "kernel_initializer": "complex_independent" if not DCN_ours else IndependentFilter(criterion='he',complex=True,seed=1337),
-      "use_bias": False
-    }
-    inputs = tf.keras.layers.Input(shape=(6, 3, 3))
-    if DCN_ours:
-      x = Channel2Batch()(inputs)
-      for i in range(num_of_conv_layer):
-        x = layers.Conv2D(**conv_args,name=f"conv_{str(i)}")(x)
-      x = Batch2Channel()(x)
-    else:
-      for i in range(num_of_conv_layer):
-        x = ComplexConv2D(**conv_args, name=f"conv2d_1/conv_{str(i)}")(inputs)
-    x = tf.keras.layers.Flatten()(x)
-    model = tf.keras.Model(inputs=[inputs], outputs=[x])
-    return model
-    
-  def get_statistics(self, num_of_conv_layer, iteration=10, is_dcn_ours=True):
-    weight_dict = defaultdict(lambda: defaultdict(list)) # dict(dict(list))
-    for i in range(iteration):
-      model = self.get_model(num_of_conv_layer, is_dcn_ours)
-      for weight in model.weights:
-        weight_name = weight.name.split("/")[1] # get the weight name as conv2d_#
-        weight_value = weight.numpy()
-        weight_dict[weight_name]["mean"].append(np.mean(weight_value)) 
-        weight_dict[weight_name]["std"].append(np.std(weight_value))
-    return weight_dict
+# class TestComplexInitCompare(unittest.TestCase):
+#   def get_model(self, num_of_conv_layer, DCN_ours = True):
+#     tf.keras.backend.set_image_data_format('channels_first')
+#     conv_args = {
+#       "filters": 3,
+#       "kernel_size": 1,
+#       "kernel_initializer": "complex_independent" if not DCN_ours else IndependentFilter(criterion='he',complex=True,seed=1337),
+#       "use_bias": False
+#     }
+#     inputs = tf.keras.layers.Input(shape=(6, 3, 3))
+#     if DCN_ours:
+#       x = Channel2Batch()(inputs)
+#       for i in range(num_of_conv_layer):
+#         x = layers.Conv2D(**conv_args,name=f"conv_{str(i)}")(x)
+#       x = Batch2Channel()(x)
+#     else:
+#       for i in range(num_of_conv_layer):
+#         x = ComplexConv2D(**conv_args, name=f"conv2d_1/conv_{str(i)}")(inputs)
+#     x = tf.keras.layers.Flatten()(x)
+#     model = tf.keras.Model(inputs=[inputs], outputs=[x])
+#     return model
 
-  def test_compare(self):
-    weight_dcn_ours = self.get_statistics(1, iteration=3, is_dcn_ours=True)
-    weight_dcn_source = self.get_statistics(1, iteration=3, is_dcn_ours=False)
-    for (k1, v1), (k2, v2) in zip(sorted(weight_dcn_ours.items()), sorted(weight_dcn_source.items())):
-      print(np.mean(v1['mean']), np.mean(v2['mean']))
-      print(np.mean(v1['std']), np.mean(v2['std']))
-      self.assertTrue(np.allclose(np.mean(v1['mean']),np.mean(v2['mean'])))
-      self.assertTrue(np.allclose(np.mean(v1['std']),np.mean(v2['std'])))
+#   def get_statistics(self, num_of_conv_layer, iteration=10, is_dcn_ours=True):
+#     weight_dict = defaultdict(lambda: defaultdict(list)) # dict(dict(list))
+#     for i in range(iteration):
+#       model = self.get_model(num_of_conv_layer, is_dcn_ours)
+#       for weight in model.weights:
+#         weight_name = weight.name.split("/")[1] # get the weight name as conv2d_#
+#         weight_value = weight.numpy()
+#         weight_dict[weight_name]["mean"].append(np.mean(weight_value))
+#         weight_dict[weight_name]["std"].append(np.std(weight_value))
+#     return weight_dict
+
+#   def test_compare(self):
+#     weight_dcn_ours = self.get_statistics(1, iteration=3, is_dcn_ours=True)
+#     weight_dcn_source = self.get_statistics(1, iteration=3, is_dcn_ours=False)
+#     for (k1, v1), (k2, v2) in zip(sorted(weight_dcn_ours.items()), sorted(weight_dcn_source.items())):
+#       print(np.mean(v1['mean']), np.mean(v2['mean']))
+#       print(np.mean(v1['std']), np.mean(v2['std']))
+#       self.assertTrue(np.allclose(np.mean(v1['mean']),np.mean(v2['mean'])))
+#       self.assertTrue(np.allclose(np.mean(v1['std']),np.mean(v2['std'])))
