@@ -2,7 +2,7 @@ import tempfile, os, shutil
 import unittest
 import tensorflow as tf
 import numpy as np
-from .layers import TF2Upstride, Upstride2TF, Conv2D, DepthwiseConv2D
+from .layers import TF2Upstride, Upstride2TF, Conv2D, DepthwiseConv2D, Conv2DParcollet
 
 
 class TestQuaternionTF2Upstride(unittest.TestCase):
@@ -101,3 +101,35 @@ class TestConv2DQuaternion(unittest.TestCase):
     self.assertEqual(listdir, ['assets', 'saved_model.pb', 'variables'])
     shutil.rmtree(dest)
 
+class TestConv2DAlgorithms(unittest.TestCase):
+  def test_conv2d(self):
+    def random_integer_tensor(shape, dtype=tf.float32):
+      """ Generates a random tensor containing integer values
+      """
+      tensor = tf.random.uniform(shape, -4, +4, dtype=tf.int32)
+      return tf.cast(tensor, dtype)
+
+    inputs = random_integer_tensor(shape=(4*2, 2, 3, 3))
+
+    # Define and build operations (by calling them a first time)
+    ref_op = Conv2D(2, 2, use_bias=False)
+    test_op = Conv2DParcollet(2, 2, use_bias=False)
+    ref_op(inputs)
+    test_op(inputs)
+
+    # Override weights, taking into account that ref_weight is of shape (H, W, I, 4*O), whereas
+    # test_weight is of shape (4, H, W, I, O)
+    ref_weight = random_integer_tensor(shape=ref_op.get_weights()[0].shape) # shape (H, W, I, N*O)
+    ref_op.set_weights([ref_weight])
+    test_weight = tf.reshape(ref_weight, (*ref_weight.shape[:-1], 4, -1)) # shape (H, W, I, N, O)
+    test_weight = tf.transpose(test_weight, perm=[3, 0, 1, 2, 4]) # shape (N, H, W, I, O)
+    test_op.set_weights([test_weight])
+
+    # Compute outputs
+    ref_output = ref_op(inputs)
+    test_output = test_op(inputs)
+
+    # Compare outputs
+    diff_sum = tf.reduce_max(ref_output - test_output)
+    self.assertEqual(ref_output.shape, test_output.shape)
+    self.assertEqual(diff_sum, 0)

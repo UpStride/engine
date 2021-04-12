@@ -2,19 +2,68 @@ from tensorflow.keras.layers import Layer
 from .... import generic_layers
 from ....generic_layers import *
 from ....batchnorm import BatchNormalizationH
-from .convolutional import Conv2D, DepthwiseConv2D
+# from .convolutional import Conv2D, DepthwiseConv2D # FIXME Conv2D and DepthwiseConv2D are buggy.
+# They do NOT yield to the same results as the generalized method from ....convolutional
 from .dense import Dense
 from tensorflow.python.keras import backend
 from tensorflow.python.keras.utils import conv_utils
 import numpy as np
+from ....convolutional import Conv2DParcollet as GenericConv2DParcollet
 
-
+from ....generic_layers import UPTYPE2
 UPSTRIDE_TYPE = 2
 BLADES_INDEXES = ['', '12', '13', '23']
 GEOMETRICAL_DEF = (3, 0, 0)
 
 # If you wish to overwrite some layers, please implements them here
 
+class Conv2D(generic_layers.Conv2D):
+  def __init__(self, *args, **kwargs):
+    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, *args, **kwargs)
+
+
+class DepthwiseConv2D(generic_layers.DepthwiseConv2D):
+  def __init__(self, *args, **kwargs):
+    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, *args, **kwargs)
+
+
+class Conv2DParcollet(GenericConv2DParcollet):
+  def __init__(self,
+               filters,
+               kernel_size,
+               strides=(1, 1),
+               padding='valid',
+               data_format=None,
+               dilation_rate=(1, 1),
+               groups=1,
+               activation=None,
+               use_bias=True,
+               kernel_initializer='glorot_uniform',
+               bias_initializer='zeros',
+               kernel_regularizer=None,
+               bias_regularizer=None,
+               activity_regularizer=None,
+               kernel_constraint=None,
+               bias_constraint=None,
+               **kwargs):
+    super().__init__(UPTYPE2,
+                     filters,
+                     kernel_size,
+                     strides=strides,
+                     padding=padding,
+                     data_format=data_format,
+                     dilation_rate=dilation_rate,
+                     groups=groups,
+                     activation=activation,
+                     use_bias=use_bias,
+                     kernel_initializer=kernel_initializer,
+                     bias_initializer=bias_initializer,
+                     kernel_regularizer=kernel_regularizer,
+                     bias_regularizer=bias_regularizer,
+                     activity_regularizer=activity_regularizer,
+                     kernel_constraint=kernel_constraint,
+                     bias_constraint=bias_constraint,
+                     **kwargs)
 
 class TF2UpstrideJoint(tf.keras.layers.Layer):
   def __init__(self, blade_indexes) -> None:

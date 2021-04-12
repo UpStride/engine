@@ -17,7 +17,64 @@ from tensorflow.keras.layers import (Activation, Add, AveragePooling2D,
 
 # from .convolutional import Conv2D as Conv2DConj for now conjugate is not used
 from .initializers import InitializersFactory
+import dataclasses
+import functools
+import numpy as np
 
+@dataclasses.dataclass(unsafe_hash=True)
+class UpstrideDatatype:
+  uptype_id: int
+  geometrical_def: tuple
+  blade_indexes: tuple
+
+  @property
+  def dimension(self) -> int:
+      return len(self.blade_indexes)
+
+UPTYPE0 = UpstrideDatatype(0, (0, 0, 0), ('',))
+UPTYPE1 = UpstrideDatatype(1, (2, 0, 0), ('', '12'))
+UPTYPE2 = UpstrideDatatype(2, (3, 0, 0), ('', '12', '13', '23'))
+UPTYPE3 = UpstrideDatatype(3, (3, 0, 0), ('', '1', '2', '3', '12', '13', '23', '123'))
+
+
+def prepare_inputs(uptype, inputs, **kwargs):
+  # TODO consider implementing uptype.interlace so that inputs.shape is (BS*N, I, ...) instead of
+  # inputs.shape (N*BS, I, ...)
+  inputs = tf.reshape(inputs, [uptype.dimension, -1, *inputs.shape[1:]]) # shape (N, BS, I, ...)
+  if kwargs.get('groups', 1) > 1:
+    rest = list(range(3, tf.rank(inputs)))
+    inputs = tf.transpose(inputs, perm=[1, 2, 0, *rest]) # shape (BS, I, N, ...)
+    inputs = tf.reshape(inputs, [inputs.shape[0], -1, *inputs.shape[3:]]) # shape (BS, I*N, ...)
+  else:
+    rest = list(range(2, tf.rank(inputs)))
+    inputs = tf.transpose(inputs, perm=[1, 0, *rest]) # shape (BS, N, I, ...)
+    inputs = tf.reshape(inputs, [inputs.shape[0], -1, *inputs.shape[3:]]) # shape (BS, N*I, ...)
+  return inputs
+
+def prepare_output(uptype, output, **kwargs):
+  if kwargs.get('groups', 1) > 1: # output.shape (BS, O*N, ...)
+    output = tf.reshape(output, [output.shape[0], -1, uptype.dimension, *output.shape[2:]]) # shape (BS, O, N, ...)
+    rest = list(range(3, tf.rank(output)))
+    output = tf.transpose(output, perm=[2, 0, 1, *rest]) # shape (N, BS, O, ...)
+  else: # output.shape (BS, N*O, ...)
+    output = tf.reshape(output, [output.shape[0], uptype.dimension, -1, *output.shape[2:]]) # shape (BS, N, O, ...)
+    rest = list(range(2, tf.rank(output)))
+    output = tf.transpose(output, perm=[1, 0, *rest]) # shape (N, BS, O, ...)
+  output = tf.reshape(output, [-1, *output.shape[2:]]) # shape (N*BS, O, ...)
+  return output
+
+def prepare_hyper_weight(uptype, weight, **kwargs):
+  if kwargs.get('groups', 1) > 1:
+    raise NotImplementedError("Grouped convolution is currently not supported with Parcollet's \
+                               implementation. Grouped convolutions require the kernel to be of \
+                               form (..., I*N, O*N), instead of (..., N*I, N*O), so that the \
+                               splitting occurs without putting apart the components of each multivector.")
+  cat_kernels_4_r = tf.concat([weight[0], -weight[1], -weight[2], -weight[3]], axis=2)
+  cat_kernels_4_i = tf.concat([weight[1],  weight[0], -weight[3],  weight[2]], axis=2)
+  cat_kernels_4_j = tf.concat([weight[2],  weight[3],  weight[0], -weight[1]], axis=2)
+  cat_kernels_4_k = tf.concat([weight[3], -weight[2],  weight[1],  weight[0]], axis=2)
+  hyper_weight = tf.concat([cat_kernels_4_r, cat_kernels_4_i, cat_kernels_4_j, cat_kernels_4_k], axis=3)
+  return hyper_weight
 
 def convert_all_args_to_kwargs(function, args, kwargs):
   """ This function use the information in the signature of the function
