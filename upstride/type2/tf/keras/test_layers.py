@@ -2,7 +2,7 @@ import tempfile, os, shutil
 import unittest
 import tensorflow as tf
 import numpy as np
-from .layers import TF2Upstride, Upstride2TF, Conv2D, DepthwiseConv2D, Conv2DParcollet
+from .layers import TF2Upstride, Upstride2TF, Conv2D, DepthwiseConv2D, Conv2DParcollet, Conv2DType2
 
 
 class TestQuaternionTF2Upstride(unittest.TestCase):
@@ -101,16 +101,50 @@ class TestConv2DQuaternion(unittest.TestCase):
     self.assertEqual(listdir, ['assets', 'saved_model.pb', 'variables'])
     shutil.rmtree(dest)
 
+def random_integer_tensor(shape, dtype=tf.float32):
+  """ Generates a random tensor containing integer values
+  """
+  tensor = tf.random.uniform(shape, -4, +4, dtype=tf.int32)
+  return tf.cast(tensor, dtype)
+
 class TestConv2DAlgorithms(unittest.TestCase):
-  def test_conv2d(self):
-    def random_integer_tensor(shape, dtype=tf.float32):
-      """ Generates a random tensor containing integer values
-      """
-      tensor = tf.random.uniform(shape, -4, +4, dtype=tf.int32)
-      return tf.cast(tensor, dtype)
+  def test_conv2d_generalized_and_type2(self):
+    inputs = random_integer_tensor(shape=(4*2, 5, 3, 3))
+    # Define and build operations (by calling them a first time)
+    use_bias = False
+    ref_op = Conv2D(2, 2, use_bias=use_bias)
+    test_op = Conv2DType2(2, 2, use_bias=use_bias)
+    ref_op(inputs)
+    test_op(inputs)
 
+    # Override weights, taking into account that ref_weight is of shape (H, W, I, 4*O), whereas
+    # test_weight is of shape (4, H, W, I, O)
+    ref_weight = random_integer_tensor(shape=ref_op.get_weights()[0].shape) # shape (H, W, I, N*O)
+    if use_bias:
+      ref_bias = random_integer_tensor(shape=ref_op.get_weights()[1].shape)
+      ref_op.set_weights([ref_weight, ref_bias])
+    else:
+      ref_op.set_weights([ref_weight])
+
+    test_weight_and_bias = tf.split(ref_op.get_weights()[0], 4, axis=-1)
+    if use_bias:
+      biases = tf.split(ref_op.get_weights()[1], 4, axis=ref_op.bias.axis)
+      reshaped_biases = [tf.reshape(bias, -1) for bias in biases]
+      test_weight_and_bias += reshaped_biases
+    test_op.set_weights(test_weight_and_bias)
+
+    # Compute outputs
+    ref_output = ref_op(inputs)
+    test_output = test_op(inputs)
+
+    # Compare outputs
+    diff_sum = tf.reduce_max(ref_output - test_output)
+    self.assertEqual(ref_output.shape, test_output.shape)
+    self.assertEqual(diff_sum, 0)
+
+
+  def test_conv2d_generalized_and_parcollet(self):
     inputs = random_integer_tensor(shape=(4*2, 2, 3, 3))
-
     # Define and build operations (by calling them a first time)
     ref_op = Conv2D(2, 2, use_bias=True)
     test_op = Conv2DParcollet(2, 2, use_bias=True)

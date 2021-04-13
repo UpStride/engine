@@ -124,10 +124,26 @@ def quaternion_mult_cpp(tf_op, inputs, kernels, f=1):
 
 
 def quaternion_mult_naive(tf_op, inputs, kernels):
+  # FIXME: context
+  # From the fact that the quaternion product is not commutative (p*q != q*p), the previous
+  # implementation commentedout hereafter doesn't lead to the same results as the algorithm
+  # generalized for all upstride datatypes in generic_layers.py
+
+  # FIXME: open question
+  # Having in mind that the following alternatives are the commutative of each other, which of the
+  # them is the expected behavior?
+
+  ## The implementation that differs from generic_layers.py:
+  ## c1 = tf_op(inputs[0], kernels[0]) - tf_op(inputs[1], kernels[1]) - tf_op(inputs[2], kernels[2]) - tf_op(inputs[3], kernels[3])
+  ## c2 = tf_op(inputs[1], kernels[0]) + tf_op(inputs[0], kernels[1]) - tf_op(inputs[3], kernels[2]) + tf_op(inputs[2], kernels[3])
+  ## c3 = tf_op(inputs[2], kernels[0]) + tf_op(inputs[3], kernels[1]) + tf_op(inputs[0], kernels[2]) - tf_op(inputs[1], kernels[3])
+  ## c4 = tf_op(inputs[3], kernels[0]) - tf_op(inputs[2], kernels[1]) + tf_op(inputs[1], kernels[2]) + tf_op(inputs[0], kernels[3])
+
+  # The implementation that behaves as generic_layers.py
   c1 = tf_op(inputs[0], kernels[0]) - tf_op(inputs[1], kernels[1]) - tf_op(inputs[2], kernels[2]) - tf_op(inputs[3], kernels[3])
-  c2 = tf_op(inputs[0], kernels[1]) + tf_op(inputs[1], kernels[0]) + tf_op(inputs[2], kernels[3]) - tf_op(inputs[3], kernels[2])
-  c3 = tf_op(inputs[0], kernels[2]) + tf_op(inputs[2], kernels[0]) + tf_op(inputs[3], kernels[1]) - tf_op(inputs[1], kernels[3])
-  c4 = tf_op(inputs[0], kernels[3]) + tf_op(inputs[3], kernels[0]) + tf_op(inputs[1], kernels[2]) - tf_op(inputs[2], kernels[1])
+  c2 = tf_op(inputs[1], kernels[0]) + tf_op(inputs[0], kernels[1]) + tf_op(inputs[3], kernels[2]) - tf_op(inputs[2], kernels[3])
+  c3 = tf_op(inputs[2], kernels[0]) - tf_op(inputs[3], kernels[1]) + tf_op(inputs[0], kernels[2]) + tf_op(inputs[1], kernels[3])
+  c4 = tf_op(inputs[3], kernels[0]) + tf_op(inputs[2], kernels[1]) - tf_op(inputs[1], kernels[2]) + tf_op(inputs[0], kernels[3])
   return [c1, c2, c3, c4]
 
 
@@ -156,7 +172,7 @@ def quaternion_mult_conv(tf_op, inputs, kernels, channel_axis):
 
 multiply_by_a = multiply_by_a1
 # mult 2 is more stable than mult 1 when working with float 16
-quaternion_mult = quaternion_mult2
+quaternion_mult = quaternion_mult_naive
 
 
 def is_quaternion_init(init_type):

@@ -2,6 +2,7 @@ from tensorflow.keras.layers import Layer
 from .... import generic_layers
 from ....generic_layers import *
 from ....batchnorm import BatchNormalizationH
+from .convolutional import Conv2D as Conv2DType2
 # from .convolutional import Conv2D, DepthwiseConv2D # FIXME Conv2D and DepthwiseConv2D are buggy.
 # They do NOT yield to the same results as the generalized method from ....convolutional
 from .dense import Dense
