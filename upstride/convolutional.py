@@ -52,44 +52,9 @@ import six
 import functools
 
 class Conv2DParcollet(tf.keras.layers.Conv2D):
-  def __init__(self,
-               uptype,
-               filters,
-               kernel_size,
-               strides=(1, 1),
-               padding='valid',
-               data_format=None,
-               dilation_rate=(1, 1),
-               groups=1,
-               activation=None,
-               use_bias=True,
-               kernel_initializer='glorot_uniform',
-               bias_initializer='zeros',
-               kernel_regularizer=None,
-               bias_regularizer=None,
-               activity_regularizer=None,
-               kernel_constraint=None,
-               bias_constraint=None,
-               **kwargs):
+  def __init__(self, uptype, *args, **kwargs):
     self.uptype = uptype # FIXME generalize when implementing for other uptypes
-    super().__init__(
-        filters=filters,
-        kernel_size=kernel_size,
-        strides=strides,
-        padding=padding,
-        data_format=data_format,
-        dilation_rate=dilation_rate,
-        groups=groups,
-        activation=activations.get(activation),
-        use_bias=use_bias,
-        kernel_initializer=initializers.get(kernel_initializer),
-        bias_initializer=initializers.get(bias_initializer),
-        kernel_regularizer=regularizers.get(kernel_regularizer),
-        bias_regularizer=regularizers.get(bias_regularizer),
-        activity_regularizer=regularizers.get(activity_regularizer),
-        kernel_constraint=constraints.get(kernel_constraint),
-        bias_constraint=constraints.get(bias_constraint),
-        **kwargs)
+    super().__init__(*args, **kwargs)
 
   def build(self, input_shape):
     input_shape = tensor_shape.TensorShape(input_shape)
@@ -163,7 +128,7 @@ class Conv2DParcollet(tf.keras.layers.Conv2D):
     #   output_rank = outputs.shape.rank
     #   if self.rank == 1 and self._channels_first:
     #     # nn.bias_add does not accept a 1D input tensor.
-    #     bias = array_ops.reshape(self.bias, (1, self.filters, 1))
+    #     bias = array_ops.reshape(self.bias, (1, uptype.dimension * self.filters, 1))
     #     outputs += bias
     #   else:
     #     # Handle multiple batch dimensions.

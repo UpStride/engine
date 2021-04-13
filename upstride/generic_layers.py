@@ -37,6 +37,70 @@ UPTYPE2 = UpstrideDatatype(2, (3, 0, 0), ('', '12', '13', '23'))
 UPTYPE3 = UpstrideDatatype(3, (3, 0, 0), ('', '1', '2', '3', '12', '13', '23', '123'))
 
 
+def unit_multiplier(uptype, i: int, j: int) -> Tuple[int, int]:
+  """given \beta_i and \beta_j, return (k,s) such as : \beta_i * \beta_j = s * \beta_k
+
+  with:
+      \beta_0 = 1, \beta_1 = i if upstride_type == 1
+      \beta_0 = 1, \beta_1 = i, \beta_2 = j, \beta_3 = k if upstride_type == 2
+      s in {-1, 1}
+
+  for instance, upstride_type == 1,
+  (0, 0) -> (0, 1) because \beta_0 * \beta_0 = 1 * 1 = 1 * \beta_0
+  (0, 1) -> (1, 1) because \beta_0 * \beta_1 = 1 * \beta_1
+  (1, 1) -> (0, -1) because \beta_1 * \beta_1 = i**2 = -1 = -1 * \beta_0
+  """
+  index1 = uptype.blade_indexes[i]
+  index2 = uptype.blade_indexes[j]
+  s, index = _ga_multiply_get_index(uptype, index1, index2)
+  return uptype.blade_indexes.index(index), s
+
+def _ga_multiply_get_index(uptype, index_1: str, index_2: str) -> Tuple[int, str]:
+  """given \beta_{index_1}, \beta_{index_2} return (s, index) such as \beta_{index_1} * \beta_{index_2} = s * \beta_{index}
+  """
+  l1 = [int(i) for i in index_1]
+  l2 = [int(i) for i in index_2]
+  s = 1
+
+  # as l1 and l2 are already sorted, we can just merge them and count the number of permutation needed
+  i1, i2, length_l1 = 0, 0, len(l1)
+  out_l = []
+  while i1 < len(l1) and i2 < len(l2):
+    if l1[i1] == l2[i2]:
+      # then move the element of l2 near the element of l1 and remove them
+      if (length_l1 - 1) % 2 != 0:
+        s *= -1
+      # check the sign of the square
+      s *= square_vector(uptype, l1[i1])
+      length_l1 -= 1
+      i1 += 1
+      i2 += 1
+    elif l1[i1] > l2[i2]:
+      # then move the element of l2 before the element of l1
+      if length_l1 % 2 != 0:
+        s *= -1
+      out_l.append(l2[i2])
+      i2 += 1
+    elif l1[i1] < l2[i2]:
+      out_l.append(l1[i1])
+      length_l1 -= 1
+      i1 += 1
+  out_l += l1[i1:] + l2[i2:]
+
+  return s, "".join([str(i) for i in out_l])
+
+def square_vector(uptype, index: int) -> int:
+  # geometrical_def is a triplet (A, B, C) defining a GA where:
+  # - the square of the A first elements is 1
+  # - the square of the B next elements is -1
+  # - the square of the C last elements is 0
+  # dev note : the + 1 is because the first index in the vector notation of a GA is... 1
+  if index < uptype.geometrical_def[0] + 1:
+    return 1
+  if index < uptype.geometrical_def[0] + uptype.geometrical_def[1] + 1:
+    return -1
+  return 0
+
 def prepare_inputs(uptype, inputs, **kwargs):
   # TODO consider implementing uptype.interlace so that inputs.shape is (BS*N, I, ...) instead of
   # inputs.shape (N*BS, I, ...)
@@ -69,11 +133,32 @@ def prepare_hyper_weight(uptype, weight, **kwargs):
                                implementation. Grouped convolutions require the kernel to be of \
                                form (..., I*N, O*N), instead of (..., N*I, N*O), so that the \
                                splitting occurs without putting apart the components of each multivector.")
-  cat_kernels_4_r = tf.concat([weight[0], -weight[1], -weight[2], -weight[3]], axis=2)
-  cat_kernels_4_i = tf.concat([weight[1],  weight[0], -weight[3],  weight[2]], axis=2)
-  cat_kernels_4_j = tf.concat([weight[2],  weight[3],  weight[0], -weight[1]], axis=2)
-  cat_kernels_4_k = tf.concat([weight[3], -weight[2],  weight[1],  weight[0]], axis=2)
-  hyper_weight = tf.concat([cat_kernels_4_r, cat_kernels_4_i, cat_kernels_4_j, cat_kernels_4_k], axis=3)
+  if uptype == UPTYPE2:
+    kernels_4_r = tf.concat([weight[0], -weight[1], -weight[2], -weight[3]], axis=2)
+    kernels_4_i = tf.concat([weight[1],  weight[0], -weight[3],  weight[2]], axis=2)
+    kernels_4_j = tf.concat([weight[2],  weight[3],  weight[0], -weight[1]], axis=2)
+    kernels_4_k = tf.concat([weight[3], -weight[2],  weight[1],  weight[0]], axis=2)
+    hyper_weight = tf.concat([kernels_4_r, kernels_4_i, kernels_4_j, kernels_4_k], axis=3)
+  elif uptype == UPTYPE1:
+    kernels_2_r = tf.concat([weight[0], -weight[1]], axis=2)
+    kernels_2_i = tf.concat([weight[1],  weight[0]], axis=2)
+    hyper_weight = tf.concat([kernels_2_r, kernels_2_i], axis=3)
+  else:
+    # If a the type in use doesn't have a hard-coded hyper_weight, then
+    # compute a single element A[i][j] for the matrix A that embeds the Hamilton product
+    w_shape = weight.shape
+    hyper_weight_list = []
+    for i in range(uptype.dimension):
+      hyper_weight_row = []
+      for j in range(uptype.dimension):
+        k, sign_j_i = unit_multiplier(uptype, j, i)
+        _, sign_j_j = unit_multiplier(uptype, j, j)
+        if sign_j_j == 0:
+          raise ZeroDivisionError()
+        hyper_weight_row.append(weight[k] * sign_j_i * sign_j_j)  # Given that sign_j_j is 1, 0 or -1,
+        # a multiplication sign was preferred over the division. When it's 0, an error is raised.
+      hyper_weight_list.append(tf.concat(hyper_weight_row, axis=2))
+    hyper_weight = tf.concat(hyper_weight_list, axis=3)
   return hyper_weight
 
 def convert_all_args_to_kwargs(function, args, kwargs):
