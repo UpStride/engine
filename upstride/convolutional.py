@@ -118,33 +118,41 @@ class Conv2DParcollet(tf.keras.layers.Conv2D):
     if self._is_causal:  # Apply causal padding to inputs for Conv1D.
       inputs = array_ops.pad(inputs, self._compute_causal_padding(inputs))
 
-    kernel = prepare_hyper_weight(self.uptype, self.kernel)
-    inputs = prepare_inputs(self.uptype, inputs)
+    kernel = prepare_hyper_weight(self.uptype, self.kernel, groups=self.groups)
+    inputs = prepare_inputs(self.uptype, inputs, groups=self.groups)
     outputs = self._convolution_op(inputs, kernel)
-    outputs = prepare_output(self.uptype, outputs)
 
-    # FIXME
-    # if self.use_bias:
-    #   output_rank = outputs.shape.rank
-    #   if self.rank == 1 and self._channels_first:
-    #     # nn.bias_add does not accept a 1D input tensor.
-    #     bias = array_ops.reshape(self.bias, (1, uptype.dimension * self.filters, 1))
-    #     outputs += bias
-    #   else:
-    #     # Handle multiple batch dimensions.
-    #     if output_rank is not None and output_rank > 2 + self.rank:
+    if self.use_bias:
+      output_rank = outputs.shape.rank
+      # If it is a grouped convolution, then the bias needs to be reshaped from [N*O] to [O*N],
+      # to be consistent with the shape in the variable outputs. For details, go to the definition
+      # of prepare_inputs()
+      if self.groups > 1: # bias.shape [N*O]
+        bias = tf.reshape(self.bias, [self.uptype.dimension, -1]) # shape [N, O]
+        bias = tf.transpose(bias, perm=[1, 0]) # shape [O, N]
+        bias = tf.reshape(bias, [-1]) # shape [O*N]
+      else:
+        bias = self.bias
+      if self.rank == 1 and self._channels_first:
+        # nn.bias_add does not accept a 1D input tensor.
+        bias = array_ops.reshape(bias, (1, self.uptype.dimension * self.filters, 1))
+        outputs += bias
+      else:
+        # Handle multiple batch dimensions.
+        if output_rank is not None and output_rank > 2 + self.rank:
 
-    #       def _apply_fn(o):
-    #         return nn.bias_add(o, self.bias, data_format=self._tf_data_format)
+          def _apply_fn(o):
+            return nn.bias_add(o, bias, data_format=self._tf_data_format)
 
-    #       outputs = nn_ops.squeeze_batch_dims(
-    #           outputs, _apply_fn, inner_rank=self.rank + 1)
-    #     else:
-    #       outputs = nn.bias_add(
-    #           outputs, self.bias, data_format=self._tf_data_format)
+          outputs = nn_ops.squeeze_batch_dims(
+              outputs, _apply_fn, inner_rank=self.rank + 1)
+        else:
+          outputs = nn.bias_add(
+              outputs, bias, data_format=self._tf_data_format)
 
-    # if self.activation is not None:
-    #   return self.activation(outputs)
+    outputs = prepare_output(self.uptype, outputs, groups=self.groups)
+    if self.activation is not None:
+      return self.activation(outputs)
     return outputs
 
 class Conv(Layer):

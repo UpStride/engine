@@ -112,18 +112,21 @@ class TestConv2DAlgorithms(unittest.TestCase):
     inputs = random_integer_tensor(shape=(4*2, 2, 3, 3))
 
     # Define and build operations (by calling them a first time)
-    ref_op = Conv2D(2, 2, use_bias=False)
-    test_op = Conv2DParcollet(2, 2, use_bias=False)
+    ref_op = Conv2D(2, 2, use_bias=True)
+    test_op = Conv2DParcollet(2, 2, use_bias=True)
     ref_op(inputs)
     test_op(inputs)
 
     # Override weights, taking into account that ref_weight is of shape (H, W, I, 4*O), whereas
     # test_weight is of shape (4, H, W, I, O)
     ref_weight = random_integer_tensor(shape=ref_op.get_weights()[0].shape) # shape (H, W, I, N*O)
-    ref_op.set_weights([ref_weight])
+    ref_bias = random_integer_tensor(shape=ref_op.get_weights()[1].shape)
+    ref_op.set_weights([ref_weight, ref_bias])
     test_weight = tf.reshape(ref_weight, (*ref_weight.shape[:-1], 4, -1)) # shape (H, W, I, N, O)
     test_weight = tf.transpose(test_weight, perm=[3, 0, 1, 2, 4]) # shape (N, H, W, I, O)
-    test_op.set_weights([test_weight])
+    test_bias = tf.reshape(ref_bias, ref_bias.shape[ref_op.bias.axis]) # reshape needed to transform
+    # back to the one-dimensional shape of a vanilla TF layer bias, instead of the (1, self.filters, 1, 1)
+    test_op.set_weights([test_weight, test_bias])
 
     # Compute outputs
     ref_output = ref_op(inputs)

@@ -105,6 +105,13 @@ def prepare_inputs(uptype, inputs, **kwargs):
   # TODO consider implementing uptype.interlace so that inputs.shape is (BS*N, I, ...) instead of
   # inputs.shape (N*BS, I, ...)
   inputs = tf.reshape(inputs, [uptype.dimension, -1, *inputs.shape[1:]]) # shape (N, BS, I, ...)
+  # Given that in a grouped convolution with g groups the input is splitted in g chunks along the
+  # channels dimension (cf. https://www.tensorflow.org/api_docs/python/tf/keras/layers/Conv2D),
+  # then a special attention is required so that the multivector components do NOT get splitted
+  # into different convolutions. The solution is to return a tensor of shape (BS, I*N, ...). As it
+  # only matters for grouped convolution, the cheaper-to-compute tensor of shape (BS, N*I, ...) is
+  # preferred whenever possible. This propagates to prepare_hyper_weight(), bias addition and
+  # prepare_output().
   if kwargs.get('groups', 1) > 1:
     rest = list(range(3, tf.rank(inputs)))
     inputs = tf.transpose(inputs, perm=[1, 2, 0, *rest]) # shape (BS, I, N, ...)
@@ -128,7 +135,7 @@ def prepare_output(uptype, output, **kwargs):
   return output
 
 def prepare_hyper_weight(uptype, weight, **kwargs):
-  if kwargs.get('groups', 1) > 1:
+  if kwargs.get('groups', 1) > 1: # TODO
     raise NotImplementedError("Grouped convolution is currently not supported with Parcollet's \
                                implementation. Grouped convolutions require the kernel to be of \
                                form (..., I*N, O*N), instead of (..., N*I, N*O), so that the \
