@@ -72,31 +72,62 @@ def generic_linear_test(layer_test, layer_ref, algebra_map, component_shape):
 
     ref_out = np.concatenate(ref_outputs)
 
-#     print(test_out)
-#     print(ref_out)
-
     assert_small_float_difference(test_out, ref_out, 0.0001)
 
-
-# @pytest.mark.parametrize("layer_test, layer_ref", [
-#     (generic_layers.Conv2D, tf.keras.layers.Conv2D),
-#     # (generic_layers.DepthwiseConv2D, tf.keras.layers.DepthwiseConv2D),
-#     # (generic_layers.Dense, tf.keras.layers.Dense),
-# ])
 
 @pytest.mark.parametrize('uptype', [0, 1, 2])
 class TestGenericLinear:
 
-    standard_params = [1, 2, 5, 16]
+    standard_params = [1, 5, 16]
 
     @pytest.mark.parametrize('units', standard_params)
     @pytest.mark.parametrize('batch_size', standard_params)
     @pytest.mark.parametrize('channels', standard_params)
     def test_Dense(self, units, batch_size, channels, uptype):
         kwargs = {
-            'units' : units
+            'units' : units,
         }
         layer_test = generic_layers.Dense(*uptypes[uptype], **kwargs)
         layer_ref = tf.keras.layers.Dense(**kwargs)
         component_shape = (batch_size, channels)
+        generic_linear_test(layer_test, layer_ref, algebra_maps[uptype], component_shape)
+
+
+    @pytest.mark.parametrize('channel_convention', ['channels_first', 'channels_last'])
+    @pytest.mark.parametrize('filters', standard_params)
+    @pytest.mark.parametrize('kernel_size', [1, 3])
+    @pytest.mark.parametrize('height', standard_params)
+    @pytest.mark.parametrize('width', standard_params)
+    @pytest.mark.parametrize('batch_size', standard_params)
+    @pytest.mark.parametrize('channels', standard_params)
+    def test_Conv2D(self, channel_convention, filters, kernel_size, height, width, batch_size, channels, uptype):
+        if kernel_size > min(height, width):
+            return
+        tf.keras.backend.set_image_data_format(channel_convention)
+        kwargs = {
+            'filters' : filters,
+            'kernel_size' : kernel_size,
+        }
+        layer_test = generic_layers.Conv2D(*uptypes[uptype], **kwargs)
+        layer_ref = tf.keras.layers.Conv2D(**kwargs)
+        component_shape = (batch_size, channels, height, width) if channel_convention == 'channels_first' else (batch_size, height, width, channels)
+        generic_linear_test(layer_test, layer_ref, algebra_maps[uptype], component_shape)
+
+
+    @pytest.mark.parametrize('channel_convention', ['channels_first', 'channels_last'])
+    @pytest.mark.parametrize('kernel_size', [1, 3])
+    @pytest.mark.parametrize('height', standard_params)
+    @pytest.mark.parametrize('width', standard_params)
+    @pytest.mark.parametrize('batch_size', standard_params)
+    @pytest.mark.parametrize('channels', standard_params)
+    def test_DepthwiseConv2D(self, channel_convention, kernel_size, height, width, batch_size, channels, uptype):
+        if kernel_size > min(height, width):
+            return
+        tf.keras.backend.set_image_data_format(channel_convention)
+        kwargs = {
+            'kernel_size' : kernel_size,
+        }
+        layer_test = generic_layers.DepthwiseConv2D(*uptypes[uptype], **kwargs)
+        layer_ref = tf.keras.layers.DepthwiseConv2D(**kwargs)
+        component_shape = (batch_size, channels, height, width) if channel_convention == 'channels_first' else (batch_size, height, width, channels)
         generic_linear_test(layer_test, layer_ref, algebra_maps[uptype], component_shape)
