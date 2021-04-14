@@ -158,8 +158,8 @@ class TestConv2DAlgorithms(unittest.TestCase):
     ref_op.set_weights([ref_weight, ref_bias])
     test_weight = tf.reshape(ref_weight, (*ref_weight.shape[:-1], 4, -1)) # shape (H, W, I, N, O)
     test_weight = tf.transpose(test_weight, perm=[3, 0, 1, 2, 4]) # shape (N, H, W, I, O)
-    test_bias = tf.reshape(ref_bias, ref_bias.shape[ref_op.bias.axis]) # reshape needed to transform
-    # back to the one-dimensional shape of a vanilla TF layer bias, instead of the (1, self.filters, 1, 1)
+    test_bias_shape = [test_weight.shape[0], ref_bias.shape[ref_op.bias.axis]//test_weight.shape[0]]
+    test_bias = tf.reshape(ref_bias, test_bias_shape) # shape (N, O)
     test_op.set_weights([test_weight, test_bias])
 
     # Compute outputs
