@@ -5,25 +5,8 @@ import numpy as np
 from ....convolutional import Conv2DParcollet as GenericConv2DParcollet
 
 from ....generic_layers import UPTYPE2
-UPSTRIDE_TYPE = 2
-BLADES_INDEXES = ['', '12', '23', '13']
-GEOMETRICAL_DEF = (3, 0, 0)
 
-# If you wish to overwrite some layers, please implements them here
-
-class Conv2D(generic_layers.Conv2D):
-  def __init__(self, *args, **kwargs):
-    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, *args, **kwargs)
-
-
-class DepthwiseConv2D(generic_layers.DepthwiseConv2D):
-  def __init__(self, *args, **kwargs):
-    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, *args, **kwargs)
-
-
-class Conv2DParcollet(GenericConv2DParcollet):
-  def __init__(self, *args, **kwargs):
-    super().__init__(UPTYPE2, *args, **kwargs)
+# If you wish to overwrite some layers, please implement them here
 
 
 class TF2UpstrideJoint(tf.keras.layers.Layer):
@@ -71,7 +54,7 @@ class TF2UpstrideGrayscale(tf.keras.layers.Layer):
 
 class TF2Upstride(generic_layers.TF2Upstride):
   def __init__(self, strategy=''):
-    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, strategy)
+    super().__init__(UPTYPE2, strategy)
 
   def add_strategies(self):
     self.strategies['joint'] = TF2UpstrideJoint
@@ -88,7 +71,7 @@ class Upstride2TF(generic_layers.Upstride2TF):
     args:
       strategy: can be the same strategy as defined in generic_layers.Upstride2TF or "norm_{number}" with number a integer number or the string "inf"
     """
-    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, strategy)
+    super().__init__(UPTYPE2, strategy)
     self.strategies['norm'] = self.norm
 
     self.norm_order = None
@@ -102,36 +85,41 @@ class Upstride2TF(generic_layers.Upstride2TF):
       self.strategy_name = 'norm'
 
   def norm(self, x):
-    x = tf.split(x, self.multivector_length, axis=0)
+    x = tf.split(x, self.uptype.multivector_length, axis=0)
     stacked_tensors = tf.stack(x, axis=-1)
     return tf.norm(stacked_tensors, axis=-1, ord=self.norm_order)
 
 
 class Conv2D(generic_layers.Conv2D):
   def __init__(self, *args, **kwargs):
-    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, *args, **kwargs)
+    super().__init__(UPTYPE2, *args, **kwargs)
+
+
+class Conv2DParcollet(GenericConv2DParcollet):
+  def __init__(self, *args, **kwargs):
+    super().__init__(UPTYPE2, *args, **kwargs)
 
 
 class Dense(generic_layers.Dense):
   def __init__(self, *args, **kwargs):
-    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, *args, **kwargs)
+    super().__init__(UPTYPE2, *args, **kwargs)
 
 
 class Conv2DTranspose(generic_layers.Conv2DTranspose):
   def __init__(self, *args, **kwargs):
-    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, *args, **kwargs)
+    super().__init__(UPTYPE2, *args, **kwargs)
 
 
 class DepthwiseConv2D(generic_layers.DepthwiseConv2D):
   def __init__(self, *args, **kwargs):
-    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, *args, **kwargs)
+    super().__init__(UPTYPE2, *args, **kwargs)
 
 
 class Dropout(generic_layers.Dropout):
   def __init__(self, *args, **kwargs):
-    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, *args, **kwargs)
+    super().__init__(UPTYPE2, *args, **kwargs)
 
 
 class BatchNormalization(generic_layers.BatchNormalization):
   def __init__(self, *args, **kwargs):
-    super().__init__(UPSTRIDE_TYPE, BLADES_INDEXES, GEOMETRICAL_DEF, *args, **kwargs)
+    super().__init__(UPTYPE2, *args, **kwargs)

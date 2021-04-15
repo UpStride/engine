@@ -8,7 +8,7 @@ class Conv2DParcollet(tf.keras.layers.Conv2D):
 
   def add_weight(self, **kwargs):
     # Intercepting add_weight to inject the extra dimension needed by upstride datatypes.
-    kwargs['shape'] = (self.uptype.dimension, *kwargs['shape'])
+    kwargs['shape'] = (self.uptype.multivector_length, *kwargs['shape'])
     return super().add_weight(**kwargs)
 
   def call(self, inputs):
@@ -31,7 +31,7 @@ class Conv2DParcollet(tf.keras.layers.Conv2D):
         bias = tf.reshape(self.bias, -1) # shape [N*O]
       if self.rank == 1 and self._channels_first:
         # nn.bias_add does not accept a 1D input tensor.
-        bias = array_ops.reshape(bias, (1, self.uptype.dimension * self.filters, 1))
+        bias = array_ops.reshape(bias, (1, self.uptype.multivector_length * self.filters, 1))
         outputs += bias
       else:
         # Handle multiple batch dimensions.

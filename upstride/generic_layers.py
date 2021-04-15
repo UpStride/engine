@@ -26,12 +26,12 @@ class UpstrideDatatype:
   blade_indexes: tuple
 
   @property
-  def dimension(self) -> int:
+  def multivector_length(self) -> int:
       return len(self.blade_indexes)
 
 UPTYPE0 = UpstrideDatatype(0, (0, 0, 0), ('',))
 UPTYPE1 = UpstrideDatatype(1, (2, 0, 0), ('', '12'))
-UPTYPE2 = UpstrideDatatype(2, (3, 0, 0), ('', '12', '13', '23'))
+UPTYPE2 = UpstrideDatatype(2, (3, 0, 0), ('', '12', '23', '13'))
 UPTYPE3 = UpstrideDatatype(3, (3, 0, 0), ('', '1', '2', '3', '12', '13', '23', '123'))
 
 
@@ -102,7 +102,7 @@ def square_vector(uptype, index: int) -> int:
 def prepare_inputs(uptype, inputs, **kwargs):
   # TODO consider implementing uptype.interlace so that inputs.shape is (BS*N, I, ...) instead of
   # inputs.shape (N*BS, I, ...)
-  inputs = tf.reshape(inputs, [uptype.dimension, -1, *inputs.shape[1:]]) # shape (N, BS, I, ...)
+  inputs = tf.reshape(inputs, [uptype.multivector_length, -1, *inputs.shape[1:]]) # shape (N, BS, I, ...)
   # Given that in a grouped convolution with g groups the input is splitted in g chunks along the
   # channels dimension (cf. https://www.tensorflow.org/api_docs/python/tf/keras/layers/Conv2D),
   # then a special attention is required so that the multivector components do NOT get splitted
@@ -122,11 +122,11 @@ def prepare_inputs(uptype, inputs, **kwargs):
 
 def prepare_output(uptype, output, **kwargs):
   if kwargs.get('groups', 1) > 1: # output.shape (BS, O*N, ...)
-    output = tf.reshape(output, [output.shape[0], -1, uptype.dimension, *output.shape[2:]]) # shape (BS, O, N, ...)
+    output = tf.reshape(output, [output.shape[0], -1, uptype.multivector_length, *output.shape[2:]]) # shape (BS, O, N, ...)
     rest = list(range(3, tf.rank(output)))
     output = tf.transpose(output, perm=[2, 0, 1, *rest]) # shape (N, BS, O, ...)
   else: # output.shape (BS, N*O, ...)
-    output = tf.reshape(output, [output.shape[0], uptype.dimension, -1, *output.shape[2:]]) # shape (BS, N, O, ...)
+    output = tf.reshape(output, [output.shape[0], uptype.multivector_length, -1, *output.shape[2:]]) # shape (BS, N, O, ...)
     rest = list(range(2, tf.rank(output)))
     output = tf.transpose(output, perm=[1, 0, *rest]) # shape (N, BS, O, ...)
   output = tf.reshape(output, [-1, *output.shape[2:]]) # shape (N*BS, O, ...)
@@ -148,9 +148,9 @@ def prepare_hyper_weight(uptype, weight, **kwargs):
     # compute a single element A[i][j] for the matrix A that embeds the Hamilton product
     w_shape = weight.shape
     hyper_weight_list = []
-    for i in range(uptype.dimension):
+    for i in range(uptype.multivector_length):
       hyper_weight_row = []
-      for j in range(uptype.dimension):
+      for j in range(uptype.multivector_length):
         k, sign_j_i = unit_multiplier(uptype, i, j)
         _, sign_j_j = unit_multiplier(uptype, j, j)
         if sign_j_j == 0:
@@ -162,7 +162,7 @@ def prepare_hyper_weight(uptype, weight, **kwargs):
   # hyper_weight.shape (..., N*I, N*O)
   if kwargs.get('groups', 1) > 1:
     shape = hyper_weight.shape
-    updim = uptype.dimension
+    updim = uptype.multivector_length
     shape = [*shape[:-2], updim, shape[-2]//updim, updim, shape[-1]//updim]
     rest = list(range(0, tf.rank(hyper_weight) - 2))
     hyper_weight = tf.reshape(hyper_weight, shape) # shape (..., N, I, N, O)
@@ -224,30 +224,26 @@ class BiasLayer(tf.keras.layers.Layer):
 
 
 class UpstrideLayer(tf.keras.layers.Layer):
-  def __init__(self, upstride_type, blade_indexes, geometrical_def, **kwargs):
+  def __init__(self, uptype, **kwargs):
     super().__init__(**kwargs)
-    self.upstride_type = upstride_type
-    self.blade_indexes = blade_indexes
-    self.geometrical_def = geometrical_def
-    self.multivector_length = len(self.blade_indexes)
+    self.uptype = uptype
     self.axis = -1 if tf.keras.backend.image_data_format() == "channels_last" else 1
 
 
 class GenericLinear(UpstrideLayer):
-  def __init__(self, layer, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
+  def __init__(self, layer, uptype, *args, **kwargs):
     """
     Args:
       layer: a subclass of tf.keras.layers.Layer
     """
-    super().__init__(upstride_type, blade_indexes, geometrical_def)
-    self.multivector_length = len(self.blade_indexes)
+    super().__init__(uptype)
 
     # convert all arguments to kwargs to ease processing
     kwargs = self.convert_all_args_to_kwargs(layer.__init__, args, kwargs)
-    kwargs[map_tf_linear_op_to_kwarg_output_size[layer]] *= self.multivector_length
+    kwargs[map_tf_linear_op_to_kwarg_output_size[layer]] *= self.uptype.multivector_length
     kwargs, add_bias, bias_parameters = self.remove_bias_from_kwargs(kwargs)
 
-    self.layer = self.get_layers(layer, self.upstride_type, **kwargs)
+    self.layer = self.get_layers(layer, self.uptype.uptype_id, **kwargs)
     self.bias = None
     if add_bias:
       self.bias = BiasLayer(bias_parameters['bias_initializer'], bias_parameters['bias_regularizer'], bias_parameters['bias_constraint'])
@@ -274,7 +270,7 @@ class GenericLinear(UpstrideLayer):
 
     """
     # first, let's split the output of the layer
-    layer_outputs = tf.split(linear_layer_output, self.multivector_length, axis=0)
+    layer_outputs = tf.split(linear_layer_output, self.uptype.multivector_length, axis=0)
     # here layer_outputs is a list of output of multiplication of one blade per all kernel blade
 
     # Now we apply the bias. This can seem like a weird place but by applying it here, between the 2 split, we can do in
@@ -283,19 +279,19 @@ class GenericLinear(UpstrideLayer):
       layer_outputs[0] = bias(layer_outputs[0])  # add the bias on one of these output
 
     cross_product_matrix = []
-    for i in range(self.multivector_length):
-      cross_product_matrix.append(tf.split(layer_outputs[i], self.multivector_length, axis=self.axis))
+    for i in range(self.uptype.multivector_length):
+      cross_product_matrix.append(tf.split(layer_outputs[i], self.uptype.multivector_length, axis=self.axis))
 
     # cross_product_matrix is a matrix such as
     # cross_product_matrix[i][j] is the result of the multiplication of the
     # i input by the j kernel
-    output = [None] * self.multivector_length
-    for i in range(self.multivector_length):
-      for j in range(self.multivector_length):
+    output = [None] * self.uptype.multivector_length
+    for i in range(self.uptype.multivector_length):
+      for j in range(self.uptype.multivector_length):
         if not inverse:
-          k, s = self.unit_multiplier(i, j)
+          k, s = unit_multiplier(self.uptype, i, j)
         else:
-          k, s = self.unit_multiplier(j, i)
+          k, s = unit_multiplier(self.uptype, j, i)
 
         # same as output[k] += s*self.layers[i](inputs[j]), but cleaner TensorFlow execution graph
         if s == 1:
@@ -426,37 +422,37 @@ map_tf_linear_op_to_kwarg_output_size = {
 
 
 class Conv2D(GenericLinear):
-  def __init__(self, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
-    super().__init__(tf.keras.layers.Conv2D, upstride_type, blade_indexes, geometrical_def, *args, **kwargs)
+  def __init__(self, uptype, *args, **kwargs):
+    super().__init__(tf.keras.layers.Conv2D, uptype, *args, **kwargs)
 
 
 class Dense(GenericLinear):
-  def __init__(self, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
-    super().__init__(tf.keras.layers.Dense, upstride_type, blade_indexes, geometrical_def, *args,  **kwargs)
+  def __init__(self, uptype, *args, **kwargs):
+    super().__init__(tf.keras.layers.Dense, uptype, *args,  **kwargs)
 
 
 class Conv2DTranspose(GenericLinear):
-  def __init__(self, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
-    super().__init__(tf.keras.layers.Conv2DTranspose, upstride_type, blade_indexes, geometrical_def, *args,  **kwargs)
+  def __init__(self, uptype, *args, **kwargs):
+    super().__init__(tf.keras.layers.Conv2DTranspose, uptype, *args,  **kwargs)
 
 
 class DepthwiseConv2D(GenericLinear):
-  def __init__(self, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
-    super().__init__(tf.keras.layers.DepthwiseConv2D, upstride_type, blade_indexes, geometrical_def, *args,  **kwargs)
+  def __init__(self, uptype, *args, **kwargs):
+    super().__init__(tf.keras.layers.DepthwiseConv2D, uptype, *args,  **kwargs)
 
 
 # and now non linear layers
 
 class BatchNormalization(UpstrideLayer):
-  def __init__(self, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
-    super().__init__(upstride_type, blade_indexes, geometrical_def)
+  def __init__(self, uptype, *args, **kwargs):
+    super().__init__(uptype)
     self.bn = tf.keras.layers.BatchNormalization(*args, **kwargs)
 
   def call(self, input_tensor, training=False):
-    x = tf.split(input_tensor, self.multivector_length, axis=0)
+    x = tf.split(input_tensor, self.uptype.multivector_length, axis=0)
     x = tf.concat(x, axis=self.axis)
     x = self.bn(x)
-    x = tf.split(x, self.multivector_length, axis=self.axis)
+    x = tf.split(x, self.uptype.multivector_length, axis=self.axis)
     x = tf.concat(x, axis=0)
     return x
 
@@ -469,10 +465,10 @@ class Dropout(tf.keras.layers.Dropout):
   dimension
   """
 
-  def __init__(self, upstride_type, blade_indexes, geometrical_def, rate, noise_shape=None, seed=None, synchronized=False, **kwargs):
+  def __init__(self, uptype, rate, noise_shape=None, seed=None, synchronized=False, **kwargs):
     super().__init__(rate, noise_shape, seed, **kwargs)
     self.synchronized = synchronized
-    self.multivector_length = len(blade_indexes)
+    self.uptype.multivector_length = len(blade_indexes)
 
   def _get_noise_shape(self, inputs):
     # see https://github.com/tensorflow/tensorflow/blob/v2.4.1/tensorflow/python/keras/layers/core.py#L144-L244
@@ -500,7 +496,7 @@ class Dropout(tf.keras.layers.Dropout):
       return super().call(input_tensor, training)
     else:
       input_shape = tf.shape(input_tensor)
-      transform_shape = tf.concat([[self.multivector_length, -1], input_shape[1:]], axis=0)
+      transform_shape = tf.concat([[self.uptype.multivector_length, -1], input_shape[1:]], axis=0)
       x = tf.reshape(input_tensor, transform_shape)
       x = super().call(x, training)
       x = tf.reshape(x, input_shape)
@@ -515,9 +511,10 @@ class TF2Upstride(UpstrideLayer):
   the self.strategies dic
   """
 
-  def __init__(self, upstride_type, blade_indexes, geometrical_def, strategy='', **kwargs):
-    super().__init__(upstride_type, blade_indexes, geometrical_def, **kwargs)
+  def __init__(self, uptype, strategy='', **kwargs):
+    super().__init__(uptype, **kwargs)
     # This dictionary map the strategy name to the function to call
+    self.uptype = uptype
     self.strategies = {
         'learned': TF2UpstrideLearned,
         'basic': TF2UpstrideBasic,
@@ -529,7 +526,7 @@ class TF2Upstride(UpstrideLayer):
 
     if self.strategy_name not in self.strategies:
       raise ValueError(f"unknown strategy: {self.strategy_name}")
-    self.model = self.strategies[self.strategy_name](self.blade_indexes, **kwargs)
+    self.model = self.strategies[self.strategy_name](self.uptype.blade_indexes, **kwargs)
 
   def add_strategies(self):
     """ The purpose of this function is to be overritten in a sub class to add elements in self.strategies
@@ -557,8 +554,8 @@ class TF2UpstrideLearned(tf.keras.layers.Layer):
     super().__init__()
     self.axis = -1 if tf.keras.backend.image_data_format() == 'channels_last' else 1
     self.layers = []
-    self.multivector_length = len(blade_indexes)
-    for i in range(1, self.multivector_length):
+    self.uptype.multivector_length = len(blade_indexes)
+    for i in range(1, self.uptype.multivector_length):
       self.layers.append(tf.keras.Sequential([
           tf.keras.layers.BatchNormalization(axis=self.axis),
           tf.keras.layers.Activation('relu'),
@@ -595,8 +592,8 @@ class Upstride2TF(UpstrideLayer):
   """convert multivector back to real values.
   """
 
-  def __init__(self, upstride_type, blade_indexes, geometrical_def, strategy='', **kwargs):
-    super().__init__(upstride_type, blade_indexes, geometrical_def, **kwargs)
+  def __init__(self, uptype, strategy='', **kwargs):
+    super().__init__(uptype, **kwargs)
     self.strategies = {
         'basic': self.basic,
         'default': self.basic,
@@ -613,19 +610,19 @@ class Upstride2TF(UpstrideLayer):
     return self.strategies[self.strategy_name](input_tensor)
 
   def basic(self, x):
-    output = tf.split(x, self.multivector_length, axis=0)
+    output = tf.split(x, self.uptype.multivector_length, axis=0)
     return output[0]
 
   def concat(self, x):
-    x = tf.split(x, self.multivector_length, axis=0)
+    x = tf.split(x, self.uptype.multivector_length, axis=0)
     return tf.concat(x, self.axis)
 
   def max_pool(self, x):
-    x = tf.split(x, self.multivector_length, axis=0)
+    x = tf.split(x, self.uptype.multivector_length, axis=0)
     x = tf.stack(x, axis=-1)
     return tf.math.reduce_max(x, axis=-1)
 
   def avg_pool(self, x):
-    x = tf.split(x, self.multivector_length, axis=0)
+    x = tf.split(x, self.uptype.multivector_length, axis=0)
     x = tf.stack(x, axis=-1)
     return tf.math.reduce_mean(x, axis=-1)
