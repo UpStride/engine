@@ -38,12 +38,12 @@ class Conv2DParcollet(tf.keras.layers.Conv2D):
         if output_rank is not None and output_rank > 2 + self.rank:
 
           def _apply_fn(o):
-            return nn.bias_add(o, bias, data_format=self._tf_data_format)
+            return tf.nn.bias_add(o, bias, data_format=self._tf_data_format)
 
           outputs = nn_ops.squeeze_batch_dims(
               outputs, _apply_fn, inner_rank=self.rank + 1)
         else:
-          outputs = nn.bias_add(
+          outputs = tf.nn.bias_add(
               outputs, bias, data_format=self._tf_data_format)
 
     outputs = prepare_output(self.uptype, outputs, groups=self.groups)

@@ -17,8 +17,7 @@ from tensorflow.keras.layers import (Activation, Add, AveragePooling2D,
 
 from .initializers import InitializersFactory
 import dataclasses
-import functools
-import numpy as np
+
 
 @dataclasses.dataclass(unsafe_hash=True)
 class UpstrideDatatype:
@@ -234,7 +233,7 @@ class GenericLinear(UpstrideLayer):
   def __init__(self, layer, upstride_type, blade_indexes, geometrical_def, *args, **kwargs):
     """
     Args:
-      layer: a subclass of tf.keras.layers.Layer 
+      layer: a subclass of tf.keras.layers.Layer
     """
     super().__init__(upstride_type, blade_indexes, geometrical_def)
     self.multivector_length = len(self.blade_indexes)
@@ -529,7 +528,7 @@ class TF2Upstride(UpstrideLayer):
     self.model = self.strategies[self.strategy_name](self.blade_indexes, **kwargs)
 
   def add_strategies(self):
-    """ The purpose of this function is to be overritten in a sub class to add elements in self.strategies 
+    """ The purpose of this function is to be overritten in a sub class to add elements in self.strategies
     """
     pass
 
@@ -589,7 +588,7 @@ class TF2UpstrideBasic(tf.keras.layers.Layer):
 
 
 class Upstride2TF(UpstrideLayer):
-  """convert multivector back to real values. 
+  """convert multivector back to real values.
   """
 
   def __init__(self, upstride_type, blade_indexes, geometrical_def, strategy='', **kwargs):
