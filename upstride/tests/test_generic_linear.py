@@ -124,7 +124,7 @@ def convolution_test(channel_convention, component_shape, uptype, layer_test_cls
     if channel_convention == 'channels_first':
         component_shape = tuple(component_shape[i] for i in nhwc_to_nchw_perm)
 
-    layers_test(component_shape, uptype, uptype, layer_test_cls, layer_ref_cls, **kwargs)
+    layers_test(component_shape, uptype, layer_test_cls, layer_ref_cls, **kwargs)
 
 
 ### Test configurations
