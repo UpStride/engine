@@ -151,11 +151,11 @@ def prepare_hyper_weight(uptype, weight, **kwargs):
     for i in range(uptype.multivector_length):
       hyper_weight_row = []
       for j in range(uptype.multivector_length):
-        k, sign_j_i = unit_multiplier(uptype, i, j)
+        k, sign_i_j = unit_multiplier(uptype, i, j)
         _, sign_j_j = unit_multiplier(uptype, j, j)
         if sign_j_j == 0:
           raise ZeroDivisionError()
-        hyper_weight_row.append(weight[k] * sign_j_i * sign_j_j)  # Given that sign_j_j is 1, 0 or -1,
+        hyper_weight_row.append(weight[k] * sign_i_j * sign_j_j)  # Given that sign_j_j is 1, 0 or -1,
         # a multiplication sign was preferred over the division. When it's 0, an error is raised.
       hyper_weight_list.append(tf.concat(hyper_weight_row, axis=2))
     hyper_weight = tf.concat(hyper_weight_list, axis=3)
@@ -163,11 +163,12 @@ def prepare_hyper_weight(uptype, weight, **kwargs):
   if kwargs.get('groups', 1) > 1:
     shape = hyper_weight.shape
     updim = uptype.multivector_length
-    shape = [*shape[:-2], updim, shape[-2]//updim, updim, shape[-1]//updim]
-    rest = list(range(0, tf.rank(hyper_weight) - 2))
-    hyper_weight = tf.reshape(hyper_weight, shape) # shape (..., N, I, N, O)
-    rank = tf.rank(hyper_weight)
-    hyper_weight = tf.transpose(hyper_weight, perm=[*rest])
+    intermediate_shape = [*shape[:-2], updim, shape[-2]//updim, updim, shape[-1]//updim]
+    rank = tf.rank(hyper_weight) - 2
+    rest = list(range(0, rank))
+    hyper_weight = tf.reshape(hyper_weight, intermediate_shape) # shape (..., N, I, N, O)
+    hyper_weight = tf.transpose(hyper_weight, perm=[*rest, rank + 1, rank, rank + 3, rank + 2]) # shape (..., I, N, O, N)
+    hyper_weight = tf.reshape(hyper_weight, shape) # shape (..., I*N, O*N)
   return hyper_weight
 
 class BiasLayer(tf.keras.layers.Layer):
@@ -262,11 +263,11 @@ class GenericLinear(UpstrideLayer):
   def geometric_multiplication(self, linear_layer_output, inverse=False, bias=None):
     """
     Args:
-      linear_layer_output: Tensor of shape (N * BS, N * C, ...) with BS the batch size and C the output size if this layer was a real one
+      linear_layer_output: Tensor of shape (N * BS, O * N, ...) with BS the batch size and O the output size if this layer was a real one
       inverse: if True then the engine compute y = W.x and not x.W
       bias: the bias operation, if needed
 
-    Returns: A tensor of shape (N * BS, C, ...)
+    Returns: A tensor of shape (N * BS, O, ...)
 
     """
     # first, let's split the output of the layer
@@ -280,6 +281,16 @@ class GenericLinear(UpstrideLayer):
 
     cross_product_matrix = []
     for i in range(self.uptype.multivector_length):
+      # dev note: if it is a grouped convolution, then we need to reshape each layer_output from
+      # (BS, O*N, ...) to (BS, N*O, ...) so that the split that follows acts on the upstride datatype
+      if getattr(self.layer, 'groups', 1) > 1:
+        shape = layer_outputs[i].shape
+        axis = self.axis
+        intermediate_shape = [*shape[:axis], -1, self.uptype.multivector_length, *shape[axis + 1:]]
+        layer_outputs[i] = tf.reshape(layer_outputs[i], intermediate_shape) # shape (BS, O, N, ...) if channels_first else (BS, ..., O, N)
+        permutation = [*range(0, axis), axis + 1, axis, *range(axis + 2, tf.rank(layer_outputs[i]))]
+        layer_outputs[i] = tf.transpose(layer_outputs[i], perm=permutation)
+        layer_outputs[i] = tf.reshape(layer_outputs[i], shape) # shape (BS, N*O, ...) is channels_first else (BS, ..., N*O)
       cross_product_matrix.append(tf.split(layer_outputs[i], self.uptype.multivector_length, axis=self.axis))
 
     # cross_product_matrix is a matrix such as

@@ -25,7 +25,7 @@ class Conv2DParcollet(tf.keras.layers.Conv2D):
       # to be consistent with the shape in the variable outputs. For details, go to the definition
       # of prepare_inputs()
       if self.groups > 1:
-        bias = tf.transpose(bias, perm=[1, 0]) # shape [O, N]
+        bias = tf.transpose(self.bias, perm=[1, 0]) # shape [O, N]
         bias = tf.reshape(bias, [-1]) # shape [O*N]
       else:
         bias = tf.reshape(self.bias, -1) # shape [N*O]

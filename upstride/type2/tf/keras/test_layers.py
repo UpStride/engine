@@ -108,59 +108,43 @@ def random_integer_tensor(shape, dtype=tf.float32):
   return tf.cast(tensor, dtype)
 
 class TestConv2DAlgorithms(unittest.TestCase):
-  # def test_conv2d_generalized_and_type2(self):
-  #   inputs = random_integer_tensor(shape=(4*2, 5, 3, 3))
-  #   # Define and build operations (by calling them a first time)
-  #   use_bias = False
-  #   ref_op = Conv2D(2, 2, use_bias=use_bias)
-  #   test_op = Conv2DType2(2, 2, use_bias=use_bias)
-  #   ref_op(inputs)
-  #   test_op(inputs)
-
-  #   # Override weights, taking into account that ref_weight is of shape (H, W, I, 4*O), whereas
-  #   # test_weight is of shape (4, H, W, I, O)
-  #   ref_weight = random_integer_tensor(shape=ref_op.get_weights()[0].shape) # shape (H, W, I, N*O)
-  #   if use_bias:
-  #     ref_bias = random_integer_tensor(shape=ref_op.get_weights()[1].shape)
-  #     ref_op.set_weights([ref_weight, ref_bias])
-  #   else:
-  #     ref_op.set_weights([ref_weight])
-
-  #   test_weight_and_bias = tf.split(ref_op.get_weights()[0], 4, axis=-1)
-  #   if use_bias:
-  #     biases = tf.split(ref_op.get_weights()[1], 4, axis=ref_op.bias.axis)
-  #     reshaped_biases = [tf.reshape(bias, -1) for bias in biases]
-  #     test_weight_and_bias += reshaped_biases
-  #   test_op.set_weights(test_weight_and_bias)
-
-  #   # Compute outputs
-  #   ref_output = ref_op(inputs)
-  #   test_output = test_op(inputs)
-
-  #   # Compare outputs
-  #   diff_sum = tf.reduce_max(ref_output - test_output)
-  #   self.assertEqual(ref_output.shape, test_output.shape)
-  #   self.assertEqual(diff_sum, 0)
-
-
   def run_conv2d_generalized_and_parcollet(self, groups=1):
     inputs = random_integer_tensor(shape=(4*2, 6, 3, 3))
     # Define and build operations (by calling them a first time)
-    ref_op = Conv2D(4, 2, use_bias=True, groups=groups)
-    test_op = Conv2DParcollet(4, 2, use_bias=True, groups=groups)
+    use_bias = True
+    ref_op = Conv2D(4, 2, use_bias=use_bias, groups=groups)
+    test_op = Conv2DParcollet(4, 2, use_bias=use_bias, groups=groups)
     ref_op(inputs)
     test_op(inputs)
 
-    # Override weights, taking into account that ref_weight is of shape (H, W, I, 4*O), whereas
-    # test_weight is of shape (4, H, W, I, O)
-    ref_weight = random_integer_tensor(shape=ref_op.get_weights()[0].shape) # shape (H, W, I, N*O)
-    ref_bias = random_integer_tensor(shape=ref_op.get_weights()[1].shape)
-    ref_op.set_weights([ref_weight, ref_bias])
-    test_weight = tf.reshape(ref_weight, (*ref_weight.shape[:-1], 4, -1)) # shape (H, W, I, N, O)
-    test_weight = tf.transpose(test_weight, perm=[3, 0, 1, 2, 4]) # shape (N, H, W, I, O)
-    test_bias_shape = [test_weight.shape[0], ref_bias.shape[ref_op.bias.axis]//test_weight.shape[0]]
-    test_bias = tf.reshape(ref_bias, test_bias_shape) # shape (N, O)
-    test_op.set_weights([test_weight, test_bias])
+    # Override weights, taking into account that ref_weight is of shape (H, W, I, O*N), whereas
+    # test_weight is of shape (N, H, W, I, O)
+    ref_weight = random_integer_tensor(shape=ref_op.get_weights()[0].shape) # shape (H, W, I, O*N)
+    if use_bias:
+      ref_bias = random_integer_tensor(shape=ref_op.get_weights()[1].shape)
+      ref_op.set_weights([ref_weight, ref_bias])
+    else:
+      ref_op.set_weights([ref_weight])
+
+    if groups > 1: # Then ref_weight.shape necessarily is (H, W, I, O*N). Otherwise, it can be seen
+    # as (H, W, I, N*O)
+      test_weight = tf.reshape(ref_weight, (*ref_weight.shape[:-1], -1, 4)) # shape (H, W, I, O, N)
+      test_weight = tf.transpose(test_weight, perm=[4, 0, 1, 2, 3]) # shape (N, H, W, I, O)
+    else:
+      test_weight = tf.reshape(ref_weight, (*ref_weight.shape[:-1], 4, -1)) # shape (H, W, I, N, O)
+      test_weight = tf.transpose(test_weight, perm=[3, 0, 1, 2, 4]) # shape (N, H, W, I, O)
+
+    if use_bias:
+      if groups > 1: # ref_bias shape (O*N,)
+        test_bias_shape = [ref_bias.shape[ref_op.bias.axis]//test_weight.shape[0], test_weight.shape[0]]
+        test_bias = tf.reshape(ref_bias, test_bias_shape) # shape (O, N)
+        test_bias = tf.transpose(test_bias) # shape (N, O)
+      else: # ref_bias shape (N*O,)
+        test_bias_shape = [test_weight.shape[0], ref_bias.shape[ref_op.bias.axis]//test_weight.shape[0]]
+        test_bias = tf.reshape(ref_bias, test_bias_shape) # shape (N, O)
+      test_op.set_weights([test_weight, test_bias])
+    else:
+      test_op.set_weights([test_weight])
 
     # Compute outputs
     ref_output = ref_op(inputs)
@@ -173,4 +157,4 @@ class TestConv2DAlgorithms(unittest.TestCase):
 
   def test_conv2d_generalized_and_parcollet(self):
     self.run_conv2d_generalized_and_parcollet(groups=1)
-  #   self.run_conv2d_generalized_and_parcollet(groups=2)
+    self.run_conv2d_generalized_and_parcollet(groups=2)
