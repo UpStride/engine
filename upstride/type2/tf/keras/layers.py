@@ -6,7 +6,7 @@ from ....convolutional import Conv2DParcollet as GenericConv2DParcollet
 
 from ....generic_layers import UPTYPE2
 UPSTRIDE_TYPE = 2
-BLADES_INDEXES = ['', '12', '13', '23']
+BLADES_INDEXES = ['', '12', '23', '13']
 GEOMETRICAL_DEF = (3, 0, 0)
 
 # If you wish to overwrite some layers, please implements them here

@@ -133,16 +133,11 @@ def prepare_output(uptype, output, **kwargs):
   return output
 
 def prepare_hyper_weight(uptype, weight, **kwargs):
-  if kwargs.get('groups', 1) > 1: # TODO
-    raise NotImplementedError("Grouped convolution is currently not supported with Parcollet's \
-                               implementation. Grouped convolutions require the kernel to be of \
-                               form (..., I*N, O*N), instead of (..., N*I, N*O), so that the \
-                               splitting occurs without putting apart the components of each multivector.")
   if uptype == UPTYPE2:
     kernels_4_r = tf.concat([weight[0], -weight[1], -weight[2], -weight[3]], axis=2)
-    kernels_4_i = tf.concat([weight[1],  weight[0], -weight[3],  weight[2]], axis=2)
-    kernels_4_j = tf.concat([weight[2],  weight[3],  weight[0], -weight[1]], axis=2)
-    kernels_4_k = tf.concat([weight[3], -weight[2],  weight[1],  weight[0]], axis=2)
+    kernels_4_i = tf.concat([weight[1],  weight[0],  weight[3], -weight[2]], axis=2)
+    kernels_4_j = tf.concat([weight[2], -weight[3],  weight[0],  weight[1]], axis=2)
+    kernels_4_k = tf.concat([weight[3],  weight[2], -weight[1],  weight[0]], axis=2)
     hyper_weight = tf.concat([kernels_4_r, kernels_4_i, kernels_4_j, kernels_4_k], axis=3)
   elif uptype == UPTYPE1:
     kernels_2_r = tf.concat([weight[0], -weight[1]], axis=2)
@@ -156,7 +151,7 @@ def prepare_hyper_weight(uptype, weight, **kwargs):
     for i in range(uptype.dimension):
       hyper_weight_row = []
       for j in range(uptype.dimension):
-        k, sign_j_i = unit_multiplier(uptype, j, i)
+        k, sign_j_i = unit_multiplier(uptype, i, j)
         _, sign_j_j = unit_multiplier(uptype, j, j)
         if sign_j_j == 0:
           raise ZeroDivisionError()
@@ -164,6 +159,15 @@ def prepare_hyper_weight(uptype, weight, **kwargs):
         # a multiplication sign was preferred over the division. When it's 0, an error is raised.
       hyper_weight_list.append(tf.concat(hyper_weight_row, axis=2))
     hyper_weight = tf.concat(hyper_weight_list, axis=3)
+  # hyper_weight.shape (..., N*I, N*O)
+  if kwargs.get('groups', 1) > 1:
+    shape = hyper_weight.shape
+    updim = uptype.dimension
+    shape = [*shape[:-2], updim, shape[-2]//updim, updim, shape[-1]//updim]
+    rest = list(range(0, tf.rank(hyper_weight) - 2))
+    hyper_weight = tf.reshape(hyper_weight, shape) # shape (..., N, I, N, O)
+    rank = tf.rank(hyper_weight)
+    hyper_weight = tf.transpose(hyper_weight, perm=[*rest])
   return hyper_weight
 
 class BiasLayer(tf.keras.layers.Layer):

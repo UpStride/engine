@@ -143,11 +143,11 @@ class TestConv2DAlgorithms(unittest.TestCase):
   #   self.assertEqual(diff_sum, 0)
 
 
-  def test_conv2d_generalized_and_parcollet(self):
-    inputs = random_integer_tensor(shape=(4*2, 2, 3, 3))
+  def run_conv2d_generalized_and_parcollet(self, groups=1):
+    inputs = random_integer_tensor(shape=(4*2, 6, 3, 3))
     # Define and build operations (by calling them a first time)
-    ref_op = Conv2D(2, 2, use_bias=True)
-    test_op = Conv2DParcollet(2, 2, use_bias=True)
+    ref_op = Conv2D(4, 2, use_bias=True, groups=groups)
+    test_op = Conv2DParcollet(4, 2, use_bias=True, groups=groups)
     ref_op(inputs)
     test_op(inputs)
 
@@ -170,3 +170,7 @@ class TestConv2DAlgorithms(unittest.TestCase):
     diff_sum = tf.reduce_max(ref_output - test_output)
     self.assertEqual(ref_output.shape, test_output.shape)
     self.assertEqual(diff_sum, 0)
+
+  def test_conv2d_generalized_and_parcollet(self):
+    self.run_conv2d_generalized_and_parcollet(groups=1)
+  #   self.run_conv2d_generalized_and_parcollet(groups=2)
