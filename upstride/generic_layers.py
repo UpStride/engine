@@ -283,7 +283,7 @@ class GenericLinear(UpstrideLayer):
     for i in range(self.uptype.multivector_length):
       # dev note: if it is a grouped convolution, then we need to reshape each layer_output from
       # (BS, O*N, ...) to (BS, N*O, ...) so that the split that follows acts on the upstride datatype
-      if getattr(self.layer, 'groups', 1) > 1:
+      if getattr(self.layer, 'groups', 1) > 1 or getattr(self.layer, 'depth_multiplier', 0) > 0:
         shape = layer_outputs[i].shape
         axis = self.axis if self.axis != -1 else tf.rank(layer_outputs[0]) - 1
         intermediate_shape = [*shape[:axis], -1, self.uptype.multivector_length, *shape[axis + 1:]]

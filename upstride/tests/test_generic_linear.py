@@ -64,7 +64,7 @@ def generic_linear_test(layer_test, layer_ref, uptype, component_shape):
     w = layer_test.get_weights()[0]
     bias = layer_test.get_weights()[1]
     w_components = w
-    if getattr(layer_test.layer, 'groups', 1) > 1 or 'DepthwiseConv2D' in str(layer_test.layer): # w shape is (H, W, I, O*N)
+    if getattr(layer_test.layer, 'groups', 1) > 1 or getattr(layer_test.layer, 'depth_multiplier', 0) > 0: # w shape is (H, W, I, O*N)
         w_components = tf.reshape(w, [*w.shape[:-1], -1, uptypes[uptype].multivector_length]) # shape (H, W, I, O, N)
         rank = tf.rank(w_components) - 2
         w_components = tf.transpose(w_components, perm=[*range(rank), rank + 1, rank]) # shape (H, W, I, N, O)
