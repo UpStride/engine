@@ -64,13 +64,11 @@ def generic_linear_test(layer_test, layer_ref, uptype, component_shape):
     w = layer_test.get_weights()[0]
     bias = layer_test.get_weights()[1]
     w_components = w
-    if getattr(layer_test.layer, 'groups', 1) > 1 or getattr(layer_test.layer, 'depth_multiplier', 0) > 0: # w shape is (H, W, I, O*N)
-        w_components = tf.reshape(w, [*w.shape[:-1], -1, uptypes[uptype].multivector_length]) # shape (H, W, I, O, N)
-        rank = tf.rank(w_components) - 2
-        w_components = tf.transpose(w_components, perm=[*range(rank), rank + 1, rank]) # shape (H, W, I, N, O)
-        w_components = tf.reshape(w_components, w.shape) # shape (H, W, I, N*O)
-    # else w shape is (H, W, I, N*O)
-    w_components = np.split(w_components, hyper_dimension, axis=-1)
+    if getattr(layer_test.layer, 'groups', 1) > 1 or getattr(layer_test.layer, 'depth_multiplier', 0) > 0:
+        multivector_len = uptypes[uptype].multivector_length
+        w_components = [w[..., i::multivector_len] for i in range(multivector_len)] # w shape is (H, W, I, O*N)
+    else:
+        w_components = np.split(w, hyper_dimension, axis=-1) # w shape is (H, W, I, N*O)
 
     layer_ref(components[0])
     zero_bias = np.zeros_like(layer_ref.get_weights()[1])

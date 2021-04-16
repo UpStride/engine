@@ -270,8 +270,10 @@ class GenericLinear(UpstrideLayer):
     Returns: A tensor of shape (N * BS, O, ...)
 
     """
+    multivector_len = self.uptype.multivector_length
+
     # first, let's split the output of the layer
-    layer_outputs = tf.split(linear_layer_output, self.uptype.multivector_length, axis=0)
+    layer_outputs = tf.split(linear_layer_output, multivector_len, axis=0)
     # here layer_outputs is a list of output of multiplication of one blade per all kernel blade
 
     # Now we apply the bias. This can seem like a weird place but by applying it here, between the 2 split, we can do in
@@ -280,25 +282,23 @@ class GenericLinear(UpstrideLayer):
       layer_outputs[0] = bias(layer_outputs[0])  # add the bias on one of these output
 
     cross_product_matrix = []
-    for i in range(self.uptype.multivector_length):
+    for layer_out in layer_outputs:
       # dev note: if it is a grouped convolution, then we need to reshape each layer_output from
       # (BS, O*N, ...) to (BS, N*O, ...) so that the split that follows acts on the upstride datatype
       if getattr(self.layer, 'groups', 1) > 1 or getattr(self.layer, 'depth_multiplier', 0) > 0:
-        shape = layer_outputs[i].shape
-        axis = self.axis if self.axis != -1 else tf.rank(layer_outputs[0]) - 1
-        intermediate_shape = [*shape[:axis], -1, self.uptype.multivector_length, *shape[axis + 1:]]
-        layer_outputs[i] = tf.reshape(layer_outputs[i], intermediate_shape) # shape (BS, O, N, ...) if channels_first else (BS, ..., O, N)
-        permutation = [*range(0, axis), axis + 1, axis, *range(axis + 2, tf.rank(layer_outputs[i]))]
-        layer_outputs[i] = tf.transpose(layer_outputs[i], perm=permutation)
-        layer_outputs[i] = tf.reshape(layer_outputs[i], shape) # shape (BS, N*O, ...) is channels_first else (BS, ..., N*O)
-      cross_product_matrix.append(tf.split(layer_outputs[i], self.uptype.multivector_length, axis=self.axis))
+        if self.axis == -1:
+          layer_out = tf.concat([layer_out[..., i::multivector_len] for i in range(multivector_len)], axis=-1)
+        elif self.axis == 1:
+          layer_out = tf.concat([layer_out[:, i::multivector_len, ...] for i in range(multivector_len)], axis=1)
+
+      cross_product_matrix.append(tf.split(layer_out, multivector_len, axis=self.axis))
 
     # cross_product_matrix is a matrix such as
     # cross_product_matrix[i][j] is the result of the multiplication of the
     # i input by the j kernel
-    output = [None] * self.uptype.multivector_length
-    for i in range(self.uptype.multivector_length):
-      for j in range(self.uptype.multivector_length):
+    output = [None] * multivector_len
+    for i in range(multivector_len):
+      for j in range(multivector_len):
         if not inverse:
           k, s = unit_multiplier(self.uptype, i, j)
         else:
