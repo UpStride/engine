@@ -63,7 +63,14 @@ def generic_linear_test(layer_test, layer_ref, uptype, component_shape):
 
     w = layer_test.get_weights()[0]
     bias = layer_test.get_weights()[1]
-    w_components = np.split(w, hyper_dimension, axis=-1)
+    w_components = w
+    if getattr(layer_test.layer, 'groups', 1) > 1 or 'DepthwiseConv2D' in str(layer_test.layer): # w shape is (H, W, I, O*N)
+        w_components = tf.reshape(w, [*w.shape[:-1], -1, uptypes[uptype].multivector_length]) # shape (H, W, I, O, N)
+        rank = tf.rank(w_components) - 2
+        w_components = tf.transpose(w_components, perm=[*range(rank), rank + 1, rank]) # shape (H, W, I, N, O)
+        w_components = tf.reshape(w_components, w.shape) # shape (H, W, I, N*O)
+    # else w shape is (H, W, I, N*O)
+    w_components = np.split(w_components, hyper_dimension, axis=-1)
 
     layer_ref(components[0])
     zero_bias = np.zeros_like(layer_ref.get_weights()[1])
@@ -570,22 +577,6 @@ class TestDepthwiseConv2D:
             'kernel_size' : 3,
             'padding' : padding,
             'dilation_rate' : dilation_rate,
-        }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
-
-
-    @pytest.mark.skipif(not gpu_visible(), reason="grouped conv not supported on CPU")
-    @pytest.mark.skipif(tf.version.VERSION < '2.3.0', reason="tensorflow version needs to be at least 2.3.0")
-    @pytest.mark.parametrize('component_shape', [
-        (7, 5, 5, 8),
-        (9, 10, 10, 4),
-        (16, 3, 3, 20),
-    ])
-    @pytest.mark.parametrize('groups', [2, 4])
-    def test_grouped(self, component_shape, groups, channel_convention, uptype):
-        kwargs = {
-            'kernel_size' : 3,
-            'groups' : groups,
         }
         convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
 

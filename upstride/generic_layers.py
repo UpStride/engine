@@ -16,10 +16,10 @@ from tensorflow.keras.layers import (Activation, Add, AveragePooling2D,
 
 
 from .initializers import InitializersFactory
-import dataclasses
+from dataclasses import dataclass
 
 
-@dataclasses.dataclass(unsafe_hash=True)
+@dataclass
 class UpstrideDatatype:
   uptype_id: int
   geometrical_def: tuple
@@ -285,7 +285,7 @@ class GenericLinear(UpstrideLayer):
       # (BS, O*N, ...) to (BS, N*O, ...) so that the split that follows acts on the upstride datatype
       if getattr(self.layer, 'groups', 1) > 1:
         shape = layer_outputs[i].shape
-        axis = self.axis
+        axis = self.axis if self.axis != -1 else tf.rank(layer_outputs[0]) - 1
         intermediate_shape = [*shape[:axis], -1, self.uptype.multivector_length, *shape[axis + 1:]]
         layer_outputs[i] = tf.reshape(layer_outputs[i], intermediate_shape) # shape (BS, O, N, ...) if channels_first else (BS, ..., O, N)
         permutation = [*range(0, axis), axis + 1, axis, *range(axis + 2, tf.rank(layer_outputs[i]))]
