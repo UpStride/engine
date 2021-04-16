@@ -330,10 +330,10 @@ class GenericLinear(UpstrideLayer):
     (0, 1) -> (1, 1) because \beta_0 * \beta_1 = 1 * \beta_1
     (1, 1) -> (0, -1) because \beta_1 * \beta_1 = i**2 = -1 = -1 * \beta_0
     """
-    index1 = self.blade_indexes[i]
-    index2 = self.blade_indexes[j]
+    index1 = self.uptype.blade_indexes[i]
+    index2 = self.uptype.blade_indexes[j]
     s, index = self._ga_multiply_get_index(index1, index2)
-    return self.blade_indexes.index(index), s
+    return self.uptype.blade_indexes.index(index), s
 
   def _ga_multiply_get_index(self, index_1: str, index_2: str) -> Tuple[int, str]:
     """given \beta_{index_1}, \beta_{index_2} return (s, index) such as \beta_{index_1} * \beta_{index_2} = s * \beta_{index}
@@ -375,9 +375,9 @@ class GenericLinear(UpstrideLayer):
     # - the square of the B next elements is -1
     # - the square of the C last elements is 0
     # dev note : the + 1 is because the first index in the vector notation of a GA is... 1
-    if index < self.geometrical_def[0] + 1:
+    if index < self.uptype.geometrical_def[0] + 1:
       return 1
-    if index < self.geometrical_def[0] + self.geometrical_def[1] + 1:
+    if index < self.uptype.geometrical_def[0] + self.uptype.geometrical_def[1] + 1:
       return -1
     return 0
 
@@ -479,7 +479,7 @@ class Dropout(tf.keras.layers.Dropout):
   def __init__(self, uptype, rate, noise_shape=None, seed=None, synchronized=False, **kwargs):
     super().__init__(rate, noise_shape, seed, **kwargs)
     self.synchronized = synchronized
-    self.uptype.multivector_length = len(blade_indexes)
+    self.uptype = uptype
 
   def _get_noise_shape(self, inputs):
     # see https://github.com/tensorflow/tensorflow/blob/v2.4.1/tensorflow/python/keras/layers/core.py#L144-L244

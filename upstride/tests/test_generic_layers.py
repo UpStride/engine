@@ -1,6 +1,6 @@
 import unittest
 import tensorflow as tf
-from upstride.generic_layers import GenericLinear
+from upstride.generic_layers import GenericLinear, UPTYPE1, UPTYPE3
 import numpy as np
 from upstride import generic_layers
 from upstride.type1.tf.keras import layers as layers_t1
@@ -9,13 +9,13 @@ from upstride.type1.tf.keras import layers as layers_t1
 class UselessLayerType3(GenericLinear):
   def __init__(self):
     args = [10]
-    super().__init__(tf.keras.layers.Dense, 3, ["", "1", "2", "3", "12", "13", "23", "123"], (3, 0, 0), *args)
+    super().__init__(tf.keras.layers.Dense, UPTYPE3, *args)
 
 
 class UselessLayerType1(GenericLinear):
   def __init__(self):
     args = [10]
-    super().__init__(tf.keras.layers.Dense, 2, ["", "12"], (2, 0, 0), *args)
+    super().__init__(tf.keras.layers.Dense, UPTYPE1, *args)
 
 
 class TestGAMultiplication(unittest.TestCase):

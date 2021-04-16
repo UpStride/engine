@@ -3,6 +3,7 @@ import tensorflow as tf
 import numpy as np
 from upstride import generic_layers
 from collections import namedtuple
+from upstride.generic_layers import UPTYPE0, UPTYPE1, UPTYPE2
 
 
 ### Tests infrastructure
@@ -10,9 +11,9 @@ from collections import namedtuple
 UpType = namedtuple('UpType', ['upstride_type', 'blade_indexes', 'geometrical_def'])
 
 uptypes = {
-    'up0' : UpType(0, [''], (0, 0, 0)),
-    'up1' : UpType(1, ['', '12'], (2, 0, 0)),
-    'up2' : UpType(2, ['', '12', '23', '13'], (3, 0, 0)),
+    'up0' : UPTYPE0, # UpType(0, [''], (0, 0, 0)),
+    'up1' : UPTYPE1, # UpType(1, ['', '12'], (2, 0, 0)),
+    'up2' : UPTYPE2, # UpType(2, ['', '12', '23', '13'], (3, 0, 0)),
 }
 
 algebra_maps = {
@@ -110,7 +111,7 @@ def assert_right_kernel_size(component_shape, raise_error=True, **kwargs):
 
 
 def layers_test(component_shape, uptype, layer_test_cls, layer_ref_cls, **kwargs):
-    layer_test = layer_test_cls(*uptypes[uptype], **kwargs)
+    layer_test = layer_test_cls(uptypes[uptype], **kwargs)
     layer_ref = layer_ref_cls(**kwargs)
     generic_linear_test(layer_test, layer_ref, uptype, component_shape)
 
