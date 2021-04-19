@@ -1,4 +1,4 @@
-"""users shouldn't import this package directly. instead import upstride.typeX.tf.keras.layers
+""" Users shouldn't import this package directly. instead import upstride.typeX.tf.keras.layers
 """
 import inspect
 from typing import List, Tuple
@@ -27,7 +27,12 @@ class UpstrideDatatype:
 
   @property
   def multivector_length(self) -> int:
-      return len(self.blade_indexes)
+    return len(self.blade_indexes)
+
+  @property
+  def __str__(self) -> str:
+    return f'uptype{self.uptype_id}'
+
 
 UPTYPE0 = UpstrideDatatype(0, (0, 0, 0), ('',))
 UPTYPE1 = UpstrideDatatype(1, (2, 0, 0), ('', '12'))
@@ -36,7 +41,7 @@ UPTYPE3 = UpstrideDatatype(3, (3, 0, 0), ('', '1', '2', '3', '12', '13', '23', '
 
 
 def unit_multiplier(uptype, i: int, j: int) -> Tuple[int, int]:
-  """given \beta_i and \beta_j, return (k,s) such as : \beta_i * \beta_j = s * \beta_k
+  """ Given \beta_i and \beta_j, return (k,s) such as : \beta_i * \beta_j = s * \beta_k
 
   with:
       \beta_0 = 1, \beta_1 = i if upstride_type == 1
@@ -50,11 +55,12 @@ def unit_multiplier(uptype, i: int, j: int) -> Tuple[int, int]:
   """
   index1 = uptype.blade_indexes[i]
   index2 = uptype.blade_indexes[j]
-  s, index = _ga_multiply_get_index(uptype, index1, index2)
+  s, index = ga_multiply_get_index(uptype, index1, index2)
   return uptype.blade_indexes.index(index), s
 
-def _ga_multiply_get_index(uptype, index_1: str, index_2: str) -> Tuple[int, str]:
-  """given \beta_{index_1}, \beta_{index_2} return (s, index) such as \beta_{index_1} * \beta_{index_2} = s * \beta_{index}
+
+def ga_multiply_get_index(uptype, index_1: str, index_2: str) -> Tuple[int, str]:
+  """ Given \beta_{index_1}, \beta_{index_2} return (s, index) such as \beta_{index_1} * \beta_{index_2} = s * \beta_{index}
   """
   l1 = [int(i) for i in index_1]
   l2 = [int(i) for i in index_2]
@@ -87,17 +93,23 @@ def _ga_multiply_get_index(uptype, index_1: str, index_2: str) -> Tuple[int, str
 
   return s, "".join([str(i) for i in out_l])
 
+
 def square_vector(uptype, index: int) -> int:
-  # geometrical_def is a triplet (A, B, C) defining a GA where:
-  # - the square of the A first elements is 1
-  # - the square of the B next elements is -1
-  # - the square of the C last elements is 0
-  # dev note : the + 1 is because the first index in the vector notation of a GA is... 1
-  if index < uptype.geometrical_def[0] + 1:
+  """
+  Geometrical_def is a triplet (A, B, C) defining a GA where:
+  - the square of the A first elements is 1
+  - the square of the B next elements is -1
+  - the square of the C last elements is 0
+  dev note : the + 1 is because the first index in the vector notation of a GA is... 1
+  """
+  if index < 1 or index > uptype.multivector_length:
+    raise ValueError(f'Index {index} outside range [1, {uptype.multivector_length}] allowed for type {uptype.__str__}')
+  if index <= uptype.geometrical_def[0]:
     return 1
-  if index < uptype.geometrical_def[0] + uptype.geometrical_def[1] + 1:
+  if index <= uptype.geometrical_def[0] + uptype.geometrical_def[1]:
     return -1
   return 0
+
 
 def prepare_inputs(uptype, inputs, **kwargs):
   # TODO consider implementing uptype.interlace so that inputs.shape is (BS*N, I, ...) instead of
@@ -120,6 +132,7 @@ def prepare_inputs(uptype, inputs, **kwargs):
     inputs = tf.reshape(inputs, [inputs.shape[0], -1, *inputs.shape[3:]]) # shape (BS, N*I, ...)
   return inputs
 
+
 def prepare_output(uptype, output, **kwargs):
   if kwargs.get('groups', 1) > 1: # output.shape (BS, O*N, ...)
     output = tf.reshape(output, [output.shape[0], -1, uptype.multivector_length, *output.shape[2:]]) # shape (BS, O, N, ...)
@@ -131,6 +144,7 @@ def prepare_output(uptype, output, **kwargs):
     output = tf.transpose(output, perm=[1, 0, *rest]) # shape (N, BS, O, ...)
   output = tf.reshape(output, [-1, *output.shape[2:]]) # shape (N*BS, O, ...)
   return output
+
 
 def prepare_hyper_weight(uptype, weight, **kwargs):
   if uptype == UPTYPE2:
@@ -171,8 +185,9 @@ def prepare_hyper_weight(uptype, weight, **kwargs):
     hyper_weight = tf.reshape(hyper_weight, shape) # shape (..., I*N, O*N)
   return hyper_weight
 
+
 class BiasLayer(tf.keras.layers.Layer):
-  """Keras layer that only adds a bias to the input. It implements the operation:
+  """ Keras layer that only adds a bias to the input. It implements the operation:
 
   output = input + bias
 
@@ -317,69 +332,6 @@ class GenericLinear(UpstrideLayer):
             output[k] -= cross_product_matrix[i][j]
     return tf.concat(output, axis=0)
 
-  def unit_multiplier(self, i: int, j: int) -> Tuple[int, int]:
-    """given \beta_i and \beta_j, return (k,s) such as : \beta_i * \beta_j = s * \beta_k
-
-    with:
-        \beta_0 = 1, \beta_1 = i if upstride_type == 1
-        \beta_0 = 1, \beta_1 = i, \beta_2 = j, \beta_3 = k if upstride_type == 2
-        s in {-1, 1}
-
-    for instance, upstride_type == 1,
-    (0, 0) -> (0, 1) because \beta_0 * \beta_0 = 1 * 1 = 1 * \beta_0
-    (0, 1) -> (1, 1) because \beta_0 * \beta_1 = 1 * \beta_1
-    (1, 1) -> (0, -1) because \beta_1 * \beta_1 = i**2 = -1 = -1 * \beta_0
-    """
-    index1 = self.uptype.blade_indexes[i]
-    index2 = self.uptype.blade_indexes[j]
-    s, index = self._ga_multiply_get_index(index1, index2)
-    return self.uptype.blade_indexes.index(index), s
-
-  def _ga_multiply_get_index(self, index_1: str, index_2: str) -> Tuple[int, str]:
-    """given \beta_{index_1}, \beta_{index_2} return (s, index) such as \beta_{index_1} * \beta_{index_2} = s * \beta_{index}
-    """
-    l1 = [int(i) for i in index_1]
-    l2 = [int(i) for i in index_2]
-    s = 1
-
-    # as l1 and l2 are already sorted, we can just merge them and count the number of permutation needed
-    i1, i2, length_l1 = 0, 0, len(l1)
-    out_l = []
-    while i1 < len(l1) and i2 < len(l2):
-      if l1[i1] == l2[i2]:
-        # then move the element of l2 near the element of l1 and remove them
-        if (length_l1 - 1) % 2 != 0:
-          s *= -1
-        # check the sign of the square
-        s *= self.square_vector(l1[i1])
-        length_l1 -= 1
-        i1 += 1
-        i2 += 1
-      elif l1[i1] > l2[i2]:
-        # then move the element of l2 before the element of l1
-        if length_l1 % 2 != 0:
-          s *= -1
-        out_l.append(l2[i2])
-        i2 += 1
-      elif l1[i1] < l2[i2]:
-        out_l.append(l1[i1])
-        length_l1 -= 1
-        i1 += 1
-    out_l += l1[i1:] + l2[i2:]
-
-    return s, "".join([str(i) for i in out_l])
-
-  def square_vector(self, index: int) -> int:
-    # geometrical_def is a triplet (A, B, C) defining a GA where:
-    # - the square of the A first elements is 1
-    # - the square of the B next elements is -1
-    # - the square of the C last elements is 0
-    # dev note : the + 1 is because the first index in the vector notation of a GA is... 1
-    if index < self.uptype.geometrical_def[0] + 1:
-      return 1
-    if index < self.uptype.geometrical_def[0] + self.uptype.geometrical_def[1] + 1:
-      return -1
-    return 0
 
   def convert_all_args_to_kwargs(self, function, args, kwargs):
     """ This function use the information in the signature of the function
@@ -409,7 +361,7 @@ class GenericLinear(UpstrideLayer):
     return kwargs, add_bias, bias_parameters
 
   def get_layers(self, layer: tf.keras.layers.Layer, upstride_type, **kwargs) -> Tuple[List[tf.keras.layers.Layer], bool, dict]:
-    """instantiate layer with the correct initializer
+    """ Instantiate layer with the correct initializer
     """
 
     init_factory = InitializersFactory()
@@ -549,17 +501,16 @@ class TF2Upstride(UpstrideLayer):
 
 
 class TF2UpstrideLearned(tf.keras.layers.Layer):
+  """ Learning module taken from this paper (https://arxiv.org/pdf/1712.04604.pdf)
+  BN --> ReLU --> Conv --> BN --> ReLU --> Conv
+
+  Args:
+    x (tensor): Input to the network.
+    channels (int): number of filters
+
+  Returns:
+    tensor: output of the network. Learned component of the multi-vector.
   """
-    Learning module taken from this paper (https://arxiv.org/pdf/1712.04604.pdf)
-    BN --> ReLU --> Conv --> BN --> ReLU --> Conv
-
-    Args:
-      x (tensor): Input to the network.
-      channels (int): number of filters
-
-    Returns:
-      tensor: output of the network. Learned component of the multi-vector.
-    """
 
   def __init__(self, blade_indexes, channels=3, kernel_size=3, use_bias=False, kernel_initializer='glorot_uniform', kernel_regularizer=None):
     super().__init__()
@@ -600,7 +551,7 @@ class TF2UpstrideBasic(tf.keras.layers.Layer):
 
 
 class Upstride2TF(UpstrideLayer):
-  """convert multivector back to real values.
+  """ Convert multivector back to real values.
   """
 
   def __init__(self, uptype, strategy='', **kwargs):

@@ -1,49 +1,94 @@
 import unittest
 import tensorflow as tf
-from upstride.generic_layers import GenericLinear, UPTYPE1, UPTYPE3
+from upstride.generic_layers import GenericLinear, ga_multiply_get_index, unit_multiplier, UPTYPE3
 import numpy as np
 from upstride import generic_layers
 from upstride.type1.tf.keras import layers as layers_t1
 
 
-class UselessLayerType3(GenericLinear):
-  def __init__(self):
-    args = [10]
-    super().__init__(tf.keras.layers.Dense, UPTYPE3, *args)
+def ga_multiply_get_index_by_insertion_sort(uptype, index_1, index_2):
+  """ Given \beta_{index_1}, \beta_{index_2} return (s, index) such as \beta_{index_1} * \beta_{index_2} = s * \beta_{index}
+  """
+  l = [int(i) for i in index_1] + [int(j) for j in index_2] + ['guard'] # adding 'guard' to the end of the list for easier pairs removal
+
+  n = len(l) - 1
+  inversions = 0
+  head = 1
+  # insertion sort with inversions count, invariant: l[:head] already sorted
+  while head < n:
+    i = head
+    while i > 0 and l[i-1] > l[i]:
+      l[i-1], l[i] = l[i], l[i-1]
+      inversions += 1
+      i -= 1
+    head += 1
+
+  out_l = []
+  s = 1
+  i = 0
+  # remove paired indexes
+  while i < n:
+    if l[i] != l[i+1]: # can check l[i+1] thanks to the 'guard' element
+      out_l.append(l[i])
+    else:
+      s *= square_vector(uptype, l[i])
+      i += 1
+    i += 1
+
+  return s * (-1 if inversions % 2 == 1 else 1), "".join([str(i) for i in out_l])
 
 
-class UselessLayerType1(GenericLinear):
-  def __init__(self):
-    args = [10]
-    super().__init__(tf.keras.layers.Dense, UPTYPE1, *args)
+def ga_multiply_get_index_by_sort(uptype, index_1, index_2):
+  """ Given \beta_{index_1}, \beta_{index_2} return (s, index) such as \beta_{index_1} * \beta_{index_2} = s * \beta_{index}
+  """
+  l = [int(i) for i in index_1] + [int(j) for j in index_2]
+  n = len(l)
+  inversions = 0
+  # count inversions
+  for i in range(n):
+    for j in range(i+1, n):
+      if l[i] > l[j]:
+        inversions += 1
+
+  l = ['x'] + sorted(l) + ['y'] # add guards at both ends for easier indexing
+  out_l = []
+  s = 1
+  # remove paired indexes
+  for i in range(1, n+1):
+    if l[i-1] == l[i]:
+      s *= square_vector(uptype, l[i])
+    elif l[i] == l[i+1]:
+      pass
+    else:
+      out_l.append(l[i])
+
+  return s * (-1 if inversions % 2 == 1 else 1), "".join([str(i) for i in out_l])
 
 
 class TestGAMultiplication(unittest.TestCase):
   def test_ga_multiply_get_index(self):
-    layer = UselessLayerType3()
-    s, index = layer._ga_multiply_get_index("123", "12")
+    s, index = ga_multiply_get_index(UPTYPE3, "123", "12")
     self.assertEqual(s, -1)
     self.assertEqual(index, "3")
-    s, index = layer._ga_multiply_get_index("13", "12")
+    s, index = ga_multiply_get_index(UPTYPE3, "13", "12")
     self.assertEqual(s, 1)
     self.assertEqual(index, "23")
-    s, index = layer._ga_multiply_get_index("3", "2")
+    s, index = ga_multiply_get_index(UPTYPE3, "3", "2")
     self.assertEqual(s, -1)
     self.assertEqual(index, "23")
-    s, index = layer._ga_multiply_get_index("32", "32")
+    s, index = ga_multiply_get_index(UPTYPE3, "32", "32")
     self.assertEqual(s, -1)
     self.assertEqual(index, "")
-    s, index = layer._ga_multiply_get_index("2", "2")
+    s, index = ga_multiply_get_index(UPTYPE3, "2", "2")
     self.assertEqual(s, 1)
     self.assertEqual(index, "")
 
   def test_unit_multiplier(self):
-    layer = UselessLayerType3()
     # order : (scalar, e1, e2, e3, e12, e13, e23, e123)
-    self.assertEqual(layer.unit_multiplier(0, 0), (0, 1))  # 1*1 = 1
-    self.assertEqual(layer.unit_multiplier(3, 3), (0, 1))  # e_3*e_3 = 1
-    self.assertEqual(layer.unit_multiplier(4, 5), (6, -1))  # e12 * e13 = -e23
-    self.assertEqual(layer.unit_multiplier(6, 7), (1, -1))  # e23 * e123 = -e1
+    self.assertEqual(unit_multiplier(UPTYPE3, 0, 0), (0, 1))  # 1*1 = 1
+    self.assertEqual(unit_multiplier(UPTYPE3, 3, 3), (0, 1))  # e_3*e_3 = 1
+    self.assertEqual(unit_multiplier(UPTYPE3, 4, 5), (6, -1))  # e12 * e13 = -e23
+    self.assertEqual(unit_multiplier(UPTYPE3, 6, 7), (1, -1))  # e23 * e123 = -e1
 
   def test_bias_undefined(self):
     tf.keras.backend.set_image_data_format('channels_first')
