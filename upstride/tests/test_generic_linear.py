@@ -8,30 +8,6 @@ from upstride.uptypes_utilities import UPTYPE0, UPTYPE1, UPTYPE2
 
 ### Tests infrastructure
 
-UpType = namedtuple('UpType', ['upstride_type', 'blade_indexes', 'geometrical_def'])
-
-uptypes = {
-    'up0' : UPTYPE0, # UpType(0, [''], (0, 0, 0)),
-    'up1' : UPTYPE1, # UpType(1, ['', '12'], (2, 0, 0)),
-    'up2' : UPTYPE2, # UpType(2, ['', '12', '23', '13'], (3, 0, 0)),
-}
-
-algebra_maps = {
-    'up0' : np.array([
-        [(0, 1)],
-    ]),
-    'up1' : np.array([
-        [(0, 1), (1, 1)],
-        [(1, 1), (0, -1)],
-    ]),
-    'up2' : np.array([
-        [(0, 1), (1, 1), (2, 1), (3, 1)],
-        [(1, 1), (0, -1), (3, -1), (2, 1)],
-        [(2, 1), (3, 1), (0, -1), (1, -1)],
-        [(3, 1), (2, -1), (1, 1), (0, -1)],
-    ]),
-}
-
 
 def gpu_visible():
   """ Returns True if TF sees GPU
@@ -48,98 +24,133 @@ def assert_small_float_difference(tensor1, tensor2, relative_error_threshold):
     assert tf.reduce_all(abs_diff < threshold)
 
 
-# assumes zero-filled / no bias
-def generic_linear_test(layer_test, layer_ref, uptype, component_shape):
-    algebra_map = algebra_maps[uptype]
-    hyper_dimension = len(algebra_map)
-
-    components = []
-    for _ in range(hyper_dimension):
-        component = np.random.rand(*component_shape).astype('f')
-        components.append(component)
-
-    inp = np.concatenate(components)
-    test_out = layer_test(inp)
-
-    w = layer_test.get_weights()[0]
-    bias = layer_test.get_weights()[1]
-    # w_components = None
-    # if getattr(layer_test.layer, 'groups', 1) > 1 or getattr(layer_test.layer, 'depth_multiplier', 0) > 0:
-    multivector_len = uptypes[uptype].multivector_length
-    w_components = [w[..., i::multivector_len] for i in range(multivector_len)]
-    # else:
-    # w_components = np.split(w, hyper_dimension, axis=-1)
-
-    layer_ref(components[0])
-    zero_bias = np.zeros_like(layer_ref.get_weights()[1])
-
-    ref_partial = [[] for _ in range(hyper_dimension)]
-    for i in range(hyper_dimension):
-        layer_ref.set_weights([w_components[i], zero_bias])
-        for j in range(hyper_dimension):
-            inter_res = layer_ref(components[j])
-            ref_partial[i].append(inter_res)
-
-    ref_outputs = [0 for _ in range(hyper_dimension)]
-    for i in range(hyper_dimension):
-        for j in range(hyper_dimension):
-            which, coeff = algebra_map[i][j]
-            ref_outputs[which] = ref_outputs[which] + ref_partial[i][j] * coeff
-
-    # print(bias.shape)
-    # print(layer_test.get_weights()[0].shape)
-
-    # for i in range(hyper_dimension):
-        # ref_outputs[i] = tf.nn.bias_add(ref_outputs[i], bias[i])
-
-    ref_out = np.concatenate(ref_outputs)
-
-    assert_small_float_difference(test_out, ref_out, 0.0001)
+def random_float_tensor(shape):
+    return tf.random.uniform(shape, dtype=tf.float32)
 
 
-def assert_right_kernel_size(component_shape, raise_error=True, **kwargs):
-    _, height, width, _ = component_shape
-    kernel_size = kwargs['kernel_size']
-    if type(kernel_size) == int:
-        if kernel_size > min(height, width):
-            if raise_error:
-                raise ValueError(f'Kernel size ({kernel_size}) too large for the image size ({height} x {width})')
-            return False
-    elif type(kernel_size) == tuple and len(kernel_size) == 2:
-        if kernel_size[0] > height or kernel_size[1] > width:
-            if raise_error:
-                raise ValueError(f'Kernel size ({kernel_size}) too large for the image size ({height} x {width})')
-            return False
-    else:
-        raise ValueError(f'Kernel size in incorrect format: {kernel_size}')
-    return True
+def random_integer_tensor(shape, dtype=tf.float32):
+    print(shape)
+    return tf.cast(tf.random.uniform(shape, -4, +4, dtype=tf.int32), dtype)
 
 
-def layers_test(component_shape, uptype, layer_test_cls, layer_ref_cls, **kwargs):
-    layer_test = layer_test_cls(uptypes[uptype], **kwargs)
-    layer_ref = layer_ref_cls(**kwargs)
-    generic_linear_test(layer_test, layer_ref, uptype, component_shape)
+class GenericTestBase:
 
+    uptypes = {
+        'up0' : UPTYPE0,
+        'up1' : UPTYPE1,
+        'up2' : UPTYPE2,
+    }
+    algebra_maps = {
+        'up0' : np.array([
+            [(0, 1)],
+        ]),
+        'up1' : np.array([
+            [(0, 1), (1, 1)],
+            [(1, 1), (0, -1)],
+        ]),
+        'up2' : np.array([
+            [(0, 1), (1, 1), (2, 1), (3, 1)],
+            [(1, 1), (0, -1), (3, -1), (2, 1)],
+            [(2, 1), (3, 1), (0, -1), (1, -1)],
+            [(3, 1), (2, -1), (1, 1), (0, -1)],
+        ]),
+    }
 
-def convolution_test(channel_convention, component_shape, uptype, layer_test_cls, layer_ref_cls, **kwargs):
-    if not assert_right_kernel_size(component_shape, **kwargs):
-        return
+    def setup(self, random_tensor=random_integer_tensor):
+        self.random_tensor = random_tensor
 
-    tf.keras.backend.set_image_data_format(channel_convention)
-    nhwc_to_nchw_perm = (0, 3, 1, 2)
-    if channel_convention == 'channels_first':
-        component_shape = tuple(component_shape[i] for i in nhwc_to_nchw_perm)
+    # assumes zero-filled / no bias
+    def generic_linear_test(self, layer_test, layer_ref, uptype, component_shape):
+        algebra_map = self.algebra_maps[uptype]
+        hyper_dimension = len(algebra_map)
 
-    layers_test(component_shape, uptype, layer_test_cls, layer_ref_cls, **kwargs)
+        components = []
+        for _ in range(hyper_dimension):
+            print(component_shape)
+            component = self.random_tensor(component_shape)
+            components.append(component)
+
+        inp = tf.concat(components, axis=0)
+        test_out = layer_test(inp)
+
+        w = layer_test.get_weights()[0]
+        bias = layer_test.get_weights()[1]
+        # w_components = None
+        # if getattr(layer_test.layer, 'groups', 1) > 1 or getattr(layer_test.layer, 'depth_multiplier', 0) > 0:
+        multivector_len = self.uptypes[uptype].multivector_length
+        w_components = [w[..., i::multivector_len] for i in range(multivector_len)]
+        # else:
+        # w_components = tf.split(w, hyper_dimension, axis=-1)
+
+        layer_ref(components[0])
+        zero_bias = tf.zeros_like(layer_ref.get_weights()[1])
+
+        ref_partial = [[] for _ in range(hyper_dimension)]
+        for i in range(hyper_dimension):
+            layer_ref.set_weights([w_components[i], zero_bias])
+            for j in range(hyper_dimension):
+                inter_res = layer_ref(components[j])
+                ref_partial[i].append(inter_res)
+
+        ref_outputs = [0 for _ in range(hyper_dimension)]
+        for i in range(hyper_dimension):
+            for j in range(hyper_dimension):
+                which, coeff = algebra_map[i][j]
+                ref_outputs[which] = ref_outputs[which] + ref_partial[i][j] * coeff
+
+        # print(bias.shape)
+        # print(layer_test.get_weights()[0].shape)
+
+        # for i in range(hyper_dimension):
+            # ref_outputs[i] = tf.nn.bias_add(ref_outputs[i], bias[i])
+
+        ref_out = tf.concat(ref_outputs, axis=0)
+        assert_small_float_difference(test_out, ref_out, 0.0001)
+
+    def assert_right_kernel_size(self, component_shape, raise_error=True, **kwargs):
+        _, height, width, _ = component_shape
+        kernel_size = kwargs['kernel_size']
+        if type(kernel_size) == int:
+            if kernel_size > min(height, width):
+                if raise_error:
+                    raise ValueError(f'Kernel size ({kernel_size}) too large for the image size ({height} x {width})')
+                return False
+        elif type(kernel_size) == tuple and len(kernel_size) == 2:
+            if kernel_size[0] > height or kernel_size[1] > width:
+                if raise_error:
+                    raise ValueError(f'Kernel size ({kernel_size}) too large for the image size ({height} x {width})')
+                return False
+        else:
+            raise ValueError(f'Kernel size in incorrect format: {kernel_size}')
+        return True
+
+    def layers_test(self, component_shape, uptype, layer_test_cls, layer_ref_cls, **kwargs):
+        layer_test = layer_test_cls(self.uptypes[uptype], **kwargs)
+        layer_ref = layer_ref_cls(**kwargs)
+        self.generic_linear_test(layer_test, layer_ref, uptype, component_shape)
+
+    def convolution_test(self, channel_convention, component_shape, uptype, layer_test_cls, layer_ref_cls, **kwargs):
+        if not self.assert_right_kernel_size(component_shape, **kwargs):
+            return
+
+        tf.keras.backend.set_image_data_format(channel_convention)
+        nhwc_to_nchw_perm = (0, 3, 1, 2)
+        if channel_convention == 'channels_first':
+            component_shape = tuple(component_shape[i] for i in nhwc_to_nchw_perm)
+
+        self.layers_test(component_shape, uptype, layer_test_cls, layer_ref_cls, **kwargs)
 
 
 ### Test configurations
 
 @pytest.mark.exhaustive
 @pytest.mark.parametrize('uptype', ['up0', 'up1', 'up2'])
-class TestGenericLinearExhaustive:
+class TestGenericLinearExhaustive(GenericTestBase):
 
     standard_params = [3, 5, 16]
+
+    def setup(self):
+        super().setup(random_float_tensor)
 
     @pytest.mark.parametrize('units', standard_params)
     @pytest.mark.parametrize('batch_size', standard_params)
@@ -149,7 +160,7 @@ class TestGenericLinearExhaustive:
             'units' : units,
         }
         component_shape = (batch_size, channels)
-        layers_test(component_shape, uptype, generic_layers.Dense, tf.keras.layers.Dense, **kwargs)
+        self.layers_test(component_shape, uptype, generic_layers.Dense, tf.keras.layers.Dense, **kwargs)
 
 
     @pytest.mark.parametrize('channel_convention', ['channels_first', 'channels_last'])
@@ -165,7 +176,7 @@ class TestGenericLinearExhaustive:
             'kernel_size' : kernel_size,
         }
         component_shape = (batch_size, height, width, channels)
-        convolution_test(channel_convention, component_shape, uptype, generic_layers.Conv2D, tf.keras.layers.Conv2D, **kwargs)
+        self.convolution_test(channel_convention, component_shape, uptype, generic_layers.Conv2D, tf.keras.layers.Conv2D, **kwargs)
 
 
     @pytest.mark.parametrize('channel_convention', ['channels_first', 'channels_last'])
@@ -179,15 +190,15 @@ class TestGenericLinearExhaustive:
             'kernel_size' : kernel_size,
         }
         component_shape = (batch_size, height, width, channels)
-        convolution_test(channel_convention, component_shape, uptype, generic_layers.DepthwiseConv2D, tf.keras.layers.DepthwiseConv2D, **kwargs)
+        self.convolution_test(channel_convention, component_shape, uptype, generic_layers.DepthwiseConv2D, tf.keras.layers.DepthwiseConv2D, **kwargs)
 
 
 @pytest.mark.parametrize('channel_convention', ['channels_first', 'channels_last'])
 @pytest.mark.parametrize('uptype', ['up0', 'up1', 'up2'])
-class TestConv2D:
+class TestConv2D(GenericTestBase):
 
-    layer_test_cls = generic_layers.Conv2D
-    layer_ref_cls = tf.keras.layers.Conv2D
+    def run_test(self, channel_convention, component_shape, uptype, **kwargs):
+        self.convolution_test(channel_convention, component_shape, uptype, generic_layers.Conv2D, tf.keras.layers.Conv2D, **kwargs)
 
     @pytest.mark.parametrize('component_shape', [
         (1, 5, 5, 8),
@@ -201,7 +212,7 @@ class TestConv2D:
             'filters' : filters,
             'kernel_size' : kernel_size,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -216,7 +227,7 @@ class TestConv2D:
             'filters' : filters,
             'kernel_size' : kernel_size,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -230,7 +241,7 @@ class TestConv2D:
             'filters' : filters,
             'kernel_size' : 1,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -250,7 +261,7 @@ class TestConv2D:
             'kernel_size' : 3,
             'strides' : strides,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -270,7 +281,7 @@ class TestConv2D:
             'kernel_size' : 3,
             'dilation_rate' : dilation_rate,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -289,7 +300,7 @@ class TestConv2D:
             'filters' : filters,
             'kernel_size' : kernel_size,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -306,7 +317,7 @@ class TestConv2D:
             # 'use_bias' : True,
             # 'bias_initializer' : 'glorot_uniform',
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -321,7 +332,7 @@ class TestConv2D:
             'kernel_size' : 3,
             'padding' : 'same',
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -336,7 +347,7 @@ class TestConv2D:
             'kernel_size' : 3,
             'padding' : 'same',
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -357,7 +368,7 @@ class TestConv2D:
             'padding' : padding,
             'strides' : strides,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -378,7 +389,7 @@ class TestConv2D:
             'padding' : padding,
             'dilation_rate' : dilation_rate,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.skipif(not gpu_visible(), reason="grouped conv not supported on CPU")
@@ -396,15 +407,15 @@ class TestConv2D:
             'kernel_size' : 3,
             'groups' : groups,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
 @pytest.mark.parametrize('channel_convention', ['channels_first', 'channels_last'])
 @pytest.mark.parametrize('uptype', ['up0', 'up1', 'up2'])
-class TestDepthwiseConv2D:
+class TestDepthwiseConv2D(GenericTestBase):
 
-    layer_test_cls = generic_layers.DepthwiseConv2D
-    layer_ref_cls = tf.keras.layers.DepthwiseConv2D
+    def run_test(self, channel_convention, component_shape, uptype, **kwargs):
+        self.convolution_test(channel_convention, component_shape, uptype, generic_layers.DepthwiseConv2D, tf.keras.layers.DepthwiseConv2D, **kwargs)
 
     @pytest.mark.parametrize('component_shape', [
         (1, 5, 5, 8),
@@ -416,7 +427,7 @@ class TestDepthwiseConv2D:
         kwargs = {
             'kernel_size' : kernel_size,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -429,7 +440,7 @@ class TestDepthwiseConv2D:
         kwargs = {
             'kernel_size' : kernel_size,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -444,7 +455,7 @@ class TestDepthwiseConv2D:
             'kernel_size' : kernel_size,
             'depth_multiplier' : depth_multiplier,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -461,7 +472,7 @@ class TestDepthwiseConv2D:
             'kernel_size' : 3,
             'strides' : strides,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -479,7 +490,7 @@ class TestDepthwiseConv2D:
             'kernel_size' : 3,
             'dilation_rate' : dilation_rate,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -496,7 +507,7 @@ class TestDepthwiseConv2D:
         kwargs = {
             'kernel_size' : kernel_size,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -511,7 +522,7 @@ class TestDepthwiseConv2D:
             # 'use_bias' : True,
             # 'bias_initializer' : 'glorot_uniform',
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -524,7 +535,7 @@ class TestDepthwiseConv2D:
             'kernel_size' : 3,
             'padding' : 'same',
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -537,7 +548,7 @@ class TestDepthwiseConv2D:
             'kernel_size' : 3,
             'padding' : 'same',
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -556,7 +567,7 @@ class TestDepthwiseConv2D:
             'padding' : padding,
             'strides' : strides,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -576,14 +587,14 @@ class TestDepthwiseConv2D:
             'padding' : padding,
             'dilation_rate' : dilation_rate,
         }
-        convolution_test(channel_convention, component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
 
 @pytest.mark.parametrize('uptype', ['up0', 'up1', 'up2'])
-class TestDense:
+class TestDense(GenericTestBase):
 
-    layer_test_cls = generic_layers.Dense
-    layer_ref_cls = tf.keras.layers.Dense
+    def run_test(self, component_shape, uptype, **kwargs):
+        self.layers_test(component_shape, uptype, generic_layers.Dense, tf.keras.layers.Dense, **kwargs)
 
     @pytest.mark.parametrize('component_shape', [
         (1, 8),
@@ -595,7 +606,7 @@ class TestDense:
         kwargs = {
             'units' : units,
         }
-        layers_test(component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -608,7 +619,7 @@ class TestDense:
         kwargs = {
             'units' : units,
         }
-        layers_test(component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(component_shape, uptype, **kwargs)
 
 
     @pytest.mark.parametrize('component_shape', [
@@ -623,4 +634,4 @@ class TestDense:
             # 'use_bias' : True,
             # 'bias_initializer' : 'glorot_uniform',
         }
-        layers_test(component_shape, uptype, self.layer_test_cls, self.layer_ref_cls, **kwargs)
+        self.run_test(component_shape, uptype, **kwargs)
