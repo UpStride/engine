@@ -63,12 +63,12 @@ def generic_linear_test(layer_test, layer_ref, uptype, component_shape):
 
     w = layer_test.get_weights()[0]
     bias = layer_test.get_weights()[1]
-    w_components = w
-    if getattr(layer_test.layer, 'groups', 1) > 1 or getattr(layer_test.layer, 'depth_multiplier', 0) > 0:
-        multivector_len = uptypes[uptype].multivector_length
-        w_components = [w[..., i::multivector_len] for i in range(multivector_len)] # w shape is (H, W, I, O*N)
-    else:
-        w_components = np.split(w, hyper_dimension, axis=-1) # w shape is (H, W, I, N*O)
+    # w_components = None
+    # if getattr(layer_test.layer, 'groups', 1) > 1 or getattr(layer_test.layer, 'depth_multiplier', 0) > 0:
+    multivector_len = uptypes[uptype].multivector_length
+    w_components = [w[..., i::multivector_len] for i in range(multivector_len)]
+    # else:
+    # w_components = np.split(w, hyper_dimension, axis=-1)
 
     layer_ref(components[0])
     zero_bias = np.zeros_like(layer_ref.get_weights()[1])

@@ -126,22 +126,22 @@ class TestConv2DAlgorithms(unittest.TestCase):
     else:
       ref_op.set_weights([ref_weight])
 
-    if groups > 1: # Then ref_weight.shape necessarily is (H, W, I, O*N). Otherwise, it can be seen
+    # if groups > 1: # Then ref_weight.shape necessarily is (H, W, I, O*N). Otherwise, it can be seen
     # as (H, W, I, N*O)
-      test_weight = tf.reshape(ref_weight, (*ref_weight.shape[:-1], -1, 4)) # shape (H, W, I, O, N)
-      test_weight = tf.transpose(test_weight, perm=[4, 0, 1, 2, 3]) # shape (N, H, W, I, O)
-    else:
-      test_weight = tf.reshape(ref_weight, (*ref_weight.shape[:-1], 4, -1)) # shape (H, W, I, N, O)
-      test_weight = tf.transpose(test_weight, perm=[3, 0, 1, 2, 4]) # shape (N, H, W, I, O)
+    test_weight = tf.reshape(ref_weight, (*ref_weight.shape[:-1], -1, 4)) # shape (H, W, I, O, N)
+    test_weight = tf.transpose(test_weight, perm=[4, 0, 1, 2, 3]) # shape (N, H, W, I, O)
+    # else:
+    # test_weight = tf.reshape(ref_weight, (*ref_weight.shape[:-1], 4, -1)) # shape (H, W, I, N, O)
+    # test_weight = tf.transpose(test_weight, perm=[3, 0, 1, 2, 4]) # shape (N, H, W, I, O)
 
     if use_bias:
-      if groups > 1: # ref_bias shape (O*N,)
-        test_bias_shape = [ref_bias.shape[ref_op.bias.axis]//test_weight.shape[0], test_weight.shape[0]]
-        test_bias = tf.reshape(ref_bias, test_bias_shape) # shape (O, N)
-        test_bias = tf.transpose(test_bias) # shape (N, O)
-      else: # ref_bias shape (N*O,)
-        test_bias_shape = [test_weight.shape[0], ref_bias.shape[ref_op.bias.axis]//test_weight.shape[0]]
-        test_bias = tf.reshape(ref_bias, test_bias_shape) # shape (N, O)
+      # if groups > 1: # ref_bias shape (O*N,)
+      test_bias_shape = [ref_bias.shape[ref_op.bias.axis]//test_weight.shape[0], test_weight.shape[0]]
+      test_bias = tf.reshape(ref_bias, test_bias_shape) # shape (O, N)
+      test_bias = tf.transpose(test_bias) # shape (N, O)
+      # else: # ref_bias shape (N*O,)
+      #   test_bias_shape = [test_weight.shape[0], ref_bias.shape[ref_op.bias.axis]//test_weight.shape[0]]
+      #   test_bias = tf.reshape(ref_bias, test_bias_shape) # shape (N, O)
       test_op.set_weights([test_weight, test_bias])
     else:
       test_op.set_weights([test_weight])

@@ -298,15 +298,23 @@ class GenericLinear(UpstrideLayer):
 
     cross_product_matrix = []
     for layer_out in layer_outputs:
+      # previous implementation:
       # dev note: if it is a grouped convolution, then we need to reshape each layer_output from
       # (BS, O*N, ...) to (BS, N*O, ...) so that the split that follows acts on the upstride datatype
-      if getattr(self.layer, 'groups', 1) > 1 or getattr(self.layer, 'depth_multiplier', 0) > 0:
-        if self.axis == -1:
-          layer_out = tf.concat([layer_out[..., i::multivector_len] for i in range(multivector_len)], axis=-1)
-        elif self.axis == 1:
-          layer_out = tf.concat([layer_out[:, i::multivector_len, ...] for i in range(multivector_len)], axis=1)
+      # if getattr(self.layer, 'groups', 1) > 1 or getattr(self.layer, 'depth_multiplier', 0) > 0:
+      #   if self.axis == -1:
+      #     layer_out = tf.concat([layer_out[..., i::multivector_len] for i in range(multivector_len)], axis=-1)
+      #   elif self.axis == 1:
+      #     layer_out = tf.concat([layer_out[:, i::multivector_len, ...] for i in range(multivector_len)], axis=1)
+      # cross_product_matrix.append(tf.split(layer_out, multivector_len, axis=self.axis))
 
-      cross_product_matrix.append(tf.split(layer_out, multivector_len, axis=self.axis))
+      if self.axis == -1:
+        layer_out = [layer_out[..., i::multivector_len] for i in range(multivector_len)]
+      elif self.axis == 1:
+        layer_out = [layer_out[:, i::multivector_len, ...] for i in range(multivector_len)]
+
+      cross_product_matrix.append(layer_out)
+
 
     # cross_product_matrix is a matrix such as
     # cross_product_matrix[i][j] is the result of the multiplication of the
