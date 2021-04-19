@@ -14,6 +14,7 @@ from tensorflow.keras.layers import (Activation, Add, AveragePooling2D,
                                      LeakyReLU, MaxPool2D, MaxPooling2D, Multiply,
                                      ReLU, Reshape, UpSampling2D, ZeroPadding2D)
 from .initializers import InitializersFactory
+from tensorflow.python.keras.utils.conv_utils import convert_data_format
 
 
 def unit_multiplier(uptype, i: int, j: int) -> Tuple[int, int]:
@@ -107,10 +108,9 @@ class BiasLayer(tf.keras.layers.Layer):
     self.bias_constraint = tf.keras.constraints.get(bias_constraint)
     self.rank = rank
     self.axis = -1 if tf.keras.backend.image_data_format() == "channels_last" else 1
-    if rank == 0: # Then it is dense layer
-      self._tf_data_format = 'NC'
-    else: # Then it is convolution
-      self._tf_data_format = tf.python.keras.utils.conv_utils.convert_data_format(
+    self.is_conv = rank != 0
+    if self.is_conv:
+      self._tf_data_format = convert_data_format(
         tf.keras.backend.image_data_format().lower(), self.rank + 2)
 
   def build(self, input_shape):
@@ -128,7 +128,7 @@ class BiasLayer(tf.keras.layers.Layer):
     self.built = True
 
   def call(self, inputs):
-    outputs = tf.add(inputs, self.bias) if self.rank == 0 else tf.nn.bias_add(
+    outputs = tf.add(inputs, self.bias) if not self.is_conv else tf.nn.bias_add(
                   inputs, self.bias, data_format=self._tf_data_format)
     return outputs
 
