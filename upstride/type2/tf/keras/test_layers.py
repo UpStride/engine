@@ -136,11 +136,11 @@ class TestConv2DAlgorithms(unittest.TestCase):
 
     if use_bias:
       # if groups > 1: # ref_bias shape (O*N,)
-      test_bias_shape = [ref_bias.shape[ref_op.bias.axis]//test_weight.shape[0], test_weight.shape[0]]
+      test_bias_shape = [ref_bias.shape[0]//test_weight.shape[0], test_weight.shape[0]]
       test_bias = tf.reshape(ref_bias, test_bias_shape) # shape (O, N)
       test_bias = tf.transpose(test_bias) # shape (N, O)
       # else: # ref_bias shape (N*O,)
-      #   test_bias_shape = [test_weight.shape[0], ref_bias.shape[ref_op.bias.axis]//test_weight.shape[0]]
+      #   test_bias_shape = [test_weight.shape[0], ref_bias.shape[0]//test_weight.shape[0]]
       #   test_bias = tf.reshape(ref_bias, test_bias_shape) # shape (N, O)
       test_op.set_weights([test_weight, test_bias])
     else:

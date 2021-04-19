@@ -100,22 +100,25 @@ class BiasLayer(tf.keras.layers.Layer):
       bias_constraint: Constraint for the bias vector.
   """
 
-  def __init__(self, bias_initializer='zeros', bias_regularizer=None, bias_constraint=None):
+  def __init__(self, rank=0, bias_initializer='zeros', bias_regularizer=None, bias_constraint=None):
     super().__init__()
     self.bias_initializer = tf.keras.initializers.get(bias_initializer)
     self.bias_regularizer = tf.keras.regularizers.get(bias_regularizer)
     self.bias_constraint = tf.keras.constraints.get(bias_constraint)
+    self.rank = rank
     self.axis = -1 if tf.keras.backend.image_data_format() == "channels_last" else 1
+    if rank == 0: # Then it is dense layer
+      self._tf_data_format = 'NC'
+    else: # Then it is convolution
+      self._tf_data_format = tf.python.keras.utils.conv_utils.convert_data_format(
+        tf.keras.backend.image_data_format().lower(), self.rank + 2)
 
   def build(self, input_shape):
     input_shape = tf.TensorShape(input_shape)
 
-    broadcast_beta_shape = [1] * len(input_shape)
-    broadcast_beta_shape[self.axis] = input_shape[self.axis]
-
     self.bias = self.add_weight(
         name='bias',
-        shape=broadcast_beta_shape,
+        shape=[input_shape[self.axis],],
         initializer=self.bias_initializer,
         regularizer=self.bias_regularizer,
         constraint=self.bias_constraint,
@@ -125,7 +128,9 @@ class BiasLayer(tf.keras.layers.Layer):
     self.built = True
 
   def call(self, inputs):
-    return tf.add(inputs, self.bias)
+    outputs = tf.add(inputs, self.bias) if self.rank == 0 else tf.nn.bias_add(
+                  inputs, self.bias, data_format=self._tf_data_format)
+    return outputs
 
   def compute_output_shape(self, input_shape):
     return input_shape
@@ -163,7 +168,7 @@ class GenericLinear(UpstrideLayer):
     self.layer = self.get_layers(layer, self.uptype.uptype_id, **kwargs)
     self.bias = None
     if add_bias:
-      self.bias = BiasLayer(bias_parameters['bias_initializer'], bias_parameters['bias_regularizer'], bias_parameters['bias_constraint'])
+      self.bias = BiasLayer(getattr(self.layer, 'rank', 0), bias_parameters['bias_initializer'], bias_parameters['bias_regularizer'], bias_parameters['bias_constraint'])
 
   def call(self, input_tensor, training=False):
     """
