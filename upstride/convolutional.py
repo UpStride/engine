@@ -1,5 +1,6 @@
 import tensorflow as tf
-from .generic_layers import prepare_inputs, prepare_output, prepare_hyper_weight
+from .uptypes_utilities import prepare_inputs, prepare_output, prepare_hyper_weight
+
 
 class Conv2DParcollet(tf.keras.layers.Conv2D):
   def __init__(self, uptype, *args, **kwargs):

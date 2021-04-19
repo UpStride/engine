@@ -7,7 +7,6 @@ import tensorflow as tf
 # from src_test.bn_from_dcn import ComplexBatchNormalization
 
 from upstride.type1.tf.keras import layers
-
 from upstride.batchnorm import BatchNormalizationC, BatchNormalizationH
 
 

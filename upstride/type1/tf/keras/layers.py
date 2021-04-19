@@ -1,7 +1,7 @@
-from .... import generic_layers
-from ....generic_layers import *
-from ....batchnorm import BatchNormalizationC
-from ....generic_layers import UPTYPE1
+from upstride import generic_layers
+from upstride.generic_layers import *
+from upstride.batchnorm import BatchNormalizationC
+from upstride.uptypes_utilities import UPTYPE1
 
 # If you wish to overwrite some layers, please implement them here
 

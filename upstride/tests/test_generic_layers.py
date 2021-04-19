@@ -1,6 +1,7 @@
 import unittest
 import tensorflow as tf
-from upstride.generic_layers import GenericLinear, ga_multiply_get_index, unit_multiplier, UPTYPE3
+from upstride.generic_layers import GenericLinear, ga_multiply_get_index, unit_multiplier
+from upstride.uptypes_utilities import UPTYPE3
 import numpy as np
 from upstride import generic_layers
 from upstride.type1.tf.keras import layers as layers_t1

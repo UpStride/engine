@@ -1,10 +1,9 @@
-from .... import generic_layers
-from ....generic_layers import *
-from ....batchnorm import BatchNormalizationH
+from upstride import generic_layers
+from upstride.generic_layers import *
+from upstride.batchnorm import BatchNormalizationH
 import numpy as np
-from ....convolutional import Conv2DParcollet as GenericConv2DParcollet
-
-from ....generic_layers import UPTYPE2
+from upstride.convolutional import Conv2DParcollet as GenericConv2DParcollet
+from upstride.uptypes_utilities import UPTYPE2
 
 # If you wish to overwrite some layers, please implement them here
 

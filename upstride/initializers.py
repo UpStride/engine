@@ -1,16 +1,16 @@
 """
 This file implement the initialization function for a various type of operation and algebra
 
-Ideas come from papers : 
+Ideas come from papers :
   1- Deep Quaternion Networks https://arxiv.org/pdf/1712.04604.pdf (section E page 3-5)
   2- Deep Complex Networks https://arxiv.org/pdf/1705.09792.pdf (section 3.6 page 6)
   3- Quaternion recurrent neural network https://arxiv.org/pdf/1806.04418.pdf
 
 
-# for 2, the trick is to say that 
+# for 2, the trick is to say that
 Var(W) = Var(|W|) + (E[|W|])**2
 
-and because it follow  Rayleigh distribution, 
+and because it follow  Rayleigh distribution,
 
 E[|W|] = sigma * sqrt(pi/2)
 Var(|W|) = (4-pi) * sigma**2 / 2
@@ -86,7 +86,7 @@ def get_input_output_unit(depthwise, shape):
   """ compute the n_in and n_out parameters used fot glorot or he criterion.
   These variables are fan_in and fan_out in Keras
 
-  Note that here again, all frameworks implement different things. Here we try to stick as close as possible to the 
+  Note that here again, all frameworks implement different things. Here we try to stick as close as possible to the
   intuition of the paper
   """
   if not depthwise:
@@ -122,7 +122,7 @@ class IndependentFilter(Initializer):
   def __init__(self, criterion='glorot', depthwise=False, complex=False, seed=None):
     """ Idea for the DCN paper
     This initialization constructs real-values or complex-values kernel with vectors that are independent as much as possible from each other while
-    respecting either the He or the Glorot criterion. 
+    respecting either the He or the Glorot criterion.
 
     Please note that this initialization is hard to implement in quaternion. If we measure any performance improvement for R or C, then
     we will implement it for H
@@ -140,7 +140,7 @@ class IndependentFilter(Initializer):
     """scale the independent filters to get the desired variance
 
     Args:
-        desired_var (float): wanted variance 
+        desired_var (float): wanted variance
         independent_filters (numpy array): real or complex matrice with variance 1
     """
     # could be a lambda function, but I believe this formulation is clearer. If someone wants to change it feel free
@@ -194,7 +194,7 @@ class IndependentFilter(Initializer):
       u, _, v = np.linalg.svd(x)
       independent_filters = np.dot(u, np.dot(np.eye(num_rows, num_cols), v.T))
     else:
-      rng = RandomState(self.seed) 
+      rng = RandomState(self.seed)
       x = rng.uniform(size=(num_rows, num_cols)) + 1j * rng.uniform(size=(num_rows, num_cols))
       u, _, v = np.linalg.svd(x)
       independent_filters = np.dot(u, np.dot(np.eye(num_rows, num_cols), np.conjugate(v).T))
@@ -224,10 +224,10 @@ class CInitializer(Initializer):
 
     Idea came from paper Deep Complex Networks https://arxiv.org/pdf/1705.09792.pdf (section 3.6 page 6)
 
-    In short, the idea is to have a nice formulation of the variance by saying that 
+    In short, the idea is to have a nice formulation of the variance by saying that
     Var(W) = Var(|W|) + (E[|W|])**2
 
-    and because it follow  Rayleigh distribution, 
+    and because it follow  Rayleigh distribution,
 
     E[|W|] = sigma * sqrt(pi/2)
     Var(|W|) = (4-pi) * sigma**2 / 2

@@ -3,7 +3,7 @@ import tensorflow as tf
 import numpy as np
 from upstride import generic_layers
 from collections import namedtuple
-from upstride.generic_layers import UPTYPE0, UPTYPE1, UPTYPE2
+from upstride.uptypes_utilities import UPTYPE0, UPTYPE1, UPTYPE2
 
 
 ### Tests infrastructure
