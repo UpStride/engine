@@ -3,6 +3,7 @@ import unittest
 import tensorflow as tf
 import numpy as np
 from .layers import TF2Upstride, Upstride2TF, Conv2D, DepthwiseConv2D, Conv2DParcollet
+from upstride.tests.utility import random_integer_tensor
 
 
 class TestQuaternionTF2Upstride(unittest.TestCase):
@@ -101,11 +102,6 @@ class TestConv2DQuaternion(unittest.TestCase):
     self.assertEqual(listdir, ['assets', 'saved_model.pb', 'variables'])
     shutil.rmtree(dest)
 
-def random_integer_tensor(shape, dtype=tf.float32):
-  """ Generates a random tensor containing integer values
-  """
-  tensor = tf.random.uniform(shape, -4, +4, dtype=tf.int32)
-  return tf.cast(tensor, dtype)
 
 class TestConv2DAlgorithms(unittest.TestCase):
   def run_conv2d_generalized_and_parcollet(self, groups=1):
