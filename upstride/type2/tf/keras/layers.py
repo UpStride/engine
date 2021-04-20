@@ -10,7 +10,7 @@ from upstride.uptypes_utilities import UPTYPE2
 
 class TF2UpstrideJoint(tf.keras.layers.Layer):
   # TODO add documentation and tests
-  def __init__(self, blade_indexes) -> None:
+  def __init__(self, uptype) -> None:
     super().__init__()
     self.image_data_format = tf.keras.backend.image_data_format()
 
@@ -30,7 +30,7 @@ class TF2UpstrideJoint(tf.keras.layers.Layer):
 
 class TF2UpstrideGrayscale(tf.keras.layers.Layer):
   # TODO document and test
-  def __init__(self, blade_indexes) -> None:
+  def __init__(self, uptype) -> None:
     super().__init__()
     self.image_data_format = tf.keras.backend.image_data_format()  # can be 'channels_last' or 'channels_first'
 

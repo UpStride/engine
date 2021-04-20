@@ -403,7 +403,7 @@ class TF2Upstride(UpstrideLayer):
 
     if self.strategy_name not in self.strategies:
       raise ValueError(f"unknown strategy: {self.strategy_name}")
-    self.model = self.strategies[self.strategy_name](self.uptype.blade_indexes, **kwargs)
+    self.model = self.strategies[self.strategy_name](self.uptype, **kwargs)
 
   def add_strategies(self):
     """ The purpose of this function is to be overritten in a sub class to add elements in self.strategies
@@ -426,11 +426,11 @@ class TF2UpstrideLearned(tf.keras.layers.Layer):
     tensor: output of the network. Learned component of the multi-vector.
   """
 
-  def __init__(self, blade_indexes, channels=3, kernel_size=3, use_bias=False, kernel_initializer='glorot_uniform', kernel_regularizer=None):
+  def __init__(self, uptype, channels=3, kernel_size=3, use_bias=False, kernel_initializer='glorot_uniform', kernel_regularizer=None):
     super().__init__()
     self.axis = -1 if tf.keras.backend.image_data_format() == 'channels_last' else 1
     self.layers = []
-    self.uptype.multivector_length = len(blade_indexes)
+    self.uptype = uptype
     for i in range(1, self.uptype.multivector_length):
       self.layers.append(tf.keras.Sequential([
           tf.keras.layers.BatchNormalization(axis=self.axis),
@@ -452,14 +452,14 @@ class TF2UpstrideLearned(tf.keras.layers.Layer):
 
 
 class TF2UpstrideBasic(tf.keras.layers.Layer):
-  def __init__(self, blade_indexes):
+  def __init__(self, uptype):
     super().__init__()
-    self.multivector_length = len(blade_indexes)
+    self.uptype = uptype
     self.concat = tf.keras.layers.Concatenate(axis=0)
 
   def call(self, x):
     outputs = [x]
-    for _ in range(1, self.multivector_length):
+    for _ in range(1, self.uptype.multivector_length):
       outputs.append(tf.zeros_like(x))
     return self.concat(outputs)
 
