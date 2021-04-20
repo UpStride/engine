@@ -1,6 +1,8 @@
 import pytest
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
+from tensorflow.python.keras.utils.conv_utils import convert_data_format
+from functools import lru_cache
 from upstride import generic_layers
 from upstride import convolutional
 from upstride.uptypes_utilities import UPTYPE0, UPTYPE1, UPTYPE2
@@ -24,8 +26,8 @@ def assert_small_float_difference(tensor1, tensor2, relative_error_threshold):
     assert tf.reduce_all(abs_diff < threshold)
 
 
-def random_float_tensor(shape):
-    return tf.random.uniform(shape, dtype=tf.float32)
+def random_float_tensor(shape, dtype=tf.float32):
+    return tf.random.uniform(shape, dtype=dtype)
 
 
 def random_integer_tensor(shape, dtype=tf.float32):
@@ -61,50 +63,61 @@ class GenericTestBase:
     # assumes zero-filled / no bias
     def generic_linear_test(self, layer_test, layer_ref, uptype, component_shape):
         algebra_map = self.algebra_maps[uptype]
-        hyper_dimension = len(algebra_map)
+        hyper_dimension = self.uptypes[uptype].multivector_length
 
+        # prepare input hyper-complex components
         components = []
         for _ in range(hyper_dimension):
             component = self.random_tensor(component_shape)
             components.append(component)
 
+        # run test operation
         inp = tf.concat(components, axis=0)
         test_out = layer_test(inp)
 
+        # prepare filter weights for the reference operation
         w = layer_test.get_weights()[0]
-        bias = layer_test.get_weights()[1]
-        # w_components = None
-        # if getattr(layer_test.layer, 'groups', 1) > 1 or getattr(layer_test.layer, 'depth_multiplier', 0) > 0:
-        multivector_len = self.uptypes[uptype].multivector_length
         if len(w.shape) != 5:
-            w = [w[..., i::multivector_len] for i in range(multivector_len)]
-        # else:
-        # w_components = tf.split(w, hyper_dimension, axis=-1)
+            w = [w[..., i::hyper_dimension] for i in range(hyper_dimension)]
 
+        # run reference once to initialize weights
         layer_ref(components[0])
-        zero_bias = tf.zeros_like(layer_ref.get_weights()[1])
+        zero_bias = tf.zeros_like(layer_ref.get_weights()[1]) if layer_ref.use_bias else None
 
+        # compute intermediate component x component results
         ref_partial = [[] for _ in range(hyper_dimension)]
         for i in range(hyper_dimension):
-            layer_ref.set_weights([w[i], zero_bias])
+            layer_ref_weights = [w[i], zero_bias] if layer_ref.use_bias else [w[i]]
+            layer_ref.set_weights(layer_ref_weights)
             for j in range(hyper_dimension):
                 inter_res = layer_ref(components[j])
                 ref_partial[i].append(inter_res)
 
+        # sum intermediate results according to the algebra
         ref_outputs = [0 for _ in range(hyper_dimension)]
         for i in range(hyper_dimension):
             for j in range(hyper_dimension):
                 which, coeff = algebra_map[i][j]
                 ref_outputs[which] = ref_outputs[which] + ref_partial[i][j] * coeff
 
-        # print(bias.shape)
-        # print(layer_test.get_weights()[0].shape)
+        # add bias if necessary
+        if layer_ref.use_bias:
+            bias = layer_test.get_weights()[1]
+            if len(bias.shape) != 2:
+                bias = [bias[i::hyper_dimension] for i in range(hyper_dimension)]
+            for i in range(hyper_dimension):
+                ref_outputs[i] = self.add_bias_component(ref_outputs[i], bias[i], layer_ref, component_shape)
 
-        # for i in range(hyper_dimension):
-            # ref_outputs[i] = tf.nn.bias_add(ref_outputs[i], bias[i])
-
+        # verify if results match
         ref_out = tf.concat(ref_outputs, axis=0)
-        assert_small_float_difference(test_out, ref_out, 0.0001)
+        assert_small_float_difference(test_out, ref_out, 0.001)
+
+    @lru_cache(maxsize=4)
+    def get_op_data_format(self, tensor_shape):
+        return convert_data_format(tf.keras.backend.image_data_format().lower(), len(tensor_shape))
+
+    def add_bias_component(self, tensor, bias, layer_ref, component_shape):
+        return tf.add(tensor, bias) if 'Dense' in str(layer_ref) else tf.nn.bias_add(tensor, bias, self.get_op_data_format(component_shape))
 
     def assert_right_kernel_size(self, component_shape, raise_error=True, **kwargs):
         _, height, width, _ = component_shape
@@ -123,7 +136,25 @@ class GenericTestBase:
             raise ValueError(f'Kernel size in incorrect format: {kernel_size}')
         return True
 
+    def try_set_filter_initializer(self, layer_test_cls, **kwargs):
+        if 'Depthwise' in str(layer_test_cls) and 'depthwise_initializer' not in kwargs:
+            kwargs['depthwise_initializer'] = self.random_tensor
+        elif 'kernel_initializer' not in kwargs:
+            kwargs['kernel_initializer'] = self.random_tensor
+        return kwargs
+
+    def try_set_bias(self, **kwargs):
+        if 'use_bias' in kwargs:
+            if kwargs['use_bias'] and 'bias_initializer' not in kwargs:
+                kwargs['bias_initializer'] = self.random_tensor
+        else:
+            kwargs['use_bias'] = False
+        return kwargs
+
     def layers_test(self, component_shape, uptype, layer_test_cls, layer_ref_cls, **kwargs):
+        kwargs = self.try_set_filter_initializer(layer_test_cls, **kwargs)
+        kwargs = self.try_set_bias(**kwargs)
+
         layer_test = layer_test_cls(self.uptypes[uptype], **kwargs)
         layer_ref = layer_ref_cls(**kwargs)
         self.generic_linear_test(layer_test, layer_ref, uptype, component_shape)
@@ -313,8 +344,7 @@ class TestConv2D(GenericTestBase):
         kwargs = {
             'filters' : filters,
             'kernel_size' : kernel_size,
-            # 'use_bias' : True,
-            # 'bias_initializer' : 'glorot_uniform',
+            'use_bias' : True,
         }
         self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
@@ -524,8 +554,7 @@ class TestDepthwiseConv2D(GenericTestBase):
     def test_bias(self, component_shape, kernel_size, channel_convention, uptype):
         kwargs = {
             'kernel_size' : kernel_size,
-            # 'use_bias' : True,
-            # 'bias_initializer' : 'glorot_uniform',
+            'use_bias' : True,
         }
         self.run_test(channel_convention, component_shape, uptype, **kwargs)
 
@@ -628,7 +657,7 @@ class TestDense(GenericTestBase):
 
 
     @pytest.mark.parametrize('component_shape', [
-        (6, 12),
+        (1, 1),
         (19, 4),
         (29, 31),
     ])
@@ -636,7 +665,6 @@ class TestDense(GenericTestBase):
     def test_bias(self, component_shape, units, uptype):
         kwargs = {
             'units' : units,
-            # 'use_bias' : True,
-            # 'bias_initializer' : 'glorot_uniform',
+            'use_bias' : True,
         }
         self.run_test(component_shape, uptype, **kwargs)

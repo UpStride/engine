@@ -25,11 +25,11 @@ class Conv2DParcollet(tf.keras.layers.Conv2D):
       # If it is a grouped convolution, then the bias needs to be reshaped from [N*O] to [O*N],
       # to be consistent with the shape in the variable outputs. For details, go to the definition
       # of prepare_inputs()
-      if self.groups > 1:
-        bias = tf.transpose(self.bias, perm=[1, 0]) # shape [O, N]
-        bias = tf.reshape(bias, [-1]) # shape [O*N]
-      else:
-        bias = tf.reshape(self.bias, -1) # shape [N*O]
+      # if self.groups > 1:
+      bias = tf.transpose(self.bias, perm=[1, 0]) # shape [O, N]
+      bias = tf.reshape(bias, [-1]) # shape [O*N]
+      # else:
+      bias = tf.reshape(self.bias, -1) # shape [N*O]
       if self.rank == 1 and self._channels_first:
         # nn.bias_add does not accept a 1D input tensor.
         bias = array_ops.reshape(bias, (1, self.uptype.multivector_length * self.filters, 1))
