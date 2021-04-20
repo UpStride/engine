@@ -24,7 +24,7 @@ UPTYPE2 = UpstrideDatatype(2, (3, 0, 0), ('', '12', '23', '13'))
 UPTYPE3 = UpstrideDatatype(3, (3, 0, 0), ('', '1', '2', '3', '12', '13', '23', '123'))
 
 
-def prepare_inputs(uptype, inputs, **kwargs):
+def prepare_inputs(uptype, inputs, channels_axis=1, **kwargs):
   # TODO consider implementing uptype.interlace so that inputs.shape is (BS*N, I, ...) instead of
   # inputs.shape (N*BS, I, ...)
   inputs = tf.reshape(inputs, [uptype.multivector_length, -1, *inputs.shape[1:]]) # shape (N, BS, I, ...)
@@ -35,27 +35,50 @@ def prepare_inputs(uptype, inputs, **kwargs):
   # only matters for grouped convolution, the cheaper-to-compute tensor of shape (BS, N*I, ...) is
   # preferred whenever possible. This propagates to prepare_hyper_weight(), bias addition and
   # prepare_output().
-  if kwargs.get('groups', 1) > 1:
-    rest = list(range(3, tf.rank(inputs)))
-    inputs = tf.transpose(inputs, perm=[1, 2, 0, *rest]) # shape (BS, I, N, ...)
-    inputs = tf.reshape(inputs, [inputs.shape[0], -1, *inputs.shape[3:]]) # shape (BS, I*N, ...)
-  else:
-    rest = list(range(2, tf.rank(inputs)))
-    inputs = tf.transpose(inputs, perm=[1, 0, *rest]) # shape (BS, N, I, ...)
-    inputs = tf.reshape(inputs, [inputs.shape[0], -1, *inputs.shape[3:]]) # shape (BS, N*I, ...)
+  if channels_axis == 1: # inputs.shape (N, BS, I, ...)
+    if kwargs.get('groups', 1) > 1:
+      rest = list(range(3, tf.rank(inputs)))
+      inputs = tf.transpose(inputs, perm=[1, 2, 0, *rest]) # shape (BS, I, N, ...)
+      inputs = tf.reshape(inputs, [inputs.shape[0], -1, *inputs.shape[3:]]) # shape (BS, I*N, ...)
+    else:
+      rest = list(range(2, tf.rank(inputs)))
+      inputs = tf.transpose(inputs, perm=[1, 0, *rest]) # shape (BS, N, I, ...)
+      inputs = tf.reshape(inputs, [inputs.shape[0], -1, *inputs.shape[3:]]) # shape (BS, N*I, ...)
+  else: # inputs.shape (N, BS, ..., I)
+    rank = tf.rank(inputs)
+    rest = list(range(2, rank - 1))
+    if kwargs.get('groups', 1) > 1:
+      inputs = tf.transpose(inputs, perm=[1, *rest, rank - 1, 0]) # shape (BS, ..., I, N)
+      inputs = tf.reshape(inputs, [*inputs.shape[:-2], -1]) # shape (BS, ..., I*N)
+    else:
+      inputs = tf.transpose(inputs, perm=[1, *rest, 0, rank - 1]) # shape (BS, ..., N, I)
+      inputs = tf.reshape(inputs, [*inputs.shape[:-2], -1]) # shape (BS, ..., N*I)
   return inputs
 
 
-def prepare_output(uptype, output, **kwargs):
-  if kwargs.get('groups', 1) > 1: # output.shape (BS, O*N, ...)
-    output = tf.reshape(output, [output.shape[0], -1, uptype.multivector_length, *output.shape[2:]]) # shape (BS, O, N, ...)
-    rest = list(range(3, tf.rank(output)))
-    output = tf.transpose(output, perm=[2, 0, 1, *rest]) # shape (N, BS, O, ...)
-  else: # output.shape (BS, N*O, ...)
-    output = tf.reshape(output, [output.shape[0], uptype.multivector_length, -1, *output.shape[2:]]) # shape (BS, N, O, ...)
-    rest = list(range(2, tf.rank(output)))
-    output = tf.transpose(output, perm=[1, 0, *rest]) # shape (N, BS, O, ...)
-  output = tf.reshape(output, [-1, *output.shape[2:]]) # shape (N*BS, O, ...)
+def prepare_output(uptype, output, channels_axis=1, **kwargs):
+  if channels_axis == 1:
+    if kwargs.get('groups', 1) > 1: # output.shape (BS, O*N, ...)
+      output = tf.reshape(output, [output.shape[0], -1, uptype.multivector_length, *output.shape[2:]]) # shape (BS, O, N, ...)
+      rest = list(range(3, tf.rank(output)))
+      output = tf.transpose(output, perm=[2, 0, 1, *rest]) # shape (N, BS, O, ...)
+    else: # output.shape (BS, N*O, ...)
+      output = tf.reshape(output, [output.shape[0], uptype.multivector_length, -1, *output.shape[2:]]) # shape (BS, N, O, ...)
+      rest = list(range(2, tf.rank(output)))
+      output = tf.transpose(output, perm=[1, 0, *rest]) # shape (N, BS, O, ...)
+    output = tf.reshape(output, [-1, *output.shape[2:]]) # shape (N*BS, O, ...)
+  else:
+    if kwargs.get('groups', 1) > 1: # output.shape (BS, ..., O*N)
+      output = tf.reshape(output, [*output.shape[:-1], -1, uptype.multivector_length]) # shape (BS, ..., O, N)
+      rank = tf.rank(output)
+      rest = list(range(1, rank - 1))
+      output = tf.transpose(output, perm=[rank - 1, 0, *rest]) # shape (N, BS, ..., O)
+    else: # output.shape (BS, ..., N*O)
+      output = tf.reshape(output, [*output.shape[:-1], uptype.multivector_length, -1]) # shape (BS, ..., N, O)
+      rank = tf.rank(output)
+      rest = list(range(1, rank - 2))
+      output = tf.transpose(output, perm=[rank - 2, 0, *rest, rank - 1]) # shape (N, BS, ..., O)
+    output = tf.reshape(output, [-1, *output.shape[2:]]) # shape (N*BS, ..., O)
   return output
 
 

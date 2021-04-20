@@ -5,6 +5,7 @@ from .uptypes_utilities import prepare_inputs, prepare_output, prepare_hyper_wei
 class Conv2DParcollet(tf.keras.layers.Conv2D):
   def __init__(self, uptype, *args, **kwargs):
     self.uptype = uptype # FIXME generalize when implementing for other uptypes
+    self.axis = -1 if tf.keras.backend.image_data_format() == 'channels_last' else 1
     super().__init__(*args, **kwargs)
 
   def add_weight(self, **kwargs):
@@ -16,8 +17,9 @@ class Conv2DParcollet(tf.keras.layers.Conv2D):
     if self._is_causal:  # Apply causal padding to inputs for Conv1D.
       inputs = array_ops.pad(inputs, self._compute_causal_padding(inputs))
 
+    axis = 1 if self.axis == 1 else tf.rank(inputs)
     kernel = prepare_hyper_weight(self.uptype, self.kernel, groups=self.groups)
-    inputs = prepare_inputs(self.uptype, inputs, groups=self.groups)
+    inputs = prepare_inputs(self.uptype, inputs, channels_axis=axis, groups=self.groups)
     outputs = self._convolution_op(inputs, kernel)
 
     if self.use_bias: # bias.shape (N, O)
@@ -47,7 +49,7 @@ class Conv2DParcollet(tf.keras.layers.Conv2D):
           outputs = tf.nn.bias_add(
               outputs, bias, data_format=self._tf_data_format)
 
-    outputs = prepare_output(self.uptype, outputs, groups=self.groups)
+    outputs = prepare_output(self.uptype, outputs, channels_axis=axis, groups=self.groups)
     if self.activation is not None:
       return self.activation(outputs)
     return outputs
