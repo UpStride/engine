@@ -2,7 +2,7 @@ import pytest
 import tensorflow as tf
 import numpy as np
 from upstride import generic_layers
-from collections import namedtuple
+from upstride import convolutional
 from upstride.uptypes_utilities import UPTYPE0, UPTYPE1, UPTYPE2
 
 
@@ -29,7 +29,6 @@ def random_float_tensor(shape):
 
 
 def random_integer_tensor(shape, dtype=tf.float32):
-    print(shape)
     return tf.cast(tf.random.uniform(shape, -4, +4, dtype=tf.int32), dtype)
 
 
@@ -66,7 +65,6 @@ class GenericTestBase:
 
         components = []
         for _ in range(hyper_dimension):
-            print(component_shape)
             component = self.random_tensor(component_shape)
             components.append(component)
 
@@ -78,7 +76,8 @@ class GenericTestBase:
         # w_components = None
         # if getattr(layer_test.layer, 'groups', 1) > 1 or getattr(layer_test.layer, 'depth_multiplier', 0) > 0:
         multivector_len = self.uptypes[uptype].multivector_length
-        w_components = [w[..., i::multivector_len] for i in range(multivector_len)]
+        if len(w.shape) != 5:
+            w = [w[..., i::multivector_len] for i in range(multivector_len)]
         # else:
         # w_components = tf.split(w, hyper_dimension, axis=-1)
 
@@ -87,7 +86,7 @@ class GenericTestBase:
 
         ref_partial = [[] for _ in range(hyper_dimension)]
         for i in range(hyper_dimension):
-            layer_ref.set_weights([w_components[i], zero_bias])
+            layer_ref.set_weights([w[i], zero_bias])
             for j in range(hyper_dimension):
                 inter_res = layer_ref(components[j])
                 ref_partial[i].append(inter_res)
@@ -408,6 +407,12 @@ class TestConv2D(GenericTestBase):
             'groups' : groups,
         }
         self.run_test(channel_convention, component_shape, uptype, **kwargs)
+
+
+class TestConv2DParcollet(TestConv2D):
+
+    def run_test(self, channel_convention, component_shape, uptype, **kwargs):
+        self.convolution_test(channel_convention, component_shape, uptype, convolutional.Conv2DParcollet, tf.keras.layers.Conv2D, **kwargs)
 
 
 @pytest.mark.parametrize('channel_convention', ['channels_first', 'channels_last'])
