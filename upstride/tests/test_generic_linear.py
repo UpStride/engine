@@ -173,6 +173,18 @@ class GenericTestBase:
 
 ### Test configurations
 
+class TestGenericLinearSimple(GenericTestBase):
+
+    def test_simple_Conv2D(self):
+        self.convolution_test('channels_last', (2, 3, 3, 2), 'up1', generic_layers.Conv2D, tf.keras.layers.Conv2D, filters=2, kernel_size=3)
+
+    def test_simple_DepthwiseConv2D(self):
+        self.convolution_test('channels_last', (2, 3, 3, 2), 'up1', generic_layers.DepthwiseConv2D, tf.keras.layers.DepthwiseConv2D, kernel_size=3)
+
+    def test_simple_Dense(self):
+        self.layers_test((2, 2), 'up1', generic_layers.Dense, tf.keras.layers.Dense, units=2)
+
+
 @pytest.mark.exhaustive
 @pytest.mark.parametrize('uptype', ['up0', 'up1', 'up2'])
 class TestGenericLinearExhaustive(GenericTestBase):

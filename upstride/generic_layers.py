@@ -49,7 +49,7 @@ def ga_multiply_get_index(uptype, index_1: str, index_2: str) -> Tuple[int, str]
   while i1 < len(l1) and i2 < len(l2):
     if l1[i1] == l2[i2]:
       # then move the element of l2 near the element of l1 and remove them
-      if (length_l1 - 1) % 2 != 0:
+      if length_l1 % 2 == 0:
         s *= -1
       # check the sign of the square
       s *= square_vector(uptype, l1[i1])
@@ -58,7 +58,7 @@ def ga_multiply_get_index(uptype, index_1: str, index_2: str) -> Tuple[int, str]
       i2 += 1
     elif l1[i1] > l2[i2]:
       # then move the element of l2 before the element of l1
-      if length_l1 % 2 != 0:
+      if length_l1 % 2 == 1:
         s *= -1
       out_l.append(l2[i2])
       i2 += 1
