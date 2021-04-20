@@ -27,7 +27,7 @@ class Conv2DParcollet(tf.keras.layers.Conv2D):
       # of prepare_inputs()
       # if self.groups > 1:
       bias = tf.transpose(self.bias, perm=[1, 0]) # shape [O, N]
-      bias = tf.reshape(bias, [-1]) # shape [O*N]
+      #   bias = tf.reshape(bias, [-1]) # shape [O*N]
       # else:
       bias = tf.reshape(self.bias, -1) # shape [N*O]
       if self.rank == 1 and self._channels_first:
