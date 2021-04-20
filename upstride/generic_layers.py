@@ -356,7 +356,7 @@ class Dropout(tf.keras.layers.Dropout):
       else:
         concrete_inputs_shape = array_ops.shape(inputs)  # concrete_inputs_shape is a tf.Tensor
         # transform the first value in the list to 1, so we don't perform Dropout along this dim
-        return ops.convert_to_tensor_v2_with_dispatch(tf.concat([[1], concrete_inputs_shape[1:]], axis=0))
+        return ops.convert_to_tensor_v2(tf.concat([[1], concrete_inputs_shape[1:]], axis=0))
 
     concrete_inputs_shape = array_ops.shape(inputs)
 
