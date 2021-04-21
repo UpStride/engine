@@ -1,15 +1,25 @@
 import unittest
+import pytest
 import tensorflow as tf
-from upstride.generic_layers import GenericLinear, ga_multiply_get_index, unit_multiplier
-from upstride.uptypes_utilities import UPTYPE3
+from upstride.generic_layers import GenericLinear, ga_multiply_get_index, unit_multiplier, square_vector
+from upstride.uptypes_utilities import UPTYPE0, UPTYPE1, UPTYPE2, UPTYPE3, UpstrideDatatype
 import numpy as np
 from upstride import generic_layers
 from upstride.type1.tf.keras import layers as layers_t1
 
 
+UPTYPE2_alternative = UpstrideDatatype(2, (0, 2, 0), ['', '1', '2', '12'])
+
+uptypes = {
+  'up0' : UPTYPE0,
+  'up1' : UPTYPE1,
+  'up2' : UPTYPE2,
+  'up3' : UPTYPE3,
+  'up2_alt' : UPTYPE2_alternative,
+}
+
+
 def ga_multiply_get_index_by_insertion_sort(uptype, index_1, index_2):
-  """ Given \beta_{index_1}, \beta_{index_2} return (s, index) such as \beta_{index_1} * \beta_{index_2} = s * \beta_{index}
-  """
   l = [int(i) for i in index_1] + [int(j) for j in index_2] + ['guard'] # adding 'guard' to the end of the list for easier pairs removal
 
   n = len(l) - 1
@@ -40,8 +50,6 @@ def ga_multiply_get_index_by_insertion_sort(uptype, index_1, index_2):
 
 
 def ga_multiply_get_index_by_sort(uptype, index_1, index_2):
-  """ Given \beta_{index_1}, \beta_{index_2} return (s, index) such as \beta_{index_1} * \beta_{index_2} = s * \beta_{index}
-  """
   l = [int(i) for i in index_1] + [int(j) for j in index_2]
   n = len(l)
   inversions = 0
@@ -64,6 +72,49 @@ def ga_multiply_get_index_by_sort(uptype, index_1, index_2):
       out_l.append(l[i])
 
   return s * (-1 if inversions % 2 == 1 else 1), "".join([str(i) for i in out_l])
+
+
+class TestGAUtilities:
+
+  @pytest.mark.parametrize('uptype, ref_squares', [
+    ('up0', []),
+    ('up1', [1] * 2),
+    ('up2', [1] * 3),
+    ('up3', [1] * 3),
+    ('up2_alt', [-1] * 2)
+  ])
+  def test_squaring(self, uptype, ref_squares):
+    uptype = uptypes[uptype]
+    base_indexes = sum(uptype.geometrical_def)
+    test_squares = [square_vector(uptype, i) for i in range(1, base_indexes + 1)]
+    assert test_squares == ref_squares
+
+  @pytest.mark.parametrize('uptype, index_1, index_2', [
+    ('up1', '1', '12'),
+    ('up1', '12', '12'),
+    ('up2', '23', '13'),
+    ('up2', '13', '12'),
+    ('up3', '123', '1'),
+    ('up3', '123', '23'),
+    ('up2_alt', '2', '1'),
+    ('up2_alt', '12', '1'),
+  ])
+  def test_ga_multiply_get_index(self, uptype, index_1, index_2):
+    uptype = uptypes[uptype]
+    assert ga_multiply_get_index(uptype, index_1, index_2) == ga_multiply_get_index_by_sort(uptype, index_1, index_2)
+
+  @pytest.mark.parametrize('uptype, i, j', [
+    ('up1', 1, 0),
+    ('up2', 3, 1),
+    ('up3', 5, 6),
+    ('up2_alt', 2, 3),
+  ])
+  def test_unit_multiplier(self, uptype, i, j):
+    uptype = uptypes[uptype]
+    test_mult = unit_multiplier(uptype, i, j)
+    # ref_sign, ref_index = ga_multiply_get_index(uptype, uptype.blade_indexes[i], uptype.blade_indexes[j])
+    # assert test_mult == (uptype.blade_indexes.index(ref_index), ref_sign)
+
 
 
 class TestGAMultiplication(unittest.TestCase):

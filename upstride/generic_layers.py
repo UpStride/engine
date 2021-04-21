@@ -79,8 +79,9 @@ def square_vector(uptype, index: int) -> int:
   - the square of the C last elements is 0
   dev note : the + 1 is because the first index in the vector notation of a GA is... 1
   """
-  if index < 1 or index > uptype.multivector_length:
-    raise ValueError(f'Index {index} outside range [1, {uptype.multivector_length}] allowed for type {uptype.__str__}')
+  max_index = sum(uptype.geometrical_def)
+  if index < 1 or index > max_index:
+    raise ValueError(f'Index {index} outside range [1, {max_index}] allowed for type uptype{uptype.uptype_id}')
   if index <= uptype.geometrical_def[0]:
     return 1
   if index <= uptype.geometrical_def[0] + uptype.geometrical_def[1]:

@@ -13,10 +13,6 @@ class UpstrideDatatype:
   def multivector_length(self) -> int:
     return len(self.blade_indexes)
 
-  @property
-  def __str__(self) -> str:
-    return f'uptype{self.uptype_id}'
-
 
 UPTYPE0 = UpstrideDatatype(0, (0, 0, 0), ('',))
 UPTYPE1 = UpstrideDatatype(1, (2, 0, 0), ('', '12'))
