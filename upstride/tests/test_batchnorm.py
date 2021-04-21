@@ -8,6 +8,7 @@ import tensorflow as tf
 
 from upstride.type1.tf.keras import layers
 from upstride.batchnorm import BatchNormalizationC, BatchNormalizationH
+from .bn_from_dcn import ComplexBatchNormalization
 
 
 class TestQuaternionBN(unittest.TestCase):
@@ -111,7 +112,6 @@ class Batch2Channel(tf.keras.layers.Layer):
     x = tf.split(inputs, 2, axis=0)
     return tf.concat(x, axis=1)
 
-"""
 
 class TestBatchNorm(unittest.TestCase):
   @classmethod
@@ -254,5 +254,3 @@ class TestBatchNorm(unittest.TestCase):
   #     csv_writer = csv.writer(fi)
   #     csv_writer.writerow(['Step','Weight_value'])
   #     csv_writer.writerows(weights_dcn_source[f])
-
-"""
