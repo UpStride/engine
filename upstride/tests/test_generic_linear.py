@@ -182,7 +182,7 @@ class TestGenericLinearExhaustive(GenericTestBase):
         self.layers_test(component_shape, uptype, generic_layers.Dense, tf.keras.layers.Dense, **kwargs)
 
 
-    @pytest.mark.parametrize('channel_convention', ['channels_first', 'channels_last'])
+    @pytest.mark.parametrize('channel_convention', ['channels_last', 'channels_first'])
     @pytest.mark.parametrize('filters', standard_params)
     @pytest.mark.parametrize('kernel_size', [1, 3])
     @pytest.mark.parametrize('height', standard_params)
@@ -198,7 +198,7 @@ class TestGenericLinearExhaustive(GenericTestBase):
         self.convolution_test(channel_convention, component_shape, uptype, generic_layers.Conv2D, tf.keras.layers.Conv2D, **kwargs)
 
 
-    @pytest.mark.parametrize('channel_convention', ['channels_first', 'channels_last'])
+    @pytest.mark.parametrize('channel_convention', ['channels_last', 'channels_first'])
     @pytest.mark.parametrize('kernel_size', [1, 3])
     @pytest.mark.parametrize('height', standard_params)
     @pytest.mark.parametrize('width', standard_params)
@@ -212,7 +212,7 @@ class TestGenericLinearExhaustive(GenericTestBase):
         self.convolution_test(channel_convention, component_shape, uptype, generic_layers.DepthwiseConv2D, tf.keras.layers.DepthwiseConv2D, **kwargs)
 
 
-@pytest.mark.parametrize('channel_convention', ['channels_first', 'channels_last'])
+@pytest.mark.parametrize('channel_convention', ['channels_last', 'channels_first'])
 @pytest.mark.parametrize('uptype', ['up0', 'up1', 'up2'])
 class TestConv2D(GenericTestBase):
 
@@ -434,7 +434,7 @@ class TestConv2DParcollet(TestConv2D):
         self.convolution_test(channel_convention, component_shape, uptype, convolutional.Conv2DParcollet, tf.keras.layers.Conv2D, **kwargs)
 
 
-@pytest.mark.parametrize('channel_convention', ['channels_first', 'channels_last'])
+@pytest.mark.parametrize('channel_convention', ['channels_last', 'channels_first'])
 @pytest.mark.parametrize('uptype', ['up0', 'up1', 'up2'])
 class TestDepthwiseConv2D(GenericTestBase):
 
