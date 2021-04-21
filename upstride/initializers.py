@@ -210,6 +210,8 @@ class IndependentFilter(Initializer):
     weights = self.reshape_weights(shape, scaled_filters[0])
     if len(scaled_filters) == 2:
       weights = np.concatenate([weights, self.reshape_weights(shape, scaled_filters[1])], axis=-1)
+      # And interleave real and imaginary components
+      weights = np.concatenate([weights[..., i::2] for i in range(2)], axis=-1)
     return weights
 
 
@@ -258,7 +260,9 @@ class CInitializer(Initializer):
     magnitude = np.random.rayleigh(scale=sigma, size=shape)
     phase = np.random.uniform(low=-np.pi, high=np.pi, size=shape)
     # Complex ops are a bit special : return concatenation of real and img along last axis
-    return np.concatenate([magnitude * np.cos(phase), magnitude * np.sin(phase)], axis=-1)
+    weight = np.concatenate([magnitude * np.cos(phase), magnitude * np.sin(phase)], axis=-1)
+    interleaved_weight = np.concatenate([weight[..., i::2] for i in range(2)], axis=-1)
+    return interleaved_weight
 
 
 class HInitializer(Initializer):
@@ -305,4 +309,6 @@ class HInitializer(Initializer):
         magnitude * u_j*np.sin(phase),
         magnitude * u_k*np.sin(phase)
     ]
-    return np.concatenate(outputs, axis=-1)
+    weight = np.concatenate(outputs, axis=-1)
+    interleaved_weight = np.concatenate([weight[..., i::4] for i in range(4)], axis=-1)
+    return interleaved_weight

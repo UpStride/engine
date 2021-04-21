@@ -190,8 +190,9 @@ class ComplexIndependentFilters(Initializer):
             weight_real = np.reshape(weight_real, kernel_shape)
             weight_imag = np.reshape(weight_imag, kernel_shape)
         weight = np.concatenate([weight_real, weight_imag], axis=-1)
-
-        return weight
+        # Interleave real and imaginary components
+        interleaved_weight = np.concatenate([weight[..., i::2] for i in range(2)], axis=-1)
+        return interleaved_weight
 
     def get_config(self):
         return {'nb_filters': self.nb_filters,
@@ -252,7 +253,9 @@ class ComplexInit(Initializer):
         weight_imag = modulus * np.sin(phase)
         weight = np.concatenate([weight_real, weight_imag], axis=-1)
 
-        return weight
+        # Interleave real and imaginary components
+        interleaved_weight = np.concatenate([weight[..., i::2] for i in range(2)], axis=-1)
+        return interleaved_weight
 
 
 class SqrtInit(Initializer):
