@@ -8,7 +8,7 @@ import tensorflow as tf
 
 from upstride.type1.tf.keras import layers
 from upstride.batchnorm import BatchNormalizationC, BatchNormalizationH
-from .bn_from_dcn import ComplexBatchNormalization
+from .dcn.bn_from_dcn import ComplexBatchNormalization
 
 
 class TestQuaternionBN(unittest.TestCase):
