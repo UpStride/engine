@@ -1,7 +1,7 @@
 import unittest
 import pytest
 import tensorflow as tf
-from upstride.generic_layers import GenericLinear, ga_multiply_get_index, unit_multiplier, square_vector
+from upstride.generic_layers import ga_multiply_get_index, unit_multiplier, square_vector
 from upstride.uptypes_utilities import UPTYPE0, UPTYPE1, UPTYPE2, UPTYPE3, UpstrideDatatype
 import numpy as np
 from upstride import generic_layers
@@ -112,8 +112,8 @@ class TestGAUtilities:
   def test_unit_multiplier(self, uptype, i, j):
     uptype = uptypes[uptype]
     test_mult = unit_multiplier(uptype, i, j)
-    # ref_sign, ref_index = ga_multiply_get_index(uptype, uptype.blade_indexes[i], uptype.blade_indexes[j])
-    # assert test_mult == (uptype.blade_indexes.index(ref_index), ref_sign)
+    ref_sign, ref_index = ga_multiply_get_index(uptype, uptype.blade_indexes[i], uptype.blade_indexes[j])
+    assert test_mult == (uptype.blade_indexes.index(ref_index), ref_sign)
 
 
 
