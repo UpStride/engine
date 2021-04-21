@@ -203,24 +203,26 @@ class GenericLinear(UpstrideLayer):
       layer_outputs[0] = bias(layer_outputs[0])  # add the bias on one of these output
 
     cross_product_matrix = []
-    for layer_out in layer_outputs:
-      # previous implementation:
-      # dev note: if it is a grouped convolution, then we need to reshape each layer_output from
-      # (BS, O*N, ...) to (BS, N*O, ...) so that the split that follows acts on the upstride datatype
-      # if getattr(self.layer, 'groups', 1) > 1 or getattr(self.layer, 'depth_multiplier', 0) > 0:
-      #   if self.axis == -1:
-      #     layer_out = tf.concat([layer_out[..., i::multivector_len] for i in range(multivector_len)], axis=-1)
-      #   elif self.axis == 1:
-      #     layer_out = tf.concat([layer_out[:, i::multivector_len, ...] for i in range(multivector_len)], axis=1)
-      # cross_product_matrix.append(tf.split(layer_out, multivector_len, axis=self.axis))
-
-      if self.axis == -1:
-        layer_out = [layer_out[..., i::multivector_len] for i in range(multivector_len)]
-      elif self.axis == 1:
-        layer_out = [layer_out[:, i::multivector_len, ...] for i in range(multivector_len)]
-
-      cross_product_matrix.append(layer_out)
-
+    # dev note: here the slicing i::multivector_len is preferred over tf.split given that the
+    # multivector components are in the innermost-part of the output dimension and tf.split would
+    # split w.r.t. the outermost-part of the output dimension.
+    if self.axis == -1: # channels_last
+      cross_product_matrix = [[layer_out[..., i::multivector_len] for i in range(multivector_len)]
+                                                                    for layer_out in layer_outputs]
+    elif self.axis == 1: # channels_first
+      cross_product_matrix = [[layer_out[:, i::multivector_len, ...] for i in range(multivector_len)]
+                                                                       for layer_out in layer_outputs]
+    # previous implementation:
+    # cross_product_matrix = []
+    # for layer_out in layer_outputs:
+    #   # dev note: if it is a grouped convolution, then we need to reshape each layer_output from
+    #   # (BS, O*N, ...) to (BS, N*O, ...) so that the split that follows acts on the upstride datatype
+    #   if getattr(self.layer, 'groups', 1) > 1 or getattr(self.layer, 'depth_multiplier', 0) > 0:
+    #     if self.axis == -1:
+    #       layer_out = tf.concat([layer_out[..., i::multivector_len] for i in range(multivector_len)], axis=-1)
+    #     elif self.axis == 1:
+    #       layer_out = tf.concat([layer_out[:, i::multivector_len, ...] for i in range(multivector_len)], axis=1)
+    #   cross_product_matrix.append(tf.split(layer_out, multivector_len, axis=self.axis))
 
     # cross_product_matrix is a matrix such as
     # cross_product_matrix[i][j] is the result of the multiplication of the
