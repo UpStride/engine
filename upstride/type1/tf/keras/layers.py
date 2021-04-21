@@ -44,3 +44,6 @@ class Upstride2TF(generic_layers.Upstride2TF):
   def __init__(self, *args, **kwargs):
     super().__init__(UPTYPE1, *args, **kwargs)
 
+class HamiltonProductLayer(generic_layers.HamiltonProductLayer):
+  def __init__(self, *args, **kwargs):
+    super().__init__(UPTYPE1, *args, **kwargs)

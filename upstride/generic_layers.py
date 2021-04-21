@@ -228,27 +228,8 @@ class GenericLinear(UpstrideLayer):
     # cross_product_matrix is a matrix such as
     # cross_product_matrix[i][j] is the result of the multiplication of the
     # i input by the j kernel
-    output = [None] * multivector_len
-    for i in range(multivector_len):
-      for j in range(multivector_len):
-        if not inverse:
-          k, s = unit_multiplier(self.uptype, i, j)
-        else:
-          k, s = unit_multiplier(self.uptype, j, i)
 
-        # same as output[k] += s*self.layers[i](inputs[j]), but cleaner TensorFlow execution graph
-        if s == 1:
-          if output[k] is None:
-            output[k] = cross_product_matrix[i][j]
-          else:
-            output[k] += cross_product_matrix[i][j]
-        elif s == -1:
-          if output[k] is None:
-            output[k] = -cross_product_matrix[i][j]
-          else:
-            output[k] -= cross_product_matrix[i][j]
-    return tf.concat(output, axis=0)
-
+    return componentwise_aggregation(self.uptype, cross_product_matrix)
 
   def convert_all_args_to_kwargs(self, function, args, kwargs):
     """ This function use the information in the signature of the function
@@ -289,6 +270,58 @@ class GenericLinear(UpstrideLayer):
         kwargs[possible_name] = custom_init
 
     return layer(**kwargs)
+
+
+class HamiltonProductLayer(UpstrideLayer):
+  def __init__(self, uptype):
+    super().__init__(uptype)
+
+  def call(self, input_tensors, training=False):
+    """
+    to implement the hamilton product, the simplest way it to split the 2 input tensors and compute the real
+    hamilton product between every pair of blades. the recompose the output tensor using the unit_multiplier function
+    to know the sign to put if front of every multiplication result
+
+    Args:
+        input_tensor (List[Tensors]): list of 2 tensors to multiply. Tensor shape should be:
+          - shape=(N*Bs, ..., D1, D2)
+          - shape=(N*Bs, ..., D2, D3)
+
+    Returns: a tensor of shape=(N*Bs, ..., D1, D3)
+    """
+    n = self.uptype.multivector_length  # n is defined only to simplify notations
+    a, b = input_tensors
+
+    # get the blades of the input tensors
+    blades_a = tf.split(a, n)
+    blades_b = tf.split(b, n)
+
+    # Now we can compute every real hamilton product and store them in a array of 2 dimensions with
+    # first dimension index (i) matching the index of the blade of 'a' and second the index (j) the blade of b
+    hamilton_product_r = [[tf.matmul(blades_a[i], blades_b[j]) for j in range(n)] for i in range(n)]
+
+    return componentwise_aggregation(self.uptype, hamilton_product_r)
+
+
+def componentwise_aggregation(uptype, components):
+  n = uptype.multivector_length  # n is defined only to simplify notations
+  output = [None] * n
+  for i in range(n):
+    for j in range(n):
+      k, s = unit_multiplier(uptype, i, j)
+
+      # same as output[k] += s*self.layers[i](inputs[j]), but cleaner TensorFlow execution graph
+      if s == 1:
+        if output[k] is None:
+          output[k] = components[i][j]
+        else:
+          output[k] += components[i][j]
+      elif s == -1:
+        if output[k] is None:
+          output[k] = -components[i][j]
+        else:
+          output[k] -= components[i][j]
+  return tf.concat(output, axis=0)
 
 
 # All linear layers should be defined here

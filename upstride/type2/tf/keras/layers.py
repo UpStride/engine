@@ -122,3 +122,7 @@ class Dropout(generic_layers.Dropout):
 class BatchNormalization(generic_layers.BatchNormalization):
   def __init__(self, *args, **kwargs):
     super().__init__(UPTYPE2, *args, **kwargs)
+
+class HamiltonProductLayer(generic_layers.HamiltonProductLayer):
+  def __init__(self, *args, **kwargs):
+    super().__init__(UPTYPE2, *args, **kwargs)
