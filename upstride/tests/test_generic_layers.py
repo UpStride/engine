@@ -264,139 +264,100 @@ class TestBatchNormalization(unittest.TestCase):
 
 class TestBatchNormalizationCompute:
 
-  # def compute_upstride_bn(self, uptype, component_shape, channel_convention, **kwargs):
-  #   hyper_dimension = uptype.multivector_length
-  #   tf.keras.backend.set_image_data_format(channel_convention)
-  #   nic_to_nci_perm = (0, 2, 1)
-  #   if channel_convention == 'channels_first':
-  #     component_shape = tuple(component_shape[i] for i in nic_to_nci_perm)
-
-  #   components = []
-  #   for _ in range(hyper_dimension):
-  #       component = random_integer_tensor(component_shape)
-  #       components.append(component)
-
-  #   axis = 1 if 'channels_first' else -1
-  #   layer = generic_layers.BatchNormalization(uptype, axis=axis, **kwargs)
-
-  #   inp = tf.concat(components, axis=0)
-  #   test_out = layer(inp, training=True)
-
-  #   return test_out, components, axis, layer.get_weights()
-
-
-  def test_manual(self):
-    uptype = UPTYPE1
+  def preparation(self, uptype, component_shape, channel_convention):
+    axis = 1 if channel_convention == 'channels_first' else -1
     hyper_dimension = uptype.multivector_length
-    batch_size = 5
-    input_dim = 4
-    channels = 7
+    tf.keras.backend.set_image_data_format(channel_convention)
+    nic_to_nci_perm = (0, 2, 1)
+    if channel_convention == 'channels_first':
+      component_shape = tuple(component_shape[i] for i in nic_to_nci_perm)
 
-    component_shape = (batch_size, input_dim, channels)
+    components = []
+    for _ in range(hyper_dimension):
+      component = random_integer_tensor(component_shape)
+      components.append(component)
 
+    return components, axis, hyper_dimension
+
+  def compute_upstride_bn(self, uptype, axis, components):
     kwargs = {
       'gamma_initializer' : random_integer_tensor,
       'beta_initializer' : random_integer_tensor,
       'epsilon' : 0,
     }
 
-    channel_convention = 'channels_last'
-
-    tf.keras.backend.set_image_data_format(channel_convention)
-
-    components = []
-    for _ in range(hyper_dimension):
-        component = random_integer_tensor(component_shape)
-        components.append(component)
-
-    axis = 1 if channel_convention == 'channels_first' else -1
     layer = generic_layers.BatchNormalization(uptype, axis=axis, **kwargs)
 
     inp = tf.concat(components, axis=0)
     test_out = layer(inp, training=True)
-    bn_weights = layer.get_weights()
 
-    # return test_out, components, axis, layer.get_weights()
+    return test_out, layer.get_weights()
 
-    # test_out, components, axis, bn_weights = self.compute_upstride_bn(uptype, component_shape, 'channels_last', **kwargs)
 
-    fun = lambda x : (x - tf.reduce_mean(x)) / tf.math.reduce_std(x)
+  def test_manual(self):
+    uptype = UPTYPE1
+    batch_size = 5
+    input_dim = 4
+    channels = 7
 
-    gamma, beta, moving_mean, moving_variance = bn_weights
+    component_shape = (batch_size, input_dim, channels)
 
-    z = [tf.concat(list(map(fun, tf.split(comp, channels, -1))), axis=axis) for comp in components]
-    y = tf.split(gamma, 2)
-    b = tf.split(beta, 2)
-    mm = tf.split(moving_mean, 2)
-    mv = tf.split(moving_variance, 2)
+    channel_convention = 'channels_last'
 
-    ref_out = tf.concat([z[i] * y[i] + b[i] for i in range(2)], axis=0)
+    components, axis, hyper_dimension = self.preparation(uptype, component_shape, channel_convention)
+    test_out, bn_weights = self.compute_upstride_bn(uptype, axis, components)
+    gamma, beta, moving_mean, moving_variance = list(map(lambda weight : tf.split(weight, hyper_dimension), bn_weights))
+
+    normalize = lambda x : (x - tf.reduce_mean(x)) / tf.math.reduce_std(x)
+    ref_out_unscaled = [tf.concat(list(map(normalize, tf.split(comp, channels, axis=axis))), axis=axis) for comp in components]
+    ref_out = tf.concat([ref_out_unscaled[i] * gamma[i] + beta[i] for i in range(hyper_dimension)], axis=0)
 
     assert_small_float_difference(test_out, ref_out, 0.001)
 
+
   def test_basic(self):
     uptype = UPTYPE1
-    hyper_dimension = uptype.multivector_length
     batch_size = 5
     input_dim = 4
     channels = 7
 
     component_shape = (batch_size, input_dim, channels)
 
-    components = []
-    for _ in range(hyper_dimension):
-        component = random_integer_tensor(component_shape)
-        components.append(component)
+    channel_convention = 'channels_last'
 
-    tf.keras.backend.set_image_data_format('channels_last')
-    layer = generic_layers.BatchNormalization(uptype, axis=-1, gamma_initializer=random_integer_tensor, beta_initializer=random_integer_tensor, epsilon=0)
+    components, axis, hyper_dimension = self.preparation(uptype, component_shape, channel_convention)
+    test_out, bn_weights = self.compute_upstride_bn(uptype, axis, components)
+    gamma, beta, moving_mean, moving_variance = list(map(lambda weight : tf.split(weight, hyper_dimension), bn_weights))
 
-    inp = tf.concat(components, axis=0)
-    out_test = layer(inp, training=True)
-
-    gamma, beta, moving_mean, moving_variance = layer.get_weights()
-
-    y = tf.split(gamma, 2)
-    b = tf.split(beta, 2)
-    mm = tf.split(moving_mean, 2)
-    mv = tf.split(moving_variance, 2)
-
-    l = tf.keras.layers.BatchNormalization(axis=-1, epsilon=0)
-    l(components[0])
-    outs = []
+    layer_ref = tf.keras.layers.BatchNormalization(axis=axis, epsilon=0)
+    layer_ref(components[0])
+    ref_outs = []
     for i, comp in enumerate(components):
-        l.set_weights([y[i], b[i], mm[i], mv[i]])
-        outs.append(l(comp, training=True))
+        layer_ref.set_weights([gamma[i], beta[i], moving_mean[i], moving_variance[i]])
+        ref_outs.append(layer_ref(comp, training=True))
 
-    reff = tf.concat(outs, axis=0)
+    ref_out = tf.concat(ref_outs, axis=0)
 
-    assert_small_float_difference(out_test, reff, 0.001)
+    assert_small_float_difference(test_out, ref_out, 0.001)
+
 
   def test_correct_statistics(self):
     uptype = UPTYPE1
-    hyper_dimension = uptype.multivector_length
     batch_size = 5
     input_dim = 4
     channels = 7
 
     component_shape = (batch_size, input_dim, channels)
 
-    components = []
-    for _ in range(hyper_dimension):
-        component = random_integer_tensor(component_shape)
-        components.append(component)
+    channel_convention = 'channels_last'
 
-    tf.keras.backend.set_image_data_format('channels_last')
-    layer = generic_layers.BatchNormalization(uptype, axis=-1, gamma_initializer=random_integer_tensor, beta_initializer=random_integer_tensor, epsilon=0)
+    components, axis, hyper_dimension = self.preparation(uptype, component_shape, channel_convention)
+    test_out, bn_weights = self.compute_upstride_bn(uptype, axis, components)
+    gamma, beta, _, _ = bn_weights
 
-    inp = tf.concat(components, axis=0)
-    out_test = layer(inp, training=True)
-
-    gamma, beta, moving_mean, moving_variance = layer.get_weights()
-
-    out_test_comps = tf.split(out_test, 2, axis=0)
-    out_gamma = tf.concat([tf.math.reduce_std(p, [0,1]) for p in out_test_comps], axis=0)
-    out_beta = tf.concat([tf.reduce_mean(p, [0,1]) for p in out_test_comps], axis=0)
+    test_out_comps = tf.split(test_out, hyper_dimension, axis=0)
+    out_gamma = tf.concat([tf.math.reduce_std(p, [0,1]) for p in test_out_comps], axis=0)
+    out_beta = tf.concat([tf.reduce_mean(p, [0,1]) for p in test_out_comps], axis=0)
 
     assert_small_float_difference(out_gamma, tf.abs(gamma))
     assert_small_float_difference(out_beta, beta)
