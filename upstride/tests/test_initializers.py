@@ -127,8 +127,8 @@ class TestIndependentFilter(unittest.TestCase):
     # fist call for real part
     kernel = init((20, 20))
     print(kernel.shape)
-    kernel_r = kernel[:, :10]
-    kernel_i = kernel[:, 10:]
+    kernel_r = kernel[:, 0::2]
+    kernel_i = kernel[:, 1::2]
     print(np.mean(kernel_r))
     print(np.var(kernel_r))
     self.assertAlmostEqual(np.var(kernel_r), 1/(20 + 10))

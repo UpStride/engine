@@ -182,7 +182,7 @@ class IndependentFilter(Initializer):
     """
     shape = list(shape)
     if self.complex:
-      shape[-1] = int(shape[-1] / 2)  # divide per 2 to get shape in term of complex number
+      shape[-1] = int(shape[-1] / 2)  # divide by 2 to get shape in terms of complex number
     if len(shape) == 2:  # then dense layer
       num_rows, num_cols = shape[0], shape[1]
     else:  # then Conv{1/2/3}D
@@ -209,9 +209,10 @@ class IndependentFilter(Initializer):
     # now need to reshape the kernel. If using complex then concatenate the real and imaginary components along the last axis
     weights = self.reshape_weights(shape, scaled_filters[0])
     if len(scaled_filters) == 2:
-      weights = np.concatenate([weights, self.reshape_weights(shape, scaled_filters[1])], axis=-1)
-      # And interleave real and imaginary components
-      weights = np.concatenate([weights[..., i::2] for i in range(2)], axis=-1)
+      component_size = weights.shape[-1]
+      weights = np.concatenate([weights, self.reshape_weights(shape, scaled_filters[1])], axis=-1) # [..., N*O]
+      # Interleave real and imaginary components
+      weights = np.concatenate([weights[..., i::component_size] for i in range(component_size)], axis=-1) # [..., O*N]
     return weights
 
 
@@ -261,7 +262,8 @@ class CInitializer(Initializer):
     phase = np.random.uniform(low=-np.pi, high=np.pi, size=shape)
     # Complex ops are a bit special : return concatenation of real and img along last axis
     weight = np.concatenate([magnitude * np.cos(phase), magnitude * np.sin(phase)], axis=-1)
-    interleaved_weight = np.concatenate([weight[..., i::2] for i in range(2)], axis=-1)
+    component_size = weight.shape[-1] // 2
+    interleaved_weight = np.concatenate([weight[..., i::component_size] for i in range(component_size)], axis=-1)
     return interleaved_weight
 
 
@@ -310,5 +312,6 @@ class HInitializer(Initializer):
         magnitude * u_k*np.sin(phase)
     ]
     weight = np.concatenate(outputs, axis=-1)
-    interleaved_weight = np.concatenate([weight[..., i::4] for i in range(4)], axis=-1)
+    component_size = weight.shape[-1] // 4
+    interleaved_weight = np.concatenate([weight[..., i::component_size] for i in range(component_size)], axis=-1)
     return interleaved_weight
