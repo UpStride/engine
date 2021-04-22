@@ -262,11 +262,18 @@ class TestBatchNormalization(unittest.TestCase):
         self.assertTrue(np.alltrue(bn_layer.non_trainable_weights[i].numpy() == np.array([0., 0., 0., 0.], dtype=np.float32)))
 
 
+@pytest.mark.parametrize('uptype', ['up0', 'up1', 'up2'])
+@pytest.mark.parametrize('component_shape', [
+  (5, 4, 7),
+  (3, 8, 9),
+  (11, 3, 2),
+])
+@pytest.mark.parametrize('channel_convention', ['channels_last', 'channels_first'])
 class TestBatchNormalizationCompute:
 
   def preparation(self, uptype, component_shape, channel_convention):
     axis = 1 if channel_convention == 'channels_first' else -1
-    hyper_dimension = uptype.multivector_length
+    hyper_dimension = uptypes[uptype].multivector_length
     tf.keras.backend.set_image_data_format(channel_convention)
     nic_to_nci_perm = (0, 2, 1)
     if channel_convention == 'channels_first':
@@ -286,7 +293,7 @@ class TestBatchNormalizationCompute:
       'epsilon' : 0,
     }
 
-    layer = generic_layers.BatchNormalization(uptype, axis=axis, **kwargs)
+    layer = generic_layers.BatchNormalization(uptypes[uptype], axis=axis, **kwargs)
 
     inp = tf.concat(components, axis=0)
     test_out = layer(inp, training=True)
@@ -294,37 +301,27 @@ class TestBatchNormalizationCompute:
     return test_out, layer.get_weights()
 
 
-  def test_manual(self):
-    uptype = UPTYPE1
-    batch_size = 5
-    input_dim = 4
-    channels = 7
-
-    component_shape = (batch_size, input_dim, channels)
-
-    channel_convention = 'channels_last'
-
+  def test_manual(self, uptype, component_shape, channel_convention):
     components, axis, hyper_dimension = self.preparation(uptype, component_shape, channel_convention)
     test_out, bn_weights = self.compute_upstride_bn(uptype, axis, components)
     gamma, beta, moving_mean, moving_variance = list(map(lambda weight : tf.split(weight, hyper_dimension), bn_weights))
 
     normalize = lambda x : (x - tf.reduce_mean(x)) / tf.math.reduce_std(x)
+    channels = components[0].shape[axis]
     ref_out_unscaled = [tf.concat(list(map(normalize, tf.split(comp, channels, axis=axis))), axis=axis) for comp in components]
+
+    if channel_convention == 'channels_first':
+      ref_out_unscaled = [tf.transpose(x, (0, 2, 1)) for x in ref_out_unscaled]
+
     ref_out = tf.concat([ref_out_unscaled[i] * gamma[i] + beta[i] for i in range(hyper_dimension)], axis=0)
+
+    if channel_convention == 'channels_first':
+      ref_out = tf.transpose(ref_out, (0, 2, 1))
 
     assert_small_float_difference(test_out, ref_out, 0.001)
 
 
-  def test_basic(self):
-    uptype = UPTYPE1
-    batch_size = 5
-    input_dim = 4
-    channels = 7
-
-    component_shape = (batch_size, input_dim, channels)
-
-    channel_convention = 'channels_last'
-
+  def test_basic(self, uptype, component_shape, channel_convention):
     components, axis, hyper_dimension = self.preparation(uptype, component_shape, channel_convention)
     test_out, bn_weights = self.compute_upstride_bn(uptype, axis, components)
     gamma, beta, moving_mean, moving_variance = list(map(lambda weight : tf.split(weight, hyper_dimension), bn_weights))
@@ -341,23 +338,16 @@ class TestBatchNormalizationCompute:
     assert_small_float_difference(test_out, ref_out, 0.001)
 
 
-  def test_correct_statistics(self):
-    uptype = UPTYPE1
-    batch_size = 5
-    input_dim = 4
-    channels = 7
-
-    component_shape = (batch_size, input_dim, channels)
-
-    channel_convention = 'channels_last'
-
+  def test_correct_statistics(self, uptype, component_shape, channel_convention):
     components, axis, hyper_dimension = self.preparation(uptype, component_shape, channel_convention)
     test_out, bn_weights = self.compute_upstride_bn(uptype, axis, components)
     gamma, beta, _, _ = bn_weights
 
     test_out_comps = tf.split(test_out, hyper_dimension, axis=0)
-    out_gamma = tf.concat([tf.math.reduce_std(p, [0,1]) for p in test_out_comps], axis=0)
-    out_beta = tf.concat([tf.reduce_mean(p, [0,1]) for p in test_out_comps], axis=0)
+    reduction_dims = [0,2] if channel_convention == 'channels_first' else [0,1]
 
-    assert_small_float_difference(out_gamma, tf.abs(gamma))
-    assert_small_float_difference(out_beta, beta)
+    test_out_gamma = tf.concat([tf.math.reduce_std(comp, reduction_dims) for comp in test_out_comps], axis=0)
+    test_out_beta = tf.concat([tf.reduce_mean(comp, reduction_dims) for comp in test_out_comps], axis=0)
+
+    assert_small_float_difference(test_out_gamma, tf.abs(gamma))
+    assert_small_float_difference(test_out_beta, beta)
