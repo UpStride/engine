@@ -131,10 +131,10 @@ class TestIndependentFilter(unittest.TestCase):
     kernel_i = kernel[:, 1::2]
     print(np.mean(kernel_r))
     print(np.var(kernel_r))
-    self.assertAlmostEqual(np.var(kernel_r), 1/(20 + 10))
+    self.assertAlmostEqual(np.var(kernel_r), 1/(20 + 10), places=3)
     print(np.mean(kernel_i))
     print(np.var(kernel_i))
-    self.assertAlmostEqual(np.var(kernel_i), 1/(20 + 10))
+    self.assertAlmostEqual(np.var(kernel_i), 1/(20 + 10), places=3)
     tf.keras.backend.set_image_data_format('channels_first')
 
 

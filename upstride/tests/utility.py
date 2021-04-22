@@ -7,7 +7,7 @@ def gpu_visible():
   return tf.config.list_physical_devices('GPU') != []
 
 
-def assert_small_float_difference(tensor1, tensor2, relative_error_threshold):
+def assert_small_float_difference(tensor1, tensor2, relative_error_threshold=0.001):
     """ Asserts float tensors differ by no more than threshold scaled by the values checked
     """
     abs_diff = tf.abs(tensor1 - tensor2)
