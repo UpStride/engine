@@ -331,7 +331,7 @@ class TestBatchNormalizationCompute:
 
 @pytest.mark.parametrize('channel_convention', ['channels_last', 'channels_first'])
 @pytest.mark.parametrize('uptype', ['up0', 'up1', 'up2'])
-class TestTF2Upstride2TF(GenericTestBase):
+class TestTF2Upstride2TF:
 
     @pytest.mark.parametrize('component_shape', [
         (1, 5, 5, 8),
@@ -354,12 +354,13 @@ class TestTF2Upstride2TF(GenericTestBase):
         if channel_convention == 'channels_first':
             component_shape = tuple(component_shape[i] for i in nhwc_to_nchw_perm)
 
-        inputs = self.random_tensor(component_shape)
+        inputs = random_integer_tensor(component_shape)
+        hyper_dimension = uptypes[uptype].multivector_length
 
         # TF2Upstride test
-        layer_test = layer_test_cls(self.uptypes[uptype], strategy=tf2upstride_strategy)
+        layer_test = layer_test_cls(uptypes[uptype], strategy=tf2upstride_strategy)
         output = layer_test(inputs)
-        assert output.shape[0] == inputs.shape[0] * self.uptypes[uptype].multivector_length
+        assert output.shape[0] == inputs.shape[0] * hyper_dimension
         assert output.shape[1:] == inputs.shape[1:]
         if tf2upstride_strategy == 'basic' or '':
             assert tf.reduce_sum(output[inputs.shape[0]:, ...]) == 0
@@ -368,12 +369,12 @@ class TestTF2Upstride2TF(GenericTestBase):
 
         # Upstride2TF test
         layer_test_cls = generic_layers.Upstride2TF
-        layer_test = layer_test_cls(self.uptypes[uptype], strategy=upstride2tf_strategy)
+        layer_test = layer_test_cls(uptypes[uptype], strategy=upstride2tf_strategy)
         output = layer_test(output)
         if upstride2tf_strategy != 'concat':
             assert output.shape == inputs.shape
         else:
             axis = 1 if channel_convention == 'channels_first' else tf.rank(output) - 1
-            assert output.shape[axis] == self.uptypes[uptype].multivector_length * inputs.shape[axis]
+            assert output.shape[axis] == hyper_dimension * inputs.shape[axis]
             assert output.shape[:axis] == inputs.shape[:axis]
             assert output.shape[axis + 1:] == inputs.shape[axis + 1:]
