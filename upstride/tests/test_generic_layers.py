@@ -353,25 +353,24 @@ class TestBatchNormalizationCompute:
 
 @pytest.mark.parametrize('channel_convention', ['channels_last', 'channels_first'])
 @pytest.mark.parametrize('uptype', ['up0', 'up1', 'up2'])
-class TestTF2Upstride(GenericTestBase):
-
-    def run_test(self, channel_convention, component_shape, uptype, **kwargs):
-        self.layers_test(channel_convention, component_shape, uptype, generic_layers.TF2Upstride, **kwargs)
+class TestTF2Upstride2TF(GenericTestBase):
 
     @pytest.mark.parametrize('component_shape', [
         (1, 5, 5, 8),
         (1, 10, 10, 4),
         (1, 3, 3, 1),
     ])
-    @pytest.mark.parametrize('strategy', ['learned', 'basic', '', 'grayscale', 'joint'])
-    def test_basic(self, component_shape, strategy, channel_convention, uptype):
+    @pytest.mark.parametrize('tf2upstride_strategy', ['learned', 'basic', '', 'grayscale', 'joint'])
+    @pytest.mark.parametrize('upstride2tf_strategy', ['basic', 'default', '', 'concat', 'max_pool', 'avg_pool'])
+    def test_basic(self, component_shape, tf2upstride_strategy, upstride2tf_strategy, channel_convention, uptype):
         kwargs = {
-            'strategy' : strategy,
+            'strategy' : tf2upstride_strategy,
         }
-        if uptype == uptypes['up2'] or strategy not in ['grayscale', 'joint']:
-          self.run_test(channel_convention, component_shape, uptype, **kwargs)
+        if uptype == uptypes['up2'] or tf2upstride_strategy not in ['grayscale', 'joint']:
+          self.run_test(channel_convention, component_shape, uptype, tf2upstride_strategy, upstride2tf_strategy)
 
-    def layers_test(self, channel_convention, component_shape, uptype, layer_test_cls, **kwargs):
+    def run_test(self, channel_convention, component_shape, uptype, tf2upstride_strategy, upstride2tf_strategy):
+        layer_test_cls = generic_layers.TF2Upstride
         tf.keras.backend.set_image_data_format(channel_convention)
         nhwc_to_nchw_perm = (0, 3, 1, 2)
         if channel_convention == 'channels_first':
@@ -379,11 +378,24 @@ class TestTF2Upstride(GenericTestBase):
 
         inputs = self.random_tensor(component_shape)
 
-        layer_test = layer_test_cls(self.uptypes[uptype], **kwargs)
+        # TF2Upstride test
+        layer_test = layer_test_cls(self.uptypes[uptype], strategy=tf2upstride_strategy)
         output = layer_test(inputs)
         assert output.shape[0] == inputs.shape[0] * self.uptypes[uptype].multivector_length
         assert output.shape[1:] == inputs.shape[1:]
-        if kwargs.get('strategy') == 'basic' or '':
-          assert tf.reduce_sum(output[inputs.shape[0]:, ...]) == 0
-        elif kwargs.get('strategy') == 'grayscale':
-          assert tf.reduce_sum(output[:inputs.shape[0], ...]) == 0
+        if tf2upstride_strategy == 'basic' or '':
+            assert tf.reduce_sum(output[inputs.shape[0]:, ...]) == 0
+        elif tf2upstride_strategy == 'grayscale':
+            assert tf.reduce_sum(output[:inputs.shape[0], ...]) == 0
+
+        # Upstride2TF test
+        layer_test_cls = generic_layers.Upstride2TF
+        layer_test = layer_test_cls(self.uptypes[uptype], strategy=upstride2tf_strategy)
+        output = layer_test(output)
+        if upstride2tf_strategy != 'concat':
+            assert output.shape == inputs.shape
+        else:
+            axis = 1 if channel_convention == 'channels_first' else tf.rank(output) - 1
+            assert output.shape[axis] == self.uptypes[uptype].multivector_length * inputs.shape[axis]
+            assert output.shape[:axis] == inputs.shape[:axis]
+            assert output.shape[axis + 1:] == inputs.shape[axis + 1:]
