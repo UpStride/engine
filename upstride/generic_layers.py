@@ -261,14 +261,14 @@ class GenericLinear(UpstrideLayer):
     return layer(**kwargs)
 
 
-class HamiltonProductLayer(UpstrideLayer):
+class GeometricMatrixMultiply(UpstrideLayer):
   def __init__(self, uptype):
     super().__init__(uptype)
 
   def call(self, input_tensors, training=False):
     """
-    to implement the hamilton product, the simplest way it to split the 2 input tensors and compute the real
-    hamilton product between every pair of blades. the recompose the output tensor using the unit_multiplier function
+    To implement the geometric matrix multiplication, the simplest way it to split the 2 input tensors and compute the real
+    matrix multiplication product between every pair of blades, then recompose the output tensor using the unit_multiplier function
     to know the sign to put if front of every multiplication result
 
     Args:

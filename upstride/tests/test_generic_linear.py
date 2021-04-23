@@ -1,52 +1,26 @@
 import pytest
-import numpy as np
 import tensorflow as tf
 from tensorflow.python.keras.utils.conv_utils import convert_data_format
 from functools import lru_cache
 from upstride import generic_layers
 from upstride import convolutional
-from upstride.uptypes_utilities import UPTYPE0, UPTYPE1, UPTYPE2
-from .utility import gpu_visible, assert_small_float_difference, random_float_tensor, random_integer_tensor
+from .utility import gpu_visible, assert_small_float_difference, random_float_tensor, random_integer_tensor, uptypes, algebra_maps, create_components
 
 
 ### Tests infrastructure
 
 class GenericTestBase:
 
-    uptypes = {
-        'up0' : UPTYPE0,
-        'up1' : UPTYPE1,
-        'up2' : UPTYPE2,
-    }
-    algebra_maps = {
-        'up0' : np.array([
-            [(0, 1)],
-        ]),
-        'up1' : np.array([
-            [(0, 1), (1, 1)],
-            [(1, 1), (0, -1)],
-        ]),
-        'up2' : np.array([
-            [(0, 1), (1, 1), (2, 1), (3, 1)],
-            [(1, 1), (0, -1), (3, -1), (2, 1)],
-            [(2, 1), (3, 1), (0, -1), (1, -1)],
-            [(3, 1), (2, -1), (1, 1), (0, -1)],
-        ]),
-    }
-
     def setup(self, random_tensor=random_integer_tensor):
         self.random_tensor = random_tensor
 
     # assumes zero-filled / no bias
     def generic_linear_test(self, layer_test, layer_ref, uptype, component_shape):
-        algebra_map = self.algebra_maps[uptype]
-        hyper_dimension = self.uptypes[uptype].multivector_length
+        algebra_map = algebra_maps[uptype]
+        hyper_dimension = uptypes[uptype].multivector_length
 
         # prepare input hyper-complex components
-        components = []
-        for _ in range(hyper_dimension):
-            component = self.random_tensor(component_shape)
-            components.append(component)
+        components = create_components(hyper_dimension, component_shape, self.random_tensor)
 
         # run test operation
         inp = tf.concat(components, axis=0)
@@ -54,7 +28,7 @@ class GenericTestBase:
 
         # prepare filter weights for the reference operation
         w = layer_test.get_weights()[0]
-        if len(w.shape) != 5:
+        if len(w.shape) != 5: # Parcollet implementation uses a separate hyper-dimension
             w = [w[..., i::hyper_dimension] for i in range(hyper_dimension)]
 
         # run reference once to initialize weights
@@ -75,12 +49,12 @@ class GenericTestBase:
         for i in range(hyper_dimension):
             for j in range(hyper_dimension):
                 which, coeff = algebra_map[i][j]
-                ref_outputs[which] = ref_outputs[which] + ref_partial[i][j] * coeff
+                ref_outputs[which] += ref_partial[i][j] * coeff
 
         # add bias if necessary
         if layer_ref.use_bias:
             bias = layer_test.get_weights()[1]
-            if len(bias.shape) != 2:
+            if len(bias.shape) != 2: # Parcollet implementation uses a separate hyper-dimension
                 bias = [bias[i::hyper_dimension] for i in range(hyper_dimension)]
             for i in range(hyper_dimension):
                 ref_outputs[i] = self.add_bias_component(ref_outputs[i], bias[i], layer_ref, component_shape)
@@ -132,7 +106,7 @@ class GenericTestBase:
         kwargs = self.try_set_filter_initializer(layer_test_cls, **kwargs)
         kwargs = self.try_set_bias(**kwargs)
 
-        layer_test = layer_test_cls(self.uptypes[uptype], **kwargs)
+        layer_test = layer_test_cls(uptypes[uptype], **kwargs)
         layer_ref = layer_ref_cls(**kwargs)
         self.generic_linear_test(layer_test, layer_ref, uptype, component_shape)
 

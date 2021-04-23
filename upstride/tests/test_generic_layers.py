@@ -3,80 +3,67 @@ import pytest
 import numpy as np
 import tensorflow as tf
 from upstride.generic_layers import ga_multiply_get_index, unit_multiplier, square_vector
-from upstride.uptypes_utilities import UPTYPE0, UPTYPE1, UPTYPE2, UPTYPE3, UpstrideDatatype
-from upstride.tests.utility import random_integer_tensor, assert_small_float_difference
+from upstride.uptypes_utilities import UPTYPE3
+from upstride.tests.utility import random_integer_tensor, assert_small_float_difference, uptypes, create_components
 from upstride import generic_layers
 from upstride.type1.tf.keras import layers as layers_t1
 from .test_generic_linear import GenericTestBase
 
 
-UPTYPE2_alternative = UpstrideDatatype(2, (0, 2, 0), ['', '1', '2', '12'])
-
-uptypes = {
-  'up0' : UPTYPE0,
-  'up1' : UPTYPE1,
-  'up2' : UPTYPE2,
-  'up3' : UPTYPE3,
-  'up2_alt' : UPTYPE2_alternative,
-}
-
-
-def ga_multiply_get_index_by_insertion_sort(uptype, index_1, index_2):
-  l = [int(i) for i in index_1] + [int(j) for j in index_2] + ['guard'] # adding 'guard' to the end of the list for easier pairs removal
-
-  n = len(l) - 1
-  inversions = 0
-  head = 1
-  # insertion sort with inversions count, invariant: l[:head] already sorted
-  while head < n:
-    i = head
-    while i > 0 and l[i-1] > l[i]:
-      l[i-1], l[i] = l[i], l[i-1]
-      inversions += 1
-      i -= 1
-    head += 1
-
-  out_l = []
-  s = 1
-  i = 0
-  # remove paired indexes
-  while i < n:
-    if l[i] != l[i+1]: # can check l[i+1] thanks to the 'guard' element
-      out_l.append(l[i])
-    else:
-      s *= square_vector(uptype, l[i])
-      i += 1
-    i += 1
-
-  return s * (-1 if inversions % 2 == 1 else 1), "".join([str(i) for i in out_l])
-
-
-def ga_multiply_get_index_by_sort(uptype, index_1, index_2):
-  l = [int(i) for i in index_1] + [int(j) for j in index_2]
-  n = len(l)
-  inversions = 0
-  # count inversions
-  for i in range(n):
-    for j in range(i+1, n):
-      if l[i] > l[j]:
-        inversions += 1
-
-  l = ['x'] + sorted(l) + ['y'] # add guards at both ends for easier indexing
-  out_l = []
-  s = 1
-  # remove paired indexes
-  for i in range(1, n+1):
-    if l[i-1] == l[i]:
-      s *= square_vector(uptype, l[i])
-    elif l[i] == l[i+1]:
-      pass
-    else:
-      out_l.append(l[i])
-
-  return s * (-1 if inversions % 2 == 1 else 1), "".join([str(i) for i in out_l])
-
-
 class TestGAUtilities:
+
+  def ga_multiply_get_index_by_insertion_sort(self, uptype, index_1, index_2):
+    l = [int(i) for i in index_1] + [int(j) for j in index_2] + ['guard'] # adding 'guard' to the end of the list for easier pairs removal
+
+    n = len(l) - 1
+    inversions = 0
+    head = 1
+    # insertion sort with inversions count, invariant: l[:head] already sorted
+    while head < n:
+      i = head
+      while i > 0 and l[i-1] > l[i]:
+        l[i-1], l[i] = l[i], l[i-1]
+        inversions += 1
+        i -= 1
+      head += 1
+
+    out_l = []
+    s = 1
+    i = 0
+    # remove paired indexes
+    while i < n:
+      if l[i] != l[i+1]: # can check l[i+1] thanks to the 'guard' element
+        out_l.append(l[i])
+      else:
+        s *= square_vector(uptype, l[i])
+        i += 1
+      i += 1
+
+    return s * (-1 if inversions % 2 == 1 else 1), "".join([str(i) for i in out_l])
+
+  def ga_multiply_get_index_by_sort(self, uptype, index_1, index_2):
+    l = [int(i) for i in index_1] + [int(j) for j in index_2]
+    n = len(l)
+    inversions = 0
+    # count inversions
+    for i in range(n):
+      for j in range(i+1, n):
+        if l[i] > l[j]:
+          inversions += 1
+
+    l = ['x'] + sorted(l) + ['y'] # add guards at both ends for easier indexing
+    out_l = []
+    s = 1
+    # remove paired indexes
+    for i in range(1, n+1):
+      if l[i-1] == l[i]:
+        s *= square_vector(uptype, l[i])
+      elif l[i] == l[i+1]:
+        pass
+      else:
+        out_l.append(l[i])
+
+    return s * (-1 if inversions % 2 == 1 else 1), "".join([str(i) for i in out_l])
 
   @pytest.mark.parametrize('uptype, ref_squares', [
     ('up0', []),
@@ -103,7 +90,7 @@ class TestGAUtilities:
   ])
   def test_ga_multiply_get_index(self, uptype, index_1, index_2):
     uptype = uptypes[uptype]
-    assert ga_multiply_get_index(uptype, index_1, index_2) == ga_multiply_get_index_by_sort(uptype, index_1, index_2)
+    assert ga_multiply_get_index(uptype, index_1, index_2) == self.ga_multiply_get_index_by_sort(uptype, index_1, index_2)
 
   @pytest.mark.parametrize('uptype, i, j', [
     ('up1', 1, 0),
@@ -116,7 +103,6 @@ class TestGAUtilities:
     test_mult = unit_multiplier(uptype, i, j)
     ref_sign, ref_index = ga_multiply_get_index(uptype, uptype.blade_indexes[i], uptype.blade_indexes[j])
     assert test_mult == (uptype.blade_indexes.index(ref_index), ref_sign)
-
 
 
 class TestGAMultiplication(unittest.TestCase):
@@ -279,12 +265,7 @@ class TestBatchNormalizationCompute:
     nic_to_nci_perm = (0, 2, 1)
     if channel_convention == 'channels_first':
       component_shape = tuple(component_shape[i] for i in nic_to_nci_perm)
-
-    components = []
-    for _ in range(hyper_dimension):
-      component = random_integer_tensor(component_shape)
-      components.append(component)
-
+    components = create_components(hyper_dimension, component_shape)
     return components, axis, hyper_dimension
 
   def compute_upstride_bn(self, uptype, axis, components):
@@ -293,12 +274,9 @@ class TestBatchNormalizationCompute:
       'beta_initializer' : random_integer_tensor,
       'epsilon' : 0,
     }
-
     layer = generic_layers.BatchNormalization(uptypes[uptype], axis=axis, **kwargs)
-
     inp = tf.concat(components, axis=0)
     test_out = layer(inp, training=True)
-
     return test_out, layer.get_weights()
 
   def test_manual(self, uptype, component_shape, channel_convention):

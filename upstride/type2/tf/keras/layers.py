@@ -123,6 +123,7 @@ class BatchNormalization(generic_layers.BatchNormalization):
   def __init__(self, *args, **kwargs):
     super().__init__(UPTYPE2, *args, **kwargs)
 
-class HamiltonProductLayer(generic_layers.HamiltonProductLayer):
+
+class GeometricMatrixMultiply(generic_layers.GeometricMatrixMultiply):
   def __init__(self, *args, **kwargs):
     super().__init__(UPTYPE2, *args, **kwargs)
