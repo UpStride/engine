@@ -470,3 +470,61 @@ class TestTF2Upstride:
     layer = upstride.type2.tf.keras.layers.TF2Upstride('grayscale')
     test_out = layer(inp)
     assert tf.reduce_all(test_out == ref_out)
+
+
+class TestUpstride2TF:
+
+  @pytest.mark.parametrize('uptype, inp, ref_out', [
+    ('up0', [1], [1]),
+    ('up1', [1, 2], [1]),
+    ('up2', [1, 2, 3, 4], [1]),
+    ('up0', [[1, 5]], [[1, 5]]),
+    ('up1', [[1, 5], [2, 6]], [[1, 5]]),
+    ('up2', [[1, 5], [2, 6], [3, 7], [4, 8]], [[1, 5]])
+  ])
+  def test_basic(self, uptype, inp, ref_out):
+    layer = generic_layers.Upstride2TF(uptypes[uptype], 'basic')
+    test_out = layer(inp)
+    assert tf.reduce_all(test_out == ref_out)
+
+
+  @pytest.mark.parametrize('uptype, inp, ref_out', [
+    ('up0', [[1]], [[1]]),
+    ('up1', [[1], [2]], [[1, 2]]),
+    ('up2', [[1], [2], [3], [4]], [[1, 2, 3, 4]]),
+    ('up0', [[1, 5]], [[1, 5]]),
+    ('up1', [[1, 5], [2, 6]], [[1, 5, 2, 6]]),
+    ('up2', [[1, 5], [2, 6], [3, 7], [4, 8]], [[1, 5, 2, 6, 3, 7, 4, 8]])
+  ])
+  def test_concat(self, uptype, inp, ref_out):
+    layer = generic_layers.Upstride2TF(uptypes[uptype], 'concat')
+    test_out = layer(inp)
+    assert tf.reduce_all(test_out == ref_out)
+
+
+  @pytest.mark.parametrize('uptype, inp, ref_out', [
+    ('up0', [1], [1]),
+    ('up1', [1, 2], [2]),
+    ('up2', [1, 2, 3, 4], [4]),
+    ('up0', [[1, 5]], [[1, 5]]),
+    ('up1', [[1, 5], [2, 6]], [[2, 6]]),
+    ('up2', [[1, 5], [2, 6], [3, 7], [4, 8]], [[4, 8]])
+  ])
+  def test_max_pool(self, uptype, inp, ref_out):
+    layer = generic_layers.Upstride2TF(uptypes[uptype], 'max_pool')
+    test_out = layer(inp)
+    assert tf.reduce_all(test_out == ref_out)
+
+
+  @pytest.mark.parametrize('uptype, inp, ref_out', [
+    ('up0', [1.], [1.]),
+    ('up1', [1., 2.], [1.5]),
+    ('up2', [1., 2., 3., 4.], [2.5]),
+    ('up0', [[1., 5.]], [[1., 5.]]),
+    ('up1', [[1., 5.], [2., 6.]], [[1.5, 5.5]]),
+    ('up2', [[1., 5.], [2., 6.], [3., 7.], [4., 8.]], [[2.5, 6.5]])
+  ])
+  def test_avg_pool(self, uptype, inp, ref_out):
+    layer = generic_layers.Upstride2TF(uptypes[uptype], 'avg_pool')
+    test_out = layer(inp)
+    assert tf.reduce_all(test_out == ref_out)
