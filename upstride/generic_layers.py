@@ -452,41 +452,52 @@ class TF2UpstrideLearned(tf.keras.layers.Layer):
   """
 
   def __init__(self, uptype, channels=3, kernel_size=3, use_bias=False, kernel_initializer='glorot_uniform', kernel_regularizer=None):
+    """ The argument "channels" is no longer used, but it is kept anyway for backward compatibility.
+    """
     super().__init__()
     self.axis = -1 if tf.keras.backend.image_data_format() == 'channels_last' else 1
     self.layers = []
     self.uptype = uptype
-    for i in range(1, self.uptype.multivector_length):
+    self.kernel_size = kernel_size
+    self.use_bias = use_bias
+    self.kernel_initializer = kernel_initializer
+    self.kernel_regularizer = kernel_regularizer
+
+  def build(self, input_shape):
+    channels = input_shape[self.axis]
+    for _ in range(1, self.uptype.multivector_length):
       self.layers.append(tf.keras.Sequential([
           tf.keras.layers.BatchNormalization(axis=self.axis),
           tf.keras.layers.Activation('relu'),
-          tf.keras.layers.Conv2D(channels, (kernel_size, kernel_size), padding='same', use_bias=use_bias,
-                                 kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer),
+          tf.keras.layers.Conv2D(channels, (self.kernel_size, self.kernel_size), padding='same',
+                                 use_bias=self.use_bias,
+                                 kernel_initializer=self.kernel_initializer,
+                                 kernel_regularizer=self.kernel_regularizer),
           tf.keras.layers.BatchNormalization(axis=self.axis),
           tf.keras.layers.Activation('relu'),
-          tf.keras.layers.Conv2D(channels, (kernel_size, kernel_size), padding='same', use_bias=use_bias,
-                                 kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer)
+          tf.keras.layers.Conv2D(channels, (self.kernel_size, self.kernel_size), padding='same',
+                                 use_bias=self.use_bias,
+                                 kernel_initializer=self.kernel_initializer,
+                                 kernel_regularizer=self.kernel_regularizer)
       ]))
-    self.concat = tf.keras.layers.Concatenate(axis=0)
 
   def call(self, input_tensor):
     outputs = [input_tensor]
     for layer in self.layers:
       outputs.append(layer(input_tensor))
-    return self.concat(outputs)
+    return tf.concat(outputs, axis=0)
 
 
 class TF2UpstrideBasic(tf.keras.layers.Layer):
   def __init__(self, uptype):
     super().__init__()
     self.uptype = uptype
-    self.concat = tf.keras.layers.Concatenate(axis=0)
 
   def call(self, x):
     outputs = [x]
     for _ in range(1, self.uptype.multivector_length):
       outputs.append(tf.zeros_like(x))
-    return self.concat(outputs)
+    return tf.concat(outputs, axis=0)
 
 
 class Upstride2TF(UpstrideLayer):

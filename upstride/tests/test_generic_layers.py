@@ -7,6 +7,7 @@ from upstride.uptypes_utilities import UPTYPE0, UPTYPE1, UPTYPE2, UPTYPE3, Upstr
 from upstride.tests.utility import random_integer_tensor, assert_small_float_difference
 from upstride import generic_layers
 from upstride.type1.tf.keras import layers as layers_t1
+from .test_generic_linear import GenericTestBase
 
 
 UPTYPE2_alternative = UpstrideDatatype(2, (0, 2, 0), ['', '1', '2', '12'])
@@ -300,7 +301,6 @@ class TestBatchNormalizationCompute:
 
     return test_out, layer.get_weights()
 
-
   def test_manual(self, uptype, component_shape, channel_convention):
     components, axis, hyper_dimension = self.preparation(uptype, component_shape, channel_convention)
     test_out, bn_weights = self.compute_upstride_bn(uptype, axis, components)
@@ -320,7 +320,6 @@ class TestBatchNormalizationCompute:
 
     assert_small_float_difference(test_out, ref_out, 0.001)
 
-
   def test_basic(self, uptype, component_shape, channel_convention):
     components, axis, hyper_dimension = self.preparation(uptype, component_shape, channel_convention)
     test_out, bn_weights = self.compute_upstride_bn(uptype, axis, components)
@@ -337,7 +336,6 @@ class TestBatchNormalizationCompute:
 
     assert_small_float_difference(test_out, ref_out, 0.001)
 
-
   def test_correct_statistics(self, uptype, component_shape, channel_convention):
     components, axis, hyper_dimension = self.preparation(uptype, component_shape, channel_convention)
     test_out, bn_weights = self.compute_upstride_bn(uptype, axis, components)
@@ -351,3 +349,41 @@ class TestBatchNormalizationCompute:
 
     assert_small_float_difference(test_out_gamma, tf.abs(gamma))
     assert_small_float_difference(test_out_beta, beta)
+
+
+@pytest.mark.parametrize('channel_convention', ['channels_last', 'channels_first'])
+@pytest.mark.parametrize('uptype', ['up0', 'up1', 'up2'])
+class TestTF2Upstride(GenericTestBase):
+
+    def run_test(self, channel_convention, component_shape, uptype, **kwargs):
+        self.layers_test(channel_convention, component_shape, uptype, generic_layers.TF2Upstride, **kwargs)
+
+    @pytest.mark.parametrize('component_shape', [
+        (1, 5, 5, 8),
+        (1, 10, 10, 4),
+        (1, 3, 3, 1),
+    ])
+    @pytest.mark.parametrize('strategy', ['learned', 'basic', '', 'grayscale', 'joint'])
+    def test_basic(self, component_shape, strategy, channel_convention, uptype):
+        kwargs = {
+            'strategy' : strategy,
+        }
+        if uptype == uptypes['up2'] or strategy not in ['grayscale', 'joint']:
+          self.run_test(channel_convention, component_shape, uptype, **kwargs)
+
+    def layers_test(self, channel_convention, component_shape, uptype, layer_test_cls, **kwargs):
+        tf.keras.backend.set_image_data_format(channel_convention)
+        nhwc_to_nchw_perm = (0, 3, 1, 2)
+        if channel_convention == 'channels_first':
+            component_shape = tuple(component_shape[i] for i in nhwc_to_nchw_perm)
+
+        inputs = self.random_tensor(component_shape)
+
+        layer_test = layer_test_cls(self.uptypes[uptype], **kwargs)
+        output = layer_test(inputs)
+        assert output.shape[0] == inputs.shape[0] * self.uptypes[uptype].multivector_length
+        assert output.shape[1:] == inputs.shape[1:]
+        if kwargs.get('strategy') == 'basic' or '':
+          assert tf.reduce_sum(output[inputs.shape[0]:, ...]) == 0
+        elif kwargs.get('strategy') == 'grayscale':
+          assert tf.reduce_sum(output[:inputs.shape[0], ...]) == 0
