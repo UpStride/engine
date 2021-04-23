@@ -378,3 +378,95 @@ class TestTF2Upstride2TF:
             assert output.shape[axis] == hyper_dimension * inputs.shape[axis]
             assert output.shape[:axis] == inputs.shape[:axis]
             assert output.shape[axis + 1:] == inputs.shape[axis + 1:]
+
+
+class TestTF2Upstride:
+
+  @pytest.mark.parametrize('uptype', ['up0', 'up1', 'up2'])
+  def test_basic_type_agnostic(self, uptype):
+    uptype = uptypes[uptype]
+    inp_shape = (1,)
+    inp = random_integer_tensor(inp_shape)
+    layer = generic_layers.TF2Upstride(uptype, 'basic')
+    test_out = layer(inp)
+    ref_out = [inp[0]] + [0] * (uptype.multivector_length - 1)
+    assert tf.reduce_all(test_out == ref_out)
+
+
+  @pytest.mark.parametrize('uptype, inp, ref_out', [
+    ('up0', [1], [1]),
+    ('up1', [1], [1, 0]),
+    ('up2', [1], [1, 0, 0, 0]),
+    ('up0', [[1, 2]], [[1, 2]]),
+    ('up1', [[1, 2]], [[1, 2], [0, 0]]),
+    ('up2', [[1, 2]], [[1, 2], [0, 0], [0, 0], [0, 0]])
+  ])
+  def test_basic(self, uptype, inp, ref_out):
+    layer = generic_layers.TF2Upstride(uptypes[uptype], 'basic')
+    test_out = layer(inp)
+    assert tf.reduce_all(test_out == ref_out)
+
+
+  @pytest.mark.parametrize('channel_convention', ['channels_last', 'channels_first'])
+  @pytest.mark.parametrize('uptype', ['up0', 'up1', 'up2'])
+  @pytest.mark.parametrize('inp_shape', [
+    (1, 5, 5, 3),
+    (2, 4, 4, 7),
+  ])
+  def test_learned(self, channel_convention, uptype, inp_shape):
+    uptype = uptypes[uptype]
+    tf.keras.backend.set_image_data_format(channel_convention)
+    nhwc_to_nchw_perm = (0, 3, 1, 2)
+    if channel_convention == 'channels_first':
+      inp_shape = tuple(inp_shape[i] for i in nhwc_to_nchw_perm)
+
+    inp = random_integer_tensor(inp_shape)
+    layer = generic_layers.TF2Upstride(uptype, 'learned')
+    layer.build(input_shape=inp_shape)
+    test_out = layer(inp)
+    ref_shape = (inp_shape[i] if i != 0 else inp_shape[i] * uptype.multivector_length for i in range(len(inp_shape)))
+    assert test_out.shape == ref_shape
+
+
+  @pytest.mark.parametrize('channel_convention', ['channels_last', 'channels_first'])
+  @pytest.mark.parametrize('inp, ref_out', [
+    ([[[[1, 2, 3]]]], [[[[0]]], [[[1]]], [[[2]]], [[[3]]]]),
+    ([[[[1, 2, 3], [1, 2, 3]]]], [[[[0, 0]]], [[[1, 1]]], [[[2, 2]]], [[[3, 3]]]])
+  ])
+  def test_joint(self, channel_convention, inp, ref_out):
+    import upstride
+    uptype = uptypes['up2']
+    tf.keras.backend.set_image_data_format(channel_convention)
+
+    nhwc_to_nchw_perm = (0, 3, 1, 2)
+    if channel_convention == 'channels_first':
+      inp = tf.transpose(inp, nhwc_to_nchw_perm)
+      ref_out = tf.transpose(ref_out, nhwc_to_nchw_perm)
+    inp = np.array(inp)
+
+    layer = upstride.type2.tf.keras.layers.TF2Upstride('joint')
+    test_out = layer(inp)
+    assert tf.reduce_all(test_out == ref_out)
+
+
+  grayscale_scalar = tf.image.rgb_to_grayscale([1, 2, 3])[0]
+
+  @pytest.mark.parametrize('channel_convention', ['channels_last', 'channels_first'])
+  @pytest.mark.parametrize('inp, ref_out', [
+    ([[[[1, 2, 3]]]], [[[[grayscale_scalar]]], [[[1]]], [[[2]]], [[[3]]]]),
+    ([[[[1, 2, 3], [1, 2, 3]]]], [[[[grayscale_scalar, grayscale_scalar]]], [[[1, 1]]], [[[2, 2]]], [[[3, 3]]]])
+  ])
+  def test_grayscale(self, channel_convention, inp, ref_out):
+    import upstride
+    uptype = uptypes['up2']
+    tf.keras.backend.set_image_data_format(channel_convention)
+
+    nhwc_to_nchw_perm = (0, 3, 1, 2)
+    if channel_convention == 'channels_first':
+      inp = tf.transpose(inp, nhwc_to_nchw_perm)
+      ref_out = tf.transpose(ref_out, nhwc_to_nchw_perm)
+    inp = np.array(inp)
+
+    layer = upstride.type2.tf.keras.layers.TF2Upstride('grayscale')
+    test_out = layer(inp)
+    assert tf.reduce_all(test_out == ref_out)
