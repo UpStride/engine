@@ -475,12 +475,13 @@ class TestUpstride2TF:
     layer_test = layer_test_cls(uptypes[uptype], strategy=upstride2tf_strategy)
     output = layer_test(inputs)
     if upstride2tf_strategy != 'concat':
-      assert output.shape == inputs.shape
+      assert output.shape[1:] == inputs.shape[1:]
     else:
       axis = 1 if channel_convention == 'channels_first' else tf.rank(output) - 1
       assert output.shape[axis] == hyper_dimension * inputs.shape[axis]
-      assert output.shape[:axis] == inputs.shape[:axis]
+      assert output.shape[1:axis] == inputs.shape[1:axis]
       assert output.shape[axis + 1:] == inputs.shape[axis + 1:]
+    assert output.shape[0] * hyper_dimension == inputs.shape[0]
 
 
   def run_test(self, uptype, inp, ref_out, up2tf_strategy):
