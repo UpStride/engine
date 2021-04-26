@@ -340,9 +340,9 @@ class TestTF2Upstride:
   @pytest.mark.parametrize('tf2upstride_strategy', ['learned', 'basic', '', 'grayscale', 'joint'])
   def test_generic(self, component_shape, tf2upstride_strategy, channel_convention, uptype):
     if uptype == uptypes['up2'] or tf2upstride_strategy not in ['grayscale', 'joint']:
-      self.run_test(channel_convention, component_shape, uptype, tf2upstride_strategy)
+      self.run_generic_test(channel_convention, component_shape, uptype, tf2upstride_strategy)
 
-  def run_test(self, channel_convention, component_shape, uptype, tf2upstride_strategy):
+  def run_generic_test(self, channel_convention, component_shape, uptype, tf2upstride_strategy):
     layer_test_cls = generic_layers.TF2Upstride
     tf.keras.backend.set_image_data_format(channel_convention)
     nhwc_to_nchw_perm = (0, 3, 1, 2)
@@ -461,7 +461,7 @@ class TestUpstride2TF:
       (8, 3, 3, 1),
   ])
   @pytest.mark.parametrize('upstride2tf_strategy', ['basic', 'default', '', 'concat', 'max_pool', 'avg_pool'])
-  def test_basic(self, component_shape, upstride2tf_strategy, channel_convention, uptype):
+  def test_generic(self, component_shape, upstride2tf_strategy, channel_convention, uptype):
     layer_test_cls = generic_layers.TF2Upstride
     tf.keras.backend.set_image_data_format(channel_convention)
     nhwc_to_nchw_perm = (0, 3, 1, 2)
