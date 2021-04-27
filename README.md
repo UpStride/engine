@@ -3,7 +3,7 @@
 In this document we discuss the notions of Geometric Algebra (section Theory) and explain how GA is implemented in our UpStride engine (section Implementation).
 
 - [Introduction](#introduction)
-- [Theory](#thoery)
+- [Theory](#theory)
   - [Definitions](#definitions)
   - [Data representation](#data-representation)
   - [Linear layers](#linear-layers)
@@ -19,7 +19,7 @@ In this document we discuss the notions of Geometric Algebra (section Theory) an
 - [Implementation](#implementation)
   - [Using Upstride Engine](#using-upstride-engine)
     - [Factor parameter](#factor-parameter)
-    - [Initialization](#initialization)
+    - [Initialization](#initialization-1)
     - [TF2Upstride](#tf2upstride)
     - [Upstride2TF](#upstride2tf)
 - [References](#references)
@@ -29,21 +29,21 @@ In this document we discuss the notions of Geometric Algebra (section Theory) an
 
 Before we proceed lets look at some of the definitions and notations we will be using in this document.
 
-* _blade_ - A blade is a generalization of the concept of scalars and vectors. Specifically, a $k$-blade is any object that can be expressed as the exterior product (or wedge $\wedge$ product) of $k$ vectors, and is of grade $k$.
-* _Multivector_ - A multivector is a linear combination of k-blades.
-* $\mathbb{G} \circ \mathbb{M}$ - GA represented as real values in the matrix form. This is crucial as numerical computation frameworks like Tensorflow do not support GA yet.
-* $\mathbb{M} \circ \mathbb{G}$ - Matrices of GA. This representation has difficult to work with the frameworks like TensorFlow as we don't have a data type that can natively represent GA.
-* $x$ - Inputs to the Neural Network layer
-* $y$ - Outputs to the Neural Network layer
-* $W$ - Weights to the Neural Network layer
-* $\sum$ - Summation
-* $\beta_i$ - Represents the ith-blade
-* $\mathbb{R^3}$ - a vector space of dimension 3 over the field $\mathbb R$ of real numbers.
-* $\wedge$ - exterior product or wedge product
+- _blade_ - A blade is a generalization of the concept of scalars and vectors. Specifically, a $k$-blade is any object that can be expressed as the exterior product (or wedge $\wedge$ product) of $k$ vectors, and is of grade $k$.
+- _Multivector_ - A multivector is a linear combination of k-blades.
+- $\mathbb{G} \circ \mathbb{M}$ - GA represented as real values in the matrix form. This is crucial as numerical computation frameworks like Tensorflow do not support GA yet.
+- $\mathbb{M} \circ \mathbb{G}$ - Matrices of GA. This representation has difficult to work with the frameworks like TensorFlow as we don't have a data type that can natively represent GA.
+- $x$ - Inputs to the Neural Network layer
+- $y$ - Outputs to the Neural Network layer
+- $W$ - Weights to the Neural Network layer
+- $\sum$ - Summation
+- $\beta_i$ - Represents the ith-blade
+- $\mathbb{R^3}$ - a vector space of dimension 3 over the field $\mathbb R$ of real numbers.
+- $\wedge$ - exterior product or wedge product
 
 The Geometric Algebra (GA) represenatation is implemented in python as $\mathbb{G} \circ \mathbb{M}$, or geometrical algebra over matrices. Code is written in TensorFlow using Keras high-level API and supports Python 3.6 or higher.
 
-The goal of th1182is document is to provide all the mathematical explanations and algorithm details to understand the code.
+The goal of this document is to provide all the mathematical explanations and algorithm details to understand the code.
 
 ## Data representation
 
@@ -288,7 +288,7 @@ This is a simple neural network that uses UpStride layers:
 
 ```python
 import tensorflow as tf
-from upstride.typetf.keras import layers
+from upstride.type2.keras import layers
 
 inputs = tf.keras.layers.Input(shape=(224, 224, 3))
 x = layers.TF2Upstride()(inputs)
@@ -328,9 +328,9 @@ UpStride's engine is divided in three main modules `type0`, `type1` and `type2`.
 # type 0
 from upstride.type0.tf.keras import layers
 # type 1
-from upstride.typetf.keras import layers
+from upstride.type1.keras import layers
 # type 2
-from upstride.typetf.keras import layers
+from upstride.type2.keras import layers
 ```
 
 When a network is built with `type0`, it is equivalent to the real valued network or just using tensorflow layers without upstride engine.
@@ -343,7 +343,7 @@ This is a simple neural network that uses UpStride layers (type 2) with `factor`
 
 ```python
 import tensorflow as tf
-from upstride.typetf.keras import layers
+from upstride.type2.keras import layers
 
 factor = 4
 
@@ -385,7 +385,7 @@ Weight initialization are done similar to TensorFlow/Keras. We utilize the `kern
 For example,
 
 ```python
-from upstride.typetf.keras import layers
+from upstride.type2.keras import layers
 # ...
 # ...
 x = layers.Conv2D(32 // factor, (3, 3), kernel_initializer='glorot')(x)
