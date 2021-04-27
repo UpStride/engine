@@ -19,7 +19,7 @@ In this document we discuss the notions of Geometric Algebra (section Theory) an
 - [Implementation](#implementation)
   - [Using Upstride Engine](#using-upstride-engine)
     - [Factor parameter](#factor-parameter)
-    - [Initialization](#initialization-1)
+    - [Initialization](#initialization)
     - [TF2Upstride](#tf2upstride)
     - [Upstride2TF](#upstride2tf)
 - [References](#references)
@@ -365,14 +365,14 @@ The `factor` parameter is used to linearly scale the number of feature maps in t
 For example,
 
 ```python
-x = layers.Conv2D(32 // factor, (3, 3))(x)
+x = layers.Conv2D(32 / factor, (3, 3))(x)
 ```
 
 Here, `factor = 2` reduces the number of channels to 16, `factor = 4` reduces the number of channels to 8.
 
 Due to the way the UpStride engine is implemented, the vanilla approach (without using the `factor` i.e. when `factor` = 1) results in a model that contains more free parameters than its pure TensorFlow counterpart. Usually, to roughly match the number of parameters of a real network with a network based on an algebra with $k$ blades, factor $\sqrt{k}$ should be used (though some layers do not comply with that, for example for a network with only DepthwiseConv2D layers, factor $k$ should be used for that aim).
 
-Our classification-api repository contains a parameter `factor` to automatically scale the models we use. Ensure the value is large enough not to hinder the learning capability of the network. In the example above, the ouput channels for the first `Conv2D` is `32 // factor`. If `factor = 32` is used then resulting output will be `1`. The network will struggle to extract features with just 1 output channel.
+Our classification-api repository contains a parameter `factor` to automatically scale the models we use. Ensure the value is large enough not to hinder the learning capability of the network. In the example above, the ouput channels for the first `Conv2D` is `32 / factor`. If `factor = 32` is used then resulting output will be `1`. The network will struggle to extract features with just 1 output channel.
 
 ## Initialization
 
