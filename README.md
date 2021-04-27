@@ -427,6 +427,21 @@ x = layers.Upstride2TF(strategy="max_pool")(x)
 x = layers.Upstride2TF(strategy="avg_pool")(x)
 ```
 
+## Tests
+
+To run tests, install pip package `pytest` and run the following in the main directory:
+
+> python test.py
+
+Pytest offers the following useful command line arguments:
+
++ -v : increases verbosity, e.g. prints test names
++ -s : prints standard output
++ -k Simple : runs only tests with "Simple" in their name
++ -k "Conv2D and (not basic or not grouped)" : runs only tests which have "Conv2D" in their name and have neither "basic" or "grouped" in their name
++ -m exhaustive : runs only tests marked as "exhaustive" in the code
++ ... filename : runs only tests from a given filename
+
 # References
 
 1. Chiheb Trabelsi, Olexa Bilaniuk, Ying Zhang, Dmitriy Serdyuk, Sandeep Subramanian, João Felipe Santos, Soroush Mehri, Negar Rostamzadeh, Yoshua Bengio, Christopher J Pal. “Deep Complex Networks”. In Internation Conference on Learning Representations (ICLR), 2018
