@@ -337,7 +337,7 @@ When a network is built with `type0`, it is equivalent to the real valued networ
 
 In the following three sections we describe some specific features implemented in our framework, such as the `factor` parameter, and conversion strategies: `Upstride2TF` and `TF2Upstride`.
 
-### Factor parameter
+## Factor parameter
 
 This is a simple neural network that uses UpStride layers (type 2) with `factor` parameter:
 
@@ -349,12 +349,12 @@ factor = 4
 
 inputs = tf.keras.layers.Input(shape=(224, 224, 3))
 x = layers.TF2Upstride()(inputs)
-x = layers.Conv2D(32 // factor, (3, 3))(x)
+x = layers.Conv2D(32 / factor, (3, 3))(x)
 x = layers.Activation('relu')(x)
-x = layers.Conv2D(64 // factor, (3, 3))(x)
+x = layers.Conv2D(64 / factor, (3, 3))(x)
 x = layers.Activation('relu')(x)
 x = layers.Flatten()(x)
-x = layers.Dense(100 // factor)(x)
+x = layers.Dense(100 / factor)(x)
 x = layers.Upstride2TF()(x)
 
 model = tf.keras.Model(inputs=[inputs], outputs=[x])
@@ -370,15 +370,11 @@ x = layers.Conv2D(32 // factor, (3, 3))(x)
 
 Here, `factor = 2` reduces the number of channels to 16, `factor = 4` reduces the number of channels to 8.
 
-The factor can be used as a hyper parameter to reduce the network width for the linear layers which would impact the final performance. The factor can be any `int` value. Ensure the value is not too small enough to hinder the learning capability of the network.
-
-In the example above, the ouput channels for the first `Conv2D` is `32 // factor`. If `factor = 32` is used then resulting output will be `1`. The network will struggle to extract features with just 1 output channel.
-
-The `factor` scales the number of channels for all the linear layers when applied. This helps in controlling the capacity of the overall network.
-
 Due to the way the UpStride engine is implemented, the vanilla approach (without using the `factor` i.e. when `factor` = 1) results in a model that contains more free parameters than its pure TensorFlow counterpart. Usually, to roughly match the number of parameters of a real network with a network based on an algebra with $k$ blades, factor $\sqrt{k}$ should be used (though some layers do not comply with that, for example for a network with only DepthwiseConv2D layers, factor $k$ should be used for that aim).
 
-### Initialization
+Our classification-api repository contains a parameter `factor` to automatically scale the models we use. Ensure the value is large enough not to hinder the learning capability of the network. In the example above, the ouput channels for the first `Conv2D` is `32 // factor`. If `factor = 32` is used then resulting output will be `1`. The network will struggle to extract features with just 1 output channel.
+
+## Initialization
 
 Weight initialization are done similar to TensorFlow/Keras. We utilize the `kernel_initializer` parameter in the linear layers.
 
@@ -395,7 +391,7 @@ Note: There are specific functionality for each `type0`, `type1` and `type2` ups
 
 Refer `InitializersFactory` in the folder `upstride/initializers.py` for further information.
 
-### TF2Upstride
+## TF2Upstride
 
 As we have seen from [data conversion](#data-conversion) section there are 2 strategies available to convert TensorFlow tensors to Upstride tensors.
 
@@ -408,7 +404,7 @@ x = layers.TF2Upstride(strategy="default")(inputs)
 x = layers.TF2Upstride(strategy="learned")(inputs)
 ```
 
-### Upstride2TF
+## Upstride2TF
 
 As we have seen from [data conversion](#data-conversion) section there are 4 strategies available to convert UpStride tensors to TensorFlow tensors.
 
