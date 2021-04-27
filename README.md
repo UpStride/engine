@@ -312,8 +312,9 @@ Note: we also have a *type0* which is the same as using tensorflow tensors with 
 
 Every module encapsulate a API similar to Keras.
 
-To use it,
-- start by importing the layers package from the upstride type you want to use.
+To use it:
+
+- start by importing the layers package from the upstride type you want to use (environment variable `PYTHONPATH` might need to be set as the path to the directory with the engine).
 - Start by defining a Input to the network.
 - convert Tensorflow tensor to Upstride type by calling `layers.TF2Upstride`
 - build the neural network the same way you do with Keras.
@@ -335,6 +336,7 @@ from upstride.typetf.keras import layers
 When a network is built with `type0`, it is equivalent to the real valued network or just using tensorflow layers without upstride engine.
 
 In the following three sections we describe some specific features implemented in our framework, such as the `factor` parameter, and conversion strategies: `Upstride2TF` and `TF2Upstride`.
+
 ### Factor parameter
 
 This is a simple neural network that uses UpStride layers (type 2) with `factor` parameter:
@@ -370,11 +372,11 @@ Here, `factor = 2` reduces the number of channels to 16, `factor = 4` reduces th
 
 The factor can be used as a hyper parameter to reduce the network width for the linear layers which would impact the final performance. The factor can be any `int` value. Ensure the value is not too small enough to hinder the learning capability of the network.
 
-In the above example, the ouput channels for the `Conv2D` is 3 If `factor = 16` then resulting output will be `1`. The network will struggle to extract features with just 1 output channel.
+In the example above, the ouput channels for the first `Conv2D` is `32 // factor`. If `factor = 32` is used then resulting output will be `1`. The network will struggle to extract features with just 1 output channel.
 
 The `factor` scales the number of channels for all the linear layers when applied. This helps in controlling the capacity of the overall network.
 
-However, due to the way the UpStride engine is implemented, the vanilla approach (without using the `factor` i.e. when `factor` = 1) results in a model that contains more free parameters than its pure TensorFlow counterpart.
+Due to the way the UpStride engine is implemented, the vanilla approach (without using the `factor` i.e. when `factor` = 1) results in a model that contains more free parameters than its pure TensorFlow counterpart. Usually, to roughly match the number of parameters of a real network with a network based on an algebra with $k$ blades, factor $\sqrt{k}$ should be used (though some layers do not comply with that, for example for a network with only DepthwiseConv2D layers, factor $k$ should be used for that aim).
 
 ### Initialization
 
@@ -428,6 +430,7 @@ x = layers.Upstride2TF(strategy="max_pool")(x)
 ```python
 x = layers.Upstride2TF(strategy="avg_pool")(x)
 ```
+
 # References
 
 1. Chiheb Trabelsi, Olexa Bilaniuk, Ying Zhang, Dmitriy Serdyuk, Sandeep Subramanian, João Felipe Santos, Soroush Mehri, Negar Rostamzadeh, Yoshua Bengio, Christopher J Pal. “Deep Complex Networks”. In Internation Conference on Learning Representations (ICLR), 2018
