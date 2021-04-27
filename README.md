@@ -65,7 +65,7 @@ Its important to note:
 
 - Blades are NOT interleaved with regards to batch. It means that the inner data representation is of shape (4, BS, C, H, W) and not (BS, 4, C, H, W). For example, to get the first full feature map, you need to type tensor[::BS] and to get all the real values, you need to type tensor[:BS]
 
-- When performing the conversion between real and upstride, the only change the user will notice is this increased batch size. If the neural network is using the information of C, H, W or H, W, C, then user doesn’t need to update his model definition when using upstride.
+- When performing the conversion between real and upstride, the only change the user will notice is this increased batch size. Users need to update his model only if they uses some operation which doesn't treat different images in a batch independently (which is usually not the case).
 
 - Although the above example follows channels first convention, the UpStride engine supports channels last data format as well.
 
