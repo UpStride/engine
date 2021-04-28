@@ -1,6 +1,6 @@
 # Introduction
 
-In this document we discuss the notions of Geometric Algebra (GA) (section Theory) and explain how GA is implemented in our python engine (section Implementation).
+In this document we discuss the notions of Geometric Algebra (GA) (section Theory) and explain how GA is implemented in our Upstride engine (section Implementation).
 
 - [Introduction](#introduction)
 - [Theory](#theory)
@@ -10,7 +10,7 @@ In this document we discuss the notions of Geometric Algebra (GA) (section Theor
   - [Complex numbers](#complex-numbers)
   - [Quaternions](#quaternions)
   - [General case](#general-case)
-  - [The Bias problem](#the-bias-problem)
+  - [The Bias handling](#the-bias-handling)
   - [Non-linear layers](#non-linear-layers)
     - [BatchNormalization](#batchnormalization)
     - [Dropout](#dropout)
@@ -29,29 +29,29 @@ In this document we discuss the notions of Geometric Algebra (GA) (section Theor
 
 Before we proceed let's look at some of the definitions and notations we will be using in this document.
 
-- _Blade_ - A blade is a generalization of the concept of scalars and vectors. Specifically, a $k$-blade is any object that can be expressed as the exterior product (or wedge $∧$ product) of $k$ vectors, and is of grade $k$.
+- _Blade_ - A blade is a generalization of the concept of scalars and vectors. Specifically, a $k$-blade is any object that can be expressed as the exterior product (or wedge $\wedge$ product) of $k$ vectors, and is of grade $k$.
 - _Multivector_ - A multivector is a linear combination of k-blades.
 - $\mathbb{G} \circ \mathbb{M}$ (Geometric Algebra over Matrices) - GA represented as real values in the matrix form. This is crucial as numerical computation frameworks like Tensorflow do not support GA yet.
 - $\mathbb{M} \circ \mathbb{G}$ (Matrices over Geometric Algebra) - This representation has a difficult integration with frameworks like TensorFlow as we don't have a data type that can natively represent GA.
 - $x$ - Inputs to the Neural Network layer
 - $y$ - Outputs to the Neural Network layer
 - $W$ - Weights to the Neural Network layer
-- $\sum$ - Summation
-- $\beta_i$ - Represents the i<sup>th</sup>-blade
+- $\beta_i$ - Represents the $i$-th blade
 - $\mathbb{R^3}$ - a vector space of dimension 3 over the field $\mathbb R$ of real numbers.
 - $\wedge$ - exterior product or wedge product
 
-The Geometric Algebra representation is implemented in python as $\mathbb{G} \circ \mathbb{M}$. Code is written in TensorFlow 2.4.1 using Keras high-level API and supports Python 3.6 or higher.
+The Geometric Algebra representation is implemented in python as $\mathbb{G} \circ \mathbb{M}$. Code is written in TensorFlow 2.4 using Keras high-level API and supports Python 3.6 or higher.
 
 The goal of this document is to provide all the mathematical explanations and algorithm details to understand the code.
+
 ## Data representation
 
 We stack the _blades_ on the batch dimension of the tensor. So, for instance, if we are working in a GA with 4 blades, a image tensor will have the shape $(4 \times BS, C, H, W)$, with:
 
-$BS$: the batch size
-$C$: number of channels
-$H$: height
-$W$: width
+- $BS$: the batch size
+- $C$: number of channels
+- $H$: height
+- $W$: width
 
 Its important to note:
 
@@ -61,7 +61,7 @@ Its important to note:
 
 - When performing the conversion between real and upstride, the only change the user will notice is this increased batch size.
 
-- Although the above example follows `channels_first` data format convention, the python engine supports `channels_last` as well.
+- Although the above example follows `channels_first` data format convention, the Upstride engine supports `channels_last` as well.
 
 ## Linear layers
 
@@ -76,7 +76,7 @@ The idea is to implement a very generic version of a linear layer, valid for any
 
 Note: `Conv2DTranspose` layer is experimental and we have not thoroughly validated.
 
-Note: `SeparableConv2D` is an exception. It is computed by going through 2 linear functions, but moving these 2 linear functions to hypercomplex is not the same as moving the combination of the function to hypercomplex. Currently not supported by the python engine for any GA.
+Note: `SeparableConv2D` is an exception. It is computed by going through 2 linear functions, but moving these 2 linear functions to hypercomplex is not the same as moving the combination of the function to hypercomplex. Currently not supported by the Upstride engine for any GA.
 
 Let's go over an example on how generic linear layer work. In the following two sections we describe two specific GAs, that is complex numbers and quaternions.
 
@@ -116,6 +116,7 @@ x_I W_R , x_I W_I
 We need to split the matrix and aggregate the component results:
 
 $y_R = x_R W_R - x_I W_I$
+
 $y_I = x_R W_I + x_I W_R$
 
 ## Quaternions
@@ -132,6 +133,7 @@ c_4 = &  u_1 v_4 +  u_4 v_1 +  u_2 v_3 -  u_3 v_2
 \end{array}$
 
 This computation includes 16 multiplications and 12 additions. Due to the isomorphism between $\mathbb{M} \circ \mathbb{G}$ and $\mathbb{G} \circ \mathbb{M}$, this corresponds to 16 calls to the TensorFlow linear layer of choice.
+
 ## General case
 
 Let’s work with a generic geometrical algebra defined by a set of blades $\beta_i, i \in [0, n]$.
@@ -163,7 +165,7 @@ def unit_multiplier(i: int, j: int) -> Tuple[int, int]:
 
 Now, we have everything to code the GenericLinear operation. Note that we do not need to know which linear TensorFlow operation will be used. We can pass this information as an argument.
 
-## The Bias problem
+## The Bias handling
 
 In deep learning, we often add a bias term after a linear operation. In Keras, this bias is handled by the linear layer itself, which is a problem here.
 
@@ -206,10 +208,14 @@ For most of the non-linear layer, the equation is simply:
 $y = \sum_if_i(x_i)\beta_i$
 
 where,
-- $y$ is the output
-- $x_i$ is the input
-- $\beta_i$ is the blade
-- $f_i$ is the non-linear function
+
+ $y$ is the output
+
+ $x_i$ is the input
+
+ $\beta_i$ is the blade
+
+ $f_i$ is the non-linear function
 
 With the way we encode hypercomplex tensor, the non-linear hypercomplex layer is the same as the real layer. The sum in the previous equation is handled naturally as all blades are stacked along the batch axis. However, there are some exceptions, such as BatchNormalization and Dropout. We describe those in the following two sections.
 
@@ -238,7 +244,7 @@ It's recommended to read section 3.4 in the [Deep Quaternion Networks](https://a
 
 Dropout is also an exception because we want to apply dropout on all blades of a hypercomplex number at the same time. This can't be done with a single Dropout.
 
-Let $N$ be the number of blades. The solution is to define $N$ Dropout operations with the same random seed to synchronize them. Then at every iteration, we split the input tensor to $N$, compute the N dropout and concatenate the output.
+Let $N$ be the number of blades. The solution is to define $N$ Dropout operations with the same random seed to synchronize them. Then at every iteration, we split the input tensor to $N$, compute the $N$ dropout and concatenate the output.
 
 ## Initialization:
 
@@ -357,7 +363,7 @@ Here, `factor = 2` reduces the number of channels to 16, `factor = 4` reduces th
 
 Due to the way the UpStride engine is implemented, the vanilla approach (without using the `factor` i.e. when `factor == 1`) results in a model that contains more free parameters than its pure TensorFlow counterpart. Usually, to roughly match the number of parameters of a real network with a network based on an algebra with $k$ blades, factor $\sqrt{k}$ should be used (though some layers do not comply with that, for example for a network with only DepthwiseConv2D layers, factor $k$ should be used for that aim).
 
-Our classification-api repository contains a parameter `factor` to automatically scale the models we use. Ensure the value is large enough not to hinder the learning capability of the network. In the example above, the ouput channels for the first `Conv2D` is `32 // factor`. If `factor = 32` is used then resulting output will be `1`. The network will struggle to extract features with just 1 output channel.
+Our classification-api repository contains a parameter `factor` to automatically scale the models we use. Ensure the value is large enough not to hinder the learning capability of the network. In the example above, the output channels for the first `Conv2D` is `32 // factor`. If `factor = 32` is used then resulting output will be `1`. The network will struggle to extract features with just 1 output channel.
 
 ## Initialization
 
