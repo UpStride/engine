@@ -5,6 +5,20 @@ from upstride.generic_layers import unit_multiplier
 
 @dataclass
 class UpstrideDatatype:
+  """
+  Args:
+      uptype_id:        an integer to serve as the Upstride datatype identifier. Kept for backward
+                        compatibility. Preferrably try choose a value not already in use by other
+                        datatypes.
+      geometrical_def:  a tuple triplet containing the number of blades that square to 1, -1 and 0,
+                        respectively, excluding the first blade (which is the scalar).
+      blade_indexes:    a tuple containing strings that represent the multivector, in which '12'
+                        represents e_{12}. The first element is expected to be an empty string ('')
+                        representing the scalar. The other elements are expected to be consistent
+                        among them (e.g. not have a bivector '13' if there is no vector '3') and
+                        each string is expected to be written in an ascending fashion (e.g. '13'
+                        (and NOT '31')).
+  """
   uptype_id: int
   geometrical_def: tuple
   blade_indexes: tuple

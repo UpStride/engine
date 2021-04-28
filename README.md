@@ -134,6 +134,21 @@ c_4 = &  u_1 v_4 +  u_4 v_1 +  u_2 v_3 -  u_3 v_2
 
 This computation includes 16 multiplications and 12 additions. Due to the isomorphism between $\mathbb{M} \circ \mathbb{G}$ and $\mathbb{G} \circ \mathbb{M}$, this corresponds to 16 calls to the TensorFlow linear layer of choice.
 
+## The definition of an Upstride data type
+
+An Upstride datatype object is defined by:
+- an _integer name_ `uptype_id`;
+- an integer tuple triplet containing its geometrical definition `geometric_def`, i.e. the number of blades that square to $1$, $-1$ and $0$, in this order and excluding the first blade, which is the scalar. Hence, quaternions are `(3, 0, 0)`;
+- a tuple of strings with the representation of each blade (e.g. `'12'` represents $e_{12}$ and `''` represents the scalar)
+
+The implementation and further details can be found at `uptypes_utilities.py` and extending to new higher dimensional geometric algebras only requires the instantiation of the desired algebra.
+
+```python
+UPTYPE0 = UpstrideDatatype(0, (0, 0, 0), ('',))
+UPTYPE1 = UpstrideDatatype(1, (2, 0, 0), ('', '12'))
+UPTYPE2 = UpstrideDatatype(2, (3, 0, 0), ('', '12', '23', '13'))
+```
+
 ## General case
 
 Let’s work with a generic geometrical algebra defined by a set of blades $\beta_i, i \in [0, n]$.
@@ -157,11 +172,13 @@ Note that the set of blades $\beta_i,i \in [0,n]$ does not correspond necessaril
 
  Computing the product with a single operation is done in the same way as for the case of complex numbers, that is by concatenating weights $W_i$'s.
 
-Then we need a function that computes the product of two blades, i.e. a function that takes as input the indexes $(i, j)$ of the two blades to be multiplied and returns the index $k$ and the sign $s$ of such product.
+Then we need a function `unit_multiplier` that computes the product of two blades, i.e. a function that takes as input the Upstride data type `uptype`, the indexes `(i, j)` of the two blades to be multiplied and returns the index `k` and the sign `s` of such product.
 
 ```python
-def unit_multiplier(i: int, j: int) -> Tuple[int, int]:
+def unit_multiplier(uptype, i: int, j: int) -> Tuple[int, int]:
 ```
+
+When the function `unit_multiplier` is called with the arguments `UPTYPE2, 2, 1` (i.e. quaternion, index of `'23'` (component $j$), index of `'12'` (component $i$)), it returns `k = 3` (the index of `'13'`) and `s = -1`, which is expected since the multiplication $j\cdot i$ is indeed $-k$.
 
 Now, we have everything to code the GenericLinear operation. Note that we do not need to know which linear TensorFlow operation will be used. We can pass this information as an argument.
 
