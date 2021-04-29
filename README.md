@@ -53,7 +53,7 @@ The goal of this document is to provide all the mathematical explanations and al
 
 ## Data representation
 
-We stack the _blades_ on the batch dimension of the tensor. So, for instance, if we are working in a GA with 4 blades, a image tensor will have the shape $(4 \times BS, C, H, W)$, with:
+We stack the _blades_ on the batch dimension of the tensor. So, for instance, if we are working in a GA with $N$ blades, a image tensor will have the shape $(N \cdot BS, C, H, W)$, with:
 
 - $BS$: the batch size
 - $C$: number of channels
@@ -61,6 +61,8 @@ We stack the _blades_ on the batch dimension of the tensor. So, for instance, if
 - $W$: width
 
 It's important to note:
+
+- We distinguish between $(N\cdot BS)$ and $(BS\cdot N)$. The former means that we concatenate $N$ tensors of size $BS$, whereas the latter means that we concatenate $BS$ tensors of size $N$. Thus an image tensor will have its multivector components stacked along the first axis (and not interleaved).
 
 - When performing the conversion between real and Upstride, the only change the user will notice is this increased batch size. Users need to update their model only if they use operations which don't treat independently different images in a batch (which is usually not the case).
 
@@ -131,13 +133,15 @@ So, for instance a linear layer will have:
 
 - $x_R$ and $x_I$ are tensors of shape $(BS, C)$
 
-- $x$ is a tensor of shape $(2 \times BS, C)$
+- $x$ is a tensor of shape $(2\cdot BS, C)$
 
 - $W_R$ and $W_I$  are tensors of shape $(C, C^\prime)$
 
-- $W$ is a tensor of shape $(C, 2 \times C^\prime)$
+- $W$ is a tensor of shape $(C, C^\prime \cdot 2)$
 
-To compute the linear product $y = xW$, the output will be a tensor of shape $(2 \times BS, 2\times C^\prime)$ equal to:
+Note: Beware that we distinguish between $(2\cdot C)$ and $(C\cdot 2)$, as explained in Data representation.
+
+To compute the linear product $y = xW$, the output will be a tensor of shape $(2 \cdot BS, C^\prime\cdot 2)$ equal to:
 
 $\begin{bmatrix}
 x_R W_R , x_R W_I \\
@@ -196,9 +200,11 @@ This function takes as input the Upstride data type `uptype`, the indexes `i` an
 
 Let's dive into the following example: `unit_multiplier(UPTYPE2, 2, 1) == (3, -1)`.
 
-Recall that `UPTYPE2` represents quaternions and that we have `UPTYPE2 = UpstrideDatatype(2, (3, 0, 0), ('', '12', '23', '13'))`. This means that the blade indexes for `UPTYPE2` is a tuple `('', '12', '23', '13')`, elements of which can be interpreted as unitary quaternions $1, i, j, k$. We thus have that `UPTYPE2.blade_indexes[2] == '23'` (interpreted as $j$) and that `UPTYPE2.blade_indexes[1] == '12'` (interpreted as $i$).
+Recall that `UPTYPE2` represents quaternions and that we have `UPTYPE2 = UpstrideDatatype(2, (3, 0, 0), ('', '12', '23', '13'))`. This means that the blade indexes for `UPTYPE2` is a tuple `('', '12', '23', '13')`, elements of which can be respectively interpreted as the quaternions $1$, $i$, $j$, $k$. We thus have that `UPTYPE2.blade_indexes[2] == '23'` (interpreted as $j$) and that `UPTYPE2.blade_indexes[1] == '12'` (interpreted as $i$).
 
-`unit_multiplier(UPTYPE2, 2, 1)` is interpreted as multiplication $j * i$ in quaternions, which is equal to $-k$, and indeed this function call returns `(3, -1)`, which corresponds to the quaternion $k$ (as `UPTYPE2.blade_indexes[3] == '13'` is interpreted as $k$) taken with a negative sign (`-1` as the second returned value).
+`unit_multiplier(UPTYPE2, 2, 1)` is interpreted as the multiplication $j\cdot i$ of the quaternions $j$ and $i$. This is equal to $-k$, and indeed this function call returns `(3, -1)`, which corresponds to:
+- the quaternion $k$, as `3` is the first returned value and `UPTYPE2.blade_indexes[3] == '13'` is interpreted as $k$
+- a negative sign, as `-1` is the second returned value.
 
 Now, we have everything to code the GenericLinear operation. Note that we do not need to know which linear TensorFlow operation will be used. We can pass this information as an argument.
 
@@ -209,6 +215,7 @@ In deep learning, we often add a bias term after a linear operation. In Keras, t
 Let's take the example of complex number. If the bias was in the TensorFlow layer the computation would be:
 
 $y_R = x_RW_R - x_IW_I + b_R - b_I$
+
 $y_I = x_IW_R + x_RW_I + b_R + b_I$
 
 where $b_R, b_I$ are the bias terms.
@@ -292,7 +299,7 @@ The weight initialization techniques for Complex (Trabelsi el al [1]) and Quarte
 Two operations are defined for converting data between TensorFlow and Upstride: `TF2Upstride` and `Upstride2TF`. The output of `TF2Upstride` is $N$ times bigger than the input tensor along the batch dimension, where $N$ is the number of blades of the multivector. Conversely, the output of `Upstride2TF` is $N$ times smaller along the batch dimension. The other dimensions depend on the conversion strategy provided to the layer and are not enforced to be the same between the input and the output for all the strategies.
 
 Note:
-- The blades are NOT interleaved with regards to batch. Therefore, for an 2D image the underlying Upstride data representation is of shape `(n_blades, batch_size, channels, height, width)` and not `(batch_size, n_blades, channels, height, width)`. Consequently, to get the first full feature map, you need to type `my_tensor[::n_blades]` and to get all the real values, you need to type `my_tensor[:BS]`.
+- The blades are stacked (and NOT interleaved) with regards to batch axis. Therefore, for an 2D image the underlying Upstride data representation is of shape `(n_blades * batch_size, channels, height, width)` and not `(batch_size * n_blades, channels, height, width)`. Consequently, to get the first full feature map you need to type `my_tensor[::batch_size]`, whereas to get all the real values you need to type `my_tensor[:batch_size]`.
 
 These 2 operations support several strategies depending on the Upstride type we’re using.
 
