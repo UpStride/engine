@@ -3,28 +3,35 @@
 In this document we discuss the notions of Geometric Algebra (GA) (section Theory) and explain how GA is implemented in our Upstride engine (section Implementation).
 
 - [Introduction](#introduction)
+- [Requirements](#requirements)
 - [Theory](#theory)
   - [Definitions](#definitions)
   - [Data representation](#data-representation)
+  - [Upstride data type](#upstride-data-type)
   - [Linear layers](#linear-layers)
-  - [Complex numbers](#complex-numbers)
-  - [Quaternions](#quaternions)
-  - [General case](#general-case)
-  - [The Bias handling](#the-bias-handling)
+    - [Complex numbers](#complex-numbers)
+    - [Quaternions](#quaternions)
+    - [General case](#general-case)
+    - [The Bias handling](#the-bias-handling)
   - [Non-linear layers](#non-linear-layers)
     - [BatchNormalization](#batchnormalization)
     - [Dropout](#dropout)
   - [Initialization:](#initialization)
   - [Data conversion](#data-conversion)
-- [Implementation](#implementation)
-  - [Using Upstride Engine](#using-upstride-engine)
-    - [Factor parameter](#factor-parameter)
-    - [Initialization](#initialization)
-    - [TF2Upstride](#tf2upstride)
-    - [Upstride2TF](#upstride2tf)
+- [Using Upstride Engine](#using-upstride-engine)
+  - [Factor parameter](#factor-parameter)
+  - [Initialization](#initialization)
+  - [TF2Upstride](#tf2upstride)
+  - [Upstride2TF](#upstride2tf)
 - [References](#references)
 
+# Requirements
+Upstride integrates seamlessly with TensorFlow 2.4. It is assumed that the user is experienced with development based on TensorFlow/Keras.
+
 # Theory
+
+This document is not intended to provide an explanation on GA itself. It rather focuses on describing how the Upstride engine makes it frictionless to use GA in TensorFlow. It also provides the information needed to expand and explore beyond what is currently implemented in the engine in terms of GA sub-algebras. For details on GA, please refer to [3-5].
+
 ## Definitions
 
 Before we proceed let's look at some of the definitions and notations we will be using in this document.
@@ -32,7 +39,7 @@ Before we proceed let's look at some of the definitions and notations we will be
 - _Blade_ - A blade is a generalization of the concept of scalars and vectors. Specifically, a $k$-blade is any object that can be expressed as the exterior product (or wedge $\wedge$ product) of $k$ vectors, and is of grade $k$.
 - _Multivector_ - A multivector is a linear combination of k-blades.
 - $\mathbb{G} \circ \mathbb{M}$ (Geometric Algebra over Matrices) - GA represented as real values in the matrix form. This is crucial as numerical computation frameworks like Tensorflow do not support GA yet.
-- $\mathbb{M} \circ \mathbb{G}$ (Matrices over Geometric Algebra) - This representation has a difficult integration with frameworks like TensorFlow as we don't have a data type that can natively represent GA.
+- $\mathbb{M} \circ \mathbb{G}$ (Matrices over Geometric Algebra) - This representation has a difficult integration with frameworks like TensorFlow as we don't have a hardware-friendly data type that can natively represent multivectors.
 - $x$ - Inputs to the Neural Network layer
 - $y$ - Outputs to the Neural Network layer
 - $W$ - Weights to the Neural Network layer
@@ -46,22 +53,48 @@ The goal of this document is to provide all the mathematical explanations and al
 
 ## Data representation
 
-We stack the _blades_ on the batch dimension of the tensor. So, for instance, if we are working in a GA with 4 blades, a image tensor will have the shape $(4 \times BS, C, H, W)$, with:
+We stack the _blades_ on the batch dimension of the tensor. So, for instance, if we are working in a GA with $N$ blades, a image tensor will have the shape $(N \cdot BS, C, H, W)$, with:
 
 - $BS$: the batch size
 - $C$: number of channels
 - $H$: height
 - $W$: width
 
-Its important to note:
+It's important to note:
 
-- Blades are NOT interleaved with regards to batch. It means that the underlying data representation is of shape $(4, BS, C, H, W)$ and not $(BS, 4, C, H, W)$. For example, to get the first full feature map, you need to type `my_tensor[::4]` and to get all the real values, you need to type `my_tensor[:BS]`.
+- We distinguish between $(N\cdot BS)$ and $(BS\cdot N)$. The former means that we concatenate $N$ tensors of size $BS$, whereas the latter means that we concatenate $BS$ tensors of size $N$. Thus an image tensor will have its multivector components stacked along the first axis (and not interleaved).
 
 - When performing the conversion between real and Upstride, the only change the user will notice is this increased batch size. Users need to update their model only if they use operations which don't treat independently different images in a batch (which is usually not the case).
 
 - When performing the conversion between real and upstride, the only change the user will notice is this increased batch size.
 
 - Although the above example follows `channels_first` data format convention, the Upstride engine supports `channels_last` as well.
+
+## Upstride data type
+
+Upstride data types are GA-based types, in which GA sub-algebras like complex numbers or quaternions can also be expressed. It's defined by:
+- an _integer name_ `uptype_id`;
+- an integer tuple triplet containing its geometrical definition `geometric_def`, i.e. the number of blades that square to $1$, $-1$ and $0$, in this order and excluding the first blade, which is the scalar;
+- a tuple of strings with the representation of each blade (e.g. `'12'` represents $e_{12}$ and `''` represents the scalar)
+
+The implementation and further details can be found at `uptypes_utilities.py` and extending to new higher dimensional geometric algebras only requires the instantiation of the desired algebra.
+
+```python
+@dataclass
+class UpstrideDatatype:
+  uptype_id: int
+  geometrical_def: tuple
+  blade_indexes: tuple
+
+UPTYPE0 = UpstrideDatatype(0, (0, 0, 0), ('',))                   # Real numbers
+UPTYPE1 = UpstrideDatatype(1, (2, 0, 0), ('', '12'))              # Complex numbers
+UPTYPE2 = UpstrideDatatype(2, (3, 0, 0), ('', '12', '23', '13'))  # Quaternions
+# In particular for these Upstride data types:
+# ''   is the real
+# '12' has the same properties as the imaginary component i
+# '23' has the same properties as the imaginary component j
+# '13' has the same properties as the imaginary component k
+```
 
 ## Linear layers
 
@@ -80,7 +113,7 @@ Note: `SeparableConv2D` is an exception. It is computed by going through 2 linea
 
 Let's go over an example on how generic linear layer work. In the following two sections we describe two specific GAs, that is complex numbers and quaternions.
 
-## Complex numbers
+### Complex numbers
 
 Let’s define:
 
@@ -100,13 +133,15 @@ So, for instance a linear layer will have:
 
 - $x_R$ and $x_I$ are tensors of shape $(BS, C)$
 
-- $x$ is a tensor of shape $(2 \times BS, C)$
+- $x$ is a tensor of shape $(2\cdot BS, C)$
 
 - $W_R$ and $W_I$  are tensors of shape $(C, C^\prime)$
 
-- $W$ is a tensor of shape $(C, 2 \times C^\prime)$
+- $W$ is a tensor of shape $(C, C^\prime \cdot 2)$
 
-To compute the linear product $y = xW$, the output will be a tensor of shape $(2 \times BS, 2\times C^\prime)$ equal to:
+Note: Beware that we distinguish between $(2\cdot C)$ and $(C\cdot 2)$, as explained in Data representation.
+
+To compute the linear product $y = xW$, the output will be a tensor of shape $(2 \cdot BS, C^\prime\cdot 2)$ equal to:
 
 $\begin{bmatrix}
 x_R W_R , x_R W_I \\
@@ -119,7 +154,7 @@ $y_R = x_R W_R - x_I W_I$
 
 $y_I = x_R W_I + x_I W_R$
 
-## Quaternions
+### Quaternions
 
 Let's look at example of computing the linear product for quaternions.
 
@@ -134,7 +169,7 @@ c_4 = &  u_1 v_4 +  u_4 v_1 +  u_2 v_3 -  u_3 v_2
 
 This computation includes 16 multiplications and 12 additions. Due to the isomorphism between $\mathbb{M} \circ \mathbb{G}$ and $\mathbb{G} \circ \mathbb{M}$, this corresponds to 16 calls to the TensorFlow linear layer of choice.
 
-## General case
+### General case
 
 Let’s work with a generic geometrical algebra defined by a set of blades $\beta_i, i \in [0, n]$.
 
@@ -155,26 +190,35 @@ $\beta_i\beta_j = s\beta_k,(s,k) \in \lbrace -1, 0, 1\rbrace \times [0, n]$
 
 Note that the set of blades $\beta_i,i \in [0,n]$ does not correspond necessarily to an orthonormal set . For example, given the orthonormal set $\lbrace e_1, e_2, e_3 \rbrace$ in the space $\mathbb{R}^3$, a valid basis for a GA on the same space is $\lbrace 1, e_1, e_2, e_3, e_1 \wedge e_2, e_2 \wedge e_3, e_3 \wedge e_1, e_1 \wedge e_2 \wedge e_3 \rbrace$. We can express this basis in terms of blades as $\beta_i, i \in [0, 7]$ where  is $\beta_0$ a 0-blade, $\beta_1, \beta_2, \beta_3$ are 1-blades, $\beta_4, \beta_5, \beta_6$ are 2-blades and $\beta_7$ is a 3-blade.
 
- Computing the product with a single operation is done in the same way as for the case of complex numbers, that is by concatenating weights $W_i$'s.
-
-Then we need a function that computes the product of two blades, i.e. a function that takes as input the indexes $(i, j)$ of the two blades to be multiplied and returns the index $k$ and the sign $s$ of such product.
+Computing the intermediate $x_i W_j$ results is done in the same way as for complex numbers, that is by running a single linear operation with input tensor obtained as concatenated components $x_i$, and filter obtained as concatenated weights $W_j$. The matrix is then split and the intermediate results are aggregated according to the GA formulation, based on an internal function `unit_multiplier`, which computes the product of two unit blades.
 
 ```python
-def unit_multiplier(i: int, j: int) -> Tuple[int, int]:
+def unit_multiplier(uptype, i: int, j: int) -> Tuple[int, int]:
 ```
+
+This function takes as input the Upstride data type `uptype`, the indexes `i` and `j` of the two blades to be multiplied and returns the index `k` and the sign `s` of such product.
+
+Let's dive into the following example: `unit_multiplier(UPTYPE2, 2, 1) == (3, -1)`.
+
+Recall that `UPTYPE2` represents quaternions and that we have `UPTYPE2 = UpstrideDatatype(2, (3, 0, 0), ('', '12', '23', '13'))`. This means that the blade indexes for `UPTYPE2` is a tuple `('', '12', '23', '13')`, elements of which can be respectively interpreted as the quaternions $1$, $i$, $j$, $k$. We thus have that `UPTYPE2.blade_indexes[2] == '23'` (interpreted as $j$) and that `UPTYPE2.blade_indexes[1] == '12'` (interpreted as $i$).
+
+`unit_multiplier(UPTYPE2, 2, 1)` is interpreted as the multiplication $j\cdot i$ of the quaternions $j$ and $i$. This is equal to $-k$, and indeed this function call returns `(3, -1)`, which corresponds to:
+- the quaternion $k$, as `3` is the first returned value and `UPTYPE2.blade_indexes[3] == '13'` is interpreted as $k$
+- a negative sign, as `-1` is the second returned value.
 
 Now, we have everything to code the GenericLinear operation. Note that we do not need to know which linear TensorFlow operation will be used. We can pass this information as an argument.
 
-## The Bias handling
+### The Bias handling
 
 In deep learning, we often add a bias term after a linear operation. In Keras, this bias is handled by the linear layer itself, which is a problem here.
 
-Let's take the example of complex number. If the bias is in the TensorFlow layer the computation will be:
+Let's take the example of complex number. If the bias was in the TensorFlow layer the computation would be:
 
 $y_R = x_RW_R - x_IW_I + b_R - b_I$
+
 $y_I = x_IW_R + x_RW_I + b_R + b_I$
 
-with $b_R, b_I$ are the bias terms.
+where $b_R, b_I$ are the bias terms.
 
 This formulation has two issues:
 
@@ -203,7 +247,7 @@ Examples of non-linear layers are:
 - `Add`
 - `Concatenate`
 
-For most of the non-linear layer, the equation is simply:
+For most of the non-linear layers, the equation is simply:
 
 $y = \sum_if_i(x_i)\beta_i$
 
@@ -223,28 +267,26 @@ With the way we encode hypercomplex tensor, the non-linear hypercomplex layer is
 
 For batchnormalization to work, the blades should not be stacked along the first axis so that the normalization is not computed as if the blades belonged to the batch axis. We decided to stack the blades on the channel axis.
 
-Also, note that the current (BatchNormalization) implementation works on the several components of the multivector in a correlated way. If you want more clever mechanism you should go for BatchNormalizationC (Complex) or BatchNormalizationH (Quaternion) where the real and imaginary parts are decorrelated.
+Also, note that the current (BatchNormalization) implementation works on the several components of the multivector in a correlated way. In case you would like to compute it differently (e.g. for ensuring equal variance in all the blades), you could opt for BatchNormalizationC (Complex) or BatchNormalizationH (Quaternion) where the real and imaginary parts are independent.
 
 **BatchNormalizationC**: Trabelsi et al [1]
 
 * Ensures the equal variance for both real and imaginary parts, unlike applying real valued BatchNormalization.
-* Removes correlation between real and imaginary parts.
 
 It's recommended to read Section 3.5 in the [Deep Complex Networks](https://arxiv.org/pdf/1705.09792.pdf#subsection3.5) paper for further details.
 
 **BatchNormalizationH**: Gaudet et al [2]
 
 * Similar to Complex BatchNormalization. The Quaternion BatchNormalization uses the same idea to ensure all 4 components to have equal variance.
-* Removes correlation between real and each imaginary parts.
 
 
 It's recommended to read section 3.4 in the [Deep Quaternion Networks](https://arxiv.org/pdf/1712.04604.pdf#subsection.3.4) paper for further details.
 
 ### Dropout
 
-Dropout is also an exception because we want to apply dropout on all blades of a hypercomplex number at the same time. This can't be done with a single Dropout.
+Dropout is also an exception because in general we would like to apply dropout on all blades of a hypercomplex number at the same time. This can't be done with a single Dropout.
 
-Let $N$ be the number of blades. The solution is to define $N$ Dropout operations with the same random seed to synchronize them. Then at every iteration, we split the input tensor to $N$, compute the $N$ dropout and concatenate the output.
+Let $N$ be the number of blades. The solution for ensuring that all the blades of a multivector undergo dropout (or not) is to define $N$ Dropout operations with the same random seed to synchronize them and then apply each of the $N$ Dropout layers to one of the blades.
 
 ## Initialization:
 
@@ -254,7 +296,10 @@ The weight initialization techniques for Complex (Trabelsi el al [1]) and Quarte
 
 ## Data conversion
 
-Two operations are defined for converting data between TensorFlow and Upstride: TF2Upstride and Upstride2TF.
+Two operations are defined for converting data between TensorFlow and Upstride: `TF2Upstride` and `Upstride2TF`. The output of `TF2Upstride` is $N$ times bigger than the input tensor along the batch dimension, where $N$ is the number of blades of the multivector. Conversely, the output of `Upstride2TF` is $N$ times smaller along the batch dimension. The other dimensions depend on the conversion strategy provided to the layer and are not enforced to be the same between the input and the output for all the strategies.
+
+Note:
+- The blades are stacked (and NOT interleaved) with regards to batch axis. Therefore, for an 2D image the underlying Upstride data representation is of shape `(n_blades * batch_size, channels, height, width)` and not `(batch_size * n_blades, channels, height, width)`. Consequently, to get the first full feature map you need to type `my_tensor[::batch_size]`, whereas to get all the real values you need to type `my_tensor[:batch_size]`.
 
 These 2 operations support several strategies depending on the Upstride type we’re using.
 
@@ -270,11 +315,7 @@ For **Upstride2TF**:
 - `max_pool`: outputs a tensor that takes the maximum values across the real and imaginary parts.
 - `avg_pool`: outputs a tensor that takes the average across the real and imaginary parts.
 
-## Implementation
-
-Upstride integrates seamlessly with TensorFlow 2.4. It is assumed that the user is experienced with development based on TensorFlow/Keras.
-
-## Using Upstride Engine
+# Using Upstride Engine
 
 This is a simple neural network that uses Upstride layers:
 
@@ -351,7 +392,7 @@ x = layers.Upstride2TF()(x)
 model = tf.keras.Model(inputs=[inputs], outputs=[x])
 ```
 
-The `factor` parameter is used to linearly scale the number of feature maps in the linear layers. Higher factor value results in less number of feature maps and vice versa. The `factor` parameter allows to easily tradeoff between the overall accuracy performance and the total number of free parameters of a model. The factor can be applied to all the linear layers except the final logits layer. 
+The `factor` parameter is used to linearly scale the number of feature maps in the linear layers. Higher factor value results in less number of feature maps and vice versa. The `factor` parameter allows to easily tradeoff between the overall accuracy performance and the total number of free parameters of a model. The factor can be applied to all the linear layers except the final logits layer.
 
 For example,
 
@@ -438,3 +479,9 @@ Pytest offers the following useful command line arguments:
 1. Chiheb Trabelsi, Olexa Bilaniuk, Ying Zhang, Dmitriy Serdyuk, Sandeep Subramanian, João Felipe Santos, Soroush Mehri, Negar Rostamzadeh, Yoshua Bengio, Christopher J Pal. “Deep Complex Networks”. In Internation Conference on Learning Representations (ICLR), 2018
 
 2. Gaudet, Chase J., and Anthony S. Maida. "Deep quaternion networks." 2018 International Joint Conference on Neural Networks (IJCNN). IEEE, 2018.
+
+3. Hitzer, Eckhard. "Introduction to Clifford's geometric algebra." Journal of the Society of Instrument and Control Engineers 51, no. 4 (2012): 338-350.
+
+4. Hildenbrand, Dietmar. "Foundations of geometric algebra computing." In AIP Conference Proceedings, vol. 1479, no. 1, pp. 27-30. American Institute of Physics, 2012.
+
+5. Dorst, Leo, Chris Doran, and Joan Lasenby, eds. Applications of geometric algebra in computer science and engineering. Springer Science & Business Media, 2012.
