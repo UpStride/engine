@@ -186,15 +186,19 @@ $\beta_i\beta_j = s\beta_k,(s,k) \in \lbrace -1, 0, 1\rbrace \times [0, n]$
 
 Note that the set of blades $\beta_i,i \in [0,n]$ does not correspond necessarily to an orthonormal set . For example, given the orthonormal set $\lbrace e_1, e_2, e_3 \rbrace$ in the space $\mathbb{R}^3$, a valid basis for a GA on the same space is $\lbrace 1, e_1, e_2, e_3, e_1 \wedge e_2, e_2 \wedge e_3, e_3 \wedge e_1, e_1 \wedge e_2 \wedge e_3 \rbrace$. We can express this basis in terms of blades as $\beta_i, i \in [0, 7]$ where  is $\beta_0$ a 0-blade, $\beta_1, \beta_2, \beta_3$ are 1-blades, $\beta_4, \beta_5, \beta_6$ are 2-blades and $\beta_7$ is a 3-blade.
 
- Computing the product with a single operation is done in the same way as for the case of complex numbers, that is by concatenating weights $W_i$'s.
-
-Then we need a function `unit_multiplier` that computes the product of two blades, i.e. a function that takes as input the Upstride data type `uptype`, the indexes `(i, j)` of the two blades to be multiplied and returns the index `k` and the sign `s` of such product.
+Computing the intermediate $x_i W_j$ results is done in the same way as for complex numbers, that is by running a single linear operation with input tensor obtained as concatenated components $x_i$, and filter obtained as concatenated weights $W_j$. The matrix is then split and the intermediate results are aggregated according to the GA formulation, based on an internal function `unit_multiplier`, which computes the product of two unit blades.
 
 ```python
 def unit_multiplier(uptype, i: int, j: int) -> Tuple[int, int]:
 ```
 
-When the function `unit_multiplier` is called with the arguments `UPTYPE2, 2, 1` (i.e. quaternion, index of `'23'` (component $j$), index of `'12'` (component $i$)), it returns `k = 3` (the index of `'13'`) and `s = -1`, which is expected since the multiplication $j\cdot i$ is indeed $-k$.
+This function takes as input the Upstride data type `uptype`, the indexes `i` and `j` of the two blades to be multiplied and returns the index `k` and the sign `s` of such product.
+
+Let's dive into the following example: `unit_multiplier(UPTYPE2, 2, 1) == (3, -1)`.
+
+Recall that `UPTYPE2` represents quaternions and that we have `UPTYPE2 = UpstrideDatatype(2, (3, 0, 0), ('', '12', '23', '13'))`. This means that the blade indexes for `UPTYPE2` is a tuple `('', '12', '23', '13')`, elements of which can be interpreted as unitary quaternions $1, i, j, k$. We thus have that `UPTYPE2.blade_indexes[2] == '23'` (interpreted as $j$) and that `UPTYPE2.blade_indexes[1] == '12'` (interpreted as $i$).
+
+`unit_multiplier(UPTYPE2, 2, 1)` is interpreted as multiplication $j * i$ in quaternions, which is equal to $-k$, and indeed this function call returns `(3, -1)`, which corresponds to the quaternion $k$ (as `UPTYPE2.blade_indexes[3] == '13'` is interpreted as $k$) taken with a negative sign (`-1` as the second returned value).
 
 Now, we have everything to code the GenericLinear operation. Note that we do not need to know which linear TensorFlow operation will be used. We can pass this information as an argument.
 
@@ -381,7 +385,7 @@ x = layers.Upstride2TF()(x)
 model = tf.keras.Model(inputs=[inputs], outputs=[x])
 ```
 
-The `factor` parameter is used to linearly scale the number of feature maps in the linear layers. Higher factor value results in less number of feature maps and vice versa. The `factor` parameter allows to easily tradeoff between the overall accuracy performance and the total number of free parameters of a model. The factor can be applied to all the linear layers except the final logits layer. 
+The `factor` parameter is used to linearly scale the number of feature maps in the linear layers. Higher factor value results in less number of feature maps and vice versa. The `factor` parameter allows to easily tradeoff between the overall accuracy performance and the total number of free parameters of a model. The factor can be applied to all the linear layers except the final logits layer.
 
 For example,
 
