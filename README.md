@@ -107,7 +107,7 @@ This section describes how to implement any linear layer from any GA in TensorFl
 
 The idea is to implement a very generic version of a linear layer, valid for any GA and any linear operation. Then all the specific implementations will benefit from generic implementation.
 
-Note: `Conv2DTranspose` layer is experimental and we have not thoroughly validated.
+Note: `Conv2DTranspose` layer is considered experimental and we have not thoroughly validated it.
 
 Note: `SeparableConv2D` is an exception. It is computed by going through 2 linear functions, but moving these 2 linear functions to hypercomplex is not the same as moving the combination of the function to hypercomplex. Currently not supported by the Upstride engine for any GA.
 
@@ -265,7 +265,7 @@ With the way we encode hypercomplex tensor, the non-linear hypercomplex layer is
 
 ### BatchNormalization
 
-For batchnormalization to work, the blades should not be stacked along the first axis so that the normalization is not computed as if the blades belonged to the batch axis. We decided to stack the blades on the channel axis.
+For batch normalization to work, the blades should not be stacked along the first axis so that the normalization is not computed as if the blades belonged to the batch axis. We decided to stack the blades on the channel axis.
 
 Also, note that the current (BatchNormalization) implementation works on the several components of the multivector in a correlated way. In case you would like to compute it differently (e.g. for ensuring equal variance in all the blades), you could opt for BatchNormalizationC (Complex) or BatchNormalizationH (Quaternion) where the real and imaginary parts are independent.
 
@@ -279,14 +279,13 @@ It's recommended to read Section 3.5 in the [Deep Complex Networks](https://arxi
 
 * Similar to Complex BatchNormalization. The Quaternion BatchNormalization uses the same idea to ensure all 4 components to have equal variance.
 
-
 It's recommended to read section 3.4 in the [Deep Quaternion Networks](https://arxiv.org/pdf/1712.04604.pdf#subsection.3.4) paper for further details.
 
 ### Dropout
 
-Dropout is also an exception because in general we would like to apply dropout on all blades of a hypercomplex number at the same time. This can't be done with a single Dropout.
+We enable two approaches to dropout in the Upstride engine: it can be applied either independently on different blades, or in a "synchronized" fashion, dropping the same input units across blades. By default, `Dropout` employs the independent variant; it can be changed by setting the `synchronized` argument while constructing the layer. The "synchronized" variant requires some tensors reshaping in order to work correctly.
 
-Let $N$ be the number of blades. The solution for ensuring that all the blades of a multivector undergo dropout (or not) is to define $N$ Dropout operations with the same random seed to synchronize them and then apply each of the $N$ Dropout layers to one of the blades.
+Note: `Dropout` layer is considered experimental and we have not thoroughly tested it.
 
 ## Initialization:
 
