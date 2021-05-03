@@ -47,9 +47,7 @@ Before we proceed let's look at some of the definitions and notations we will be
 - $\mathbb{R^3}$ - a vector space of dimension 3 over the field $\mathbb R$ of real numbers.
 - $\wedge$ - exterior product or wedge product
 
-The Geometric Algebra representation is implemented in python as $\mathbb{G} \circ \mathbb{M}$. Code is written in TensorFlow 2.4 using Keras high-level API and supports Python 3.6 or higher.
-
-The goal of this document is to provide all the mathematical explanations and algorithm details to understand the code.
+The GA representation is implemented in python as $\mathbb{G} \circ \mathbb{M}$. Code is written in TensorFlow 2.4 using Keras high-level API and supports Python 3.6 or higher.
 
 ## Data representation
 
@@ -111,7 +109,7 @@ Note: `Conv2DTranspose` layer is considered experimental and we have not thoroug
 
 Note: `SeparableConv2D` is an exception. It is computed by going through 2 linear functions, but moving these 2 linear functions to hypercomplex is not the same as moving the combination of the function to hypercomplex. Currently not supported by the Upstride engine for any GA.
 
-Let's go over an example on how generic linear layer work. In the following two sections we describe two specific GAs, that is complex numbers and quaternions.
+Let's go over an example on how generic linear layer works. In the following two sections, we describe two specific GAs, that is complex numbers and quaternions.
 
 ### Complex numbers
 
@@ -123,7 +121,7 @@ $y = y_R + iy_I$, the complex output of the same layer
 
 $W = W_R + iW_I$, the kernel of the layer
 
-Computing linear layer means to compute the product: $y = xW$
+Computing a linear layer means to compute the product: $y = xW$
 
 So to compute $y$, we first need to compute all the cross-product between the components of $x$ and the components of $W$. This can be done in a single call to the TensorFlow API.
 
@@ -141,7 +139,7 @@ So, for instance a linear layer will have:
 
 Note: Beware that we distinguish between $(2\cdot C)$ and $(C\cdot 2)$, as explained in Data representation.
 
-To compute the linear product $y = xW$, the output will be a tensor of shape $(2 \cdot BS, C^\prime\cdot 2)$ equal to:
+The output of the linear product $y = xW$ will be a tensor of shape $(2 \cdot BS, C^\prime\cdot 2)$ equal to:
 
 $\begin{bmatrix}
 x_R W_R , x_R W_I \\
@@ -223,7 +221,7 @@ where $b_R, b_I$ are the bias terms.
 This formulation has two issues:
 
 1.  we perform two more operations (the bias terms) than needed.
-2.  If we worked with a single blade of the multivector (e.g: $y_R$ as the final output of the softmax layer) then we would have two variables ($b_R$ and $b_I$) and only one constraint. This kind of situation can hurt performance.
+2.  If we worked with a single blade of the multivector (e.g: $y_R$ as the final output of the softmax layer) then we would have two variables ($b_R$ and $b_I$) and only one constraint. This kind of situation can hurt the performance.
 
 One solution to prevent this is to detect when the user applies the bias term and handle it by following the steps:
 
@@ -261,7 +259,7 @@ where,
 
  $f_i$ is the non-linear function
 
-With the way we encode hypercomplex tensor, the non-linear hypercomplex layer is the same as the real layer. The sum in the previous equation is handled naturally as all blades are stacked along the batch axis. However, there are some exceptions, such as BatchNormalization and Dropout. We describe those in the following two sections.
+With the way we encode hypercomplex tensors, the non-linear hypercomplex layer is the same as the real layer. The sum in the previous equation is handled naturally as all blades are stacked along the batch axis. However, there are some exceptions, such as BatchNormalization and Dropout. We describe those in the following two sections.
 
 ### BatchNormalization
 
@@ -403,7 +401,7 @@ Here, `factor = 2` reduces the number of channels to 16, `factor = 4` reduces th
 
 Due to the way the UpStride engine is implemented, the vanilla approach (without using the `factor` i.e. when `factor == 1`) results in a model that contains more free parameters than its pure TensorFlow counterpart. Usually, to roughly match the number of parameters of a real network with a network based on an algebra with $k$ blades, factor $\sqrt{k}$ should be used (though some layers do not comply with that, for example for a network with only DepthwiseConv2D layers, factor $k$ should be used for that aim).
 
-Our classification-api repository contains a parameter `factor` to automatically scale the models we use. Ensure the value is large enough not to hinder the learning capability of the network. In the example above, the output channels for the first `Conv2D` is `32 // factor`. If `factor = 32` is used then resulting output will be `1`. The network will struggle to extract features with just 1 output channel.
+Our classification-api repository contains a parameter `factor` to automatically scale the models we use. Ensure the value is not so large that it hinders the learning capability of the network. In the example above, the output channels for the first `Conv2D` is `32 // factor`. If `factor = 32` is used then resulting output will be `1`. The network will struggle to extract features with just 1 output channel.
 
 ## Initialization
 
