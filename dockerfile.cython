@@ -1,4 +1,4 @@
-FROM tensorflow/tensorflow:2.4.1-gpu
+FROM tensorflow/tensorflow:2.4.1-gpu AS builder
 
 # Upstride bash welcome screen
 COPY bash.bashrc /etc/bash.bashrc
@@ -10,6 +10,13 @@ RUN rm -r /opt/upstride/upstride/tests && \
     pip3 install --no-cache-dir Cython && \
     cd /opt/upstride && \
     python3 cython_setup.py bdist_wheel && \
-    pip3 install --no-cache-dir /opt/upstride/dist/*.whl && \
+    mv /opt/upstride/dist /opt/dist && \
     cd / && \
     rm -r /opt/upstride
+
+FROM tensorflow/tensorflow:2.4.1-gpu
+
+COPY --from=builder /etc/bash.bashrc /etc/bash.bashrc
+COPY --from=builder /opt/dist/ /opt/dist
+RUN pip3 install --no-cache-dir /opt/dist/*.whl && \
+    rm -r /opt/dist
