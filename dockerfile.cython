@@ -1,6 +1,5 @@
 FROM tensorflow/tensorflow:2.4.1-gpu AS builder
 
-# Upstride bash welcome screen
 COPY upstride /opt/upstride/upstride
 COPY cython_setup.py /opt/upstride/cython_setup.py
 
