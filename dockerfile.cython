@@ -1,0 +1,15 @@
+FROM tensorflow/tensorflow:2.4.1-gpu AS builder
+
+COPY upstride /opt/upstride/upstride
+COPY cython_setup.py /opt/upstride/cython_setup.py
+
+RUN /usr/bin/python3 -m pip install --upgrade pip && \
+    pip3 install --no-cache-dir Cython && \
+    cd /opt/upstride && \
+    python3 cython_setup.py bdist_wheel
+
+FROM tensorflow/tensorflow:2.4.1-gpu
+
+COPY --from=builder /opt/upstride/dist/ /opt/dist
+RUN pip3 install --no-cache-dir /opt/dist/*.whl && \
+    rm -r /opt/dist

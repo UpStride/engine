@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow.python.ops import array_ops, nn_ops
 from .uptypes_utilities import prepare_inputs, prepare_output, prepare_hyper_weight
 
 

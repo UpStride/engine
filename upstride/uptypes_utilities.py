@@ -1,9 +1,7 @@
 import tensorflow as tf
-from dataclasses import dataclass
 from upstride.generic_layers import unit_multiplier
 
 
-@dataclass
 class UpstrideDatatype:
   """
   Args:
@@ -19,9 +17,10 @@ class UpstrideDatatype:
                         each string is expected to be written in an ascending fashion (e.g. '13'
                         (and NOT '31')).
   """
-  uptype_id: int
-  geometrical_def: tuple
-  blade_indexes: tuple
+  def __init__(self, uptype_id: int, geometrical_def: tuple, blade_indexes: tuple):
+    self.uptype_id = uptype_id
+    self.geometrical_def = geometrical_def
+    self.blade_indexes = blade_indexes
 
   @property
   def multivector_length(self) -> int:
